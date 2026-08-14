@@ -5,7 +5,6 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
-COPY packages/shared/src ./packages/shared/src
 COPY apps/api ./apps/api
 
 RUN npm ci
@@ -20,7 +19,6 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
-COPY packages/shared/src ./packages/shared/src
 
 RUN npm ci --omit=dev
 

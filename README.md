@@ -4,21 +4,14 @@ Internal platform for registering, assigning, and tracking customer support tick
 
 ## Run locally
 
-Copy the environment file, then start Postgres, the API, and the web UI with Compose:
+Copy the environment file, then start Postgres, the API, and the web UI:
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-From the repo root you can use the same flow as npm scripts:
-
-```bash
-cp .env.example .env
-npm run compose:up
-```
-
-`.env` is gitignored. `.env.example` lists the Postgres user, password, database name, and `DATABASE_URL` used inside Compose. Do not commit real credentials.
+`npm run compose:up` is the same command. `.env` is gitignored. `.env.example` lists the Postgres user, password, database name, and `DATABASE_URL` used inside Compose. Do not commit real credentials.
 
 ## Ports
 
@@ -50,8 +43,4 @@ Live cloud deploy is a follow-up. Do not treat Compose as the production topolog
 
 ## Stop
 
-```bash
-docker compose down
-```
-
-or `npm run compose:down`.
+`docker compose down` or `npm run compose:down`.
