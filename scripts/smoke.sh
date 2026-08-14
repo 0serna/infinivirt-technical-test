@@ -22,3 +22,22 @@ case $html in
     exit 1
     ;;
 esac
+
+asset=$(printf '%s\n' "$html" | sed -n 's/.*src="\([^"]*\)".*/\1/p' | head -n 1)
+if [ -z "$asset" ]; then
+  echo "web UI HTML did not include a script src" >&2
+  exit 1
+fi
+case $asset in
+  /*) asset_url="http://localhost:5173$asset" ;;
+  *) asset_url="http://localhost:5173/$asset" ;;
+esac
+
+js=$(curl -sf --connect-timeout 2 --max-time 5 "$asset_url")
+case $js in
+  */api/health*) echo "$asset_url uses /api/health" ;;
+  *)
+    echo "web bundle $asset_url does not call relative /api/health" >&2
+    exit 1
+    ;;
+esac
