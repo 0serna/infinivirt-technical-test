@@ -1,0 +1,20 @@
+name: support-ticketing
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: support-ticketing-api:local
+    ports:
+      - "3000:3000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: support-ticketing-web:local
+    ports:
+      - "5173:80"
+    depends_on:
+      - api

@@ -3,10 +3,12 @@
   "private": true,
   "workspaces": [
     "apps/api",
+    "apps/web",
     "packages/shared"
   ],
   "scripts": {
-    "build": "npm run build -w @support-ticketing/api",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
     "test:e2e": "npm run test:e2e -w @support-ticketing/api"
   }
 }
