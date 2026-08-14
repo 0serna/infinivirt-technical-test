@@ -1,0 +1,12 @@
+{
+  "name": "support-ticketing",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "packages/shared"
+  ],
+  "scripts": {
+    "build": "npm run build -w @support-ticketing/api",
+    "test:e2e": "npm run test:e2e -w @support-ticketing/api"
+  }
+}
