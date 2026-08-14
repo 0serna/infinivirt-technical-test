@@ -10,6 +10,8 @@
 ├── docs/
 │   ├── adr/
 │   └── agents/
+└── .github/
+    └── workflows/        # CI quality gates
 ```
 
 ## Repository Commands
@@ -19,6 +21,11 @@
 - `npm run build`: build workspace packages.
 - `npm test`: run workspace tests.
 - `npm run test:e2e`: run API end-to-end tests.
+- `npm run format`: write Biome formatting.
+- `npm run format:check`: verify Biome formatting without writing.
+- `npm run lint`: lint with Biome; warnings fail the command.
+- `npm run lint:fix`: apply Biome safe lint fixes.
+- `npm run typecheck`: typecheck all workspaces.
 
 ## Agent skills
 
