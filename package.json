@@ -11,6 +11,23 @@
     "compose:down": "docker compose down",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "test:e2e": "npm run test:e2e -w @support-ticketing/api"
+    "test:e2e": "npm run test:e2e -w @support-ticketing/api",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint --error-on-warnings .",
+    "lint:fix": "biome lint --write .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*": [
+      "biome format --write --no-errors-on-unmatched --files-ignore-unknown=true",
+      "biome lint --write --no-errors-on-unmatched --files-ignore-unknown=true"
+    ]
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0"
   }
 }
