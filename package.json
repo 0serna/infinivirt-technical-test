@@ -1,0 +1,16 @@
+{
+  "name": "support-ticketing",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "packages/shared"
+  ],
+  "scripts": {
+    "compose:up": "docker compose up --build",
+    "compose:down": "docker compose down",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e -w @support-ticketing/api"
+  }
+}

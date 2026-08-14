@@ -1,3 +1,25 @@
+## Repository Structure
+
+```text
+.
+├── apps/
+│   ├── api/              # NestJS HTTP API
+│   └── web/              # React UI served by nginx in Compose
+├── packages/
+│   └── shared/
+├── docs/
+│   ├── adr/
+│   └── agents/
+```
+
+## Repository Commands
+
+- `npm run compose:up`: start Postgres, the API, and the web UI with Compose.
+- `npm run compose:down`: stop the Compose stack.
+- `npm run build`: build workspace packages.
+- `npm test`: run workspace tests.
+- `npm run test:e2e`: run API end-to-end tests.
+
 ## Agent skills
 
 ### Issue tracker
