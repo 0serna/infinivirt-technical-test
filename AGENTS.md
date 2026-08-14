@@ -10,14 +10,12 @@
 ├── docs/
 │   ├── adr/
 │   └── agents/
-└── scripts/              # host checks against the Compose stack
 ```
 
 ## Repository Commands
 
 - `npm run compose:up`: start Postgres, the API, and the web UI with Compose.
 - `npm run compose:down`: stop the Compose stack.
-- `npm run smoke`: curl API health, proxied health, and the web UI from the host.
 - `npm run build`: build workspace packages.
 - `npm test`: run workspace tests.
 - `npm run test:e2e`: run API end-to-end tests.
