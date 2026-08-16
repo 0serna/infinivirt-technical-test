@@ -38,12 +38,29 @@ export class AuthService {
 
     return {
       accessToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        role: user.role,
-      },
+      user: this.toPublicUser(user),
+    };
+  }
+
+  async me(userId: string): Promise<PublicUser> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+    return this.toPublicUser(user);
+  }
+
+  private toPublicUser(user: {
+    id: string;
+    email: string;
+    displayName: string;
+    role: Role;
+  }): PublicUser {
+    return {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      role: user.role,
     };
   }
 }

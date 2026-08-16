@@ -20,7 +20,7 @@ describe('Health (e2e)', () => {
     await app.close();
   });
 
-  it('GET /health returns { status: "ok" }', () => {
+  it('GET /health returns { status: "ok" } without a token', () => {
     return request(app.getHttpServer())
       .get('/health')
       .expect(200)
