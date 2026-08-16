@@ -3,7 +3,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY apps/web/package.json ./apps/web/
-COPY packages/shared/package.json ./packages/shared/
+COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
 
 RUN npm ci && npm run build -w @support-ticketing/api
@@ -21,6 +21,7 @@ COPY packages/shared/package.json ./packages/shared/
 
 RUN npm ci --omit=dev --ignore-scripts
 
+COPY --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/prisma ./apps/api/prisma
 COPY apps/api/docker-entrypoint.sh ./apps/api/docker-entrypoint.sh
