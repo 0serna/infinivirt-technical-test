@@ -11,6 +11,8 @@ Web: http://localhost:5173 · API: http://localhost:3000 · Postgres: localhost:
 
 Stop with `docker compose down`.
 
+Set `JWT_SECRET` (and optionally `JWT_EXPIRES_IN`, default `8h`) in `.env` before starting Compose. The API signs Bearer access tokens with that secret; access lifetime is about one support shift (~8 hours).
+
 ## Database migrations
 
 Prisma lives in `@support-ticketing/api`. Migrations run on API container startup; seed does not (see `docs/adr/0005-migrate-on-api-startup.md`).
@@ -37,6 +39,8 @@ DATABASE_URL=postgresql://support:support@localhost:5432/support_ticketing npm r
 | `admin@example.com` | admin | `DemoPassword123!` |
 
 Passwords are stored as bcrypt hashes (cost ~10). The plaintext above is documented only for local demo login; it is not written into the database as plaintext.
+
+Staff sign in with `POST /auth/login` (`{ "email", "password" }`) and receive `{ accessToken, user }` suitable for `Authorization: Bearer <accessToken>`.
 
 ## Operational SQL (`db/queries.sql`)
 
