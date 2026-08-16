@@ -1,5 +1,6 @@
 import { AppShell, Button, Group, Text, Title } from '@mantine/core';
 import { useAuth } from '../auth/AuthProvider';
+import { TicketList } from '../tickets/TicketList';
 
 const ROLE_LABEL = {
   agent: 'Agent',
@@ -30,7 +31,7 @@ export function StaffShell() {
         </Group>
       </AppShell.Header>
       <AppShell.Main>
-        <Text>You are signed in as {user.displayName}.</Text>
+        <TicketList />
       </AppShell.Main>
     </AppShell>
   );

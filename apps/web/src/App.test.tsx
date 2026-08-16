@@ -25,6 +25,35 @@ const unauthorized = jsonResponse(401, {
   message: 'Unauthorized',
 });
 
+const emptyTickets = { tickets: [] };
+
+const sampleTickets = {
+  tickets: [
+    {
+      id: 'ticket-1',
+      title: 'High: patient portal MFA reset',
+      status: 'open',
+      priority: 'high',
+      client: { id: 'client-1', name: 'Contoso Health' },
+      assignee: null,
+      createdBy: { id: 'user-2', displayName: 'Alex Agent' },
+      updatedAt: '2026-08-01T12:00:00.000Z',
+      createdAt: '2026-07-31T12:00:00.000Z',
+    },
+    {
+      id: 'ticket-2',
+      title: 'Resolved: SSO redirect loop',
+      status: 'resolved',
+      priority: 'low',
+      client: { id: 'client-2', name: 'Initech Soft' },
+      assignee: { id: 'user-3', displayName: 'Sam Supervisor' },
+      createdBy: { id: 'user-2', displayName: 'Alex Agent' },
+      updatedAt: '2026-07-30T09:15:00.000Z',
+      createdAt: '2026-07-01T09:15:00.000Z',
+    },
+  ],
+};
+
 beforeEach(() => {
   localStorage.clear();
   vi.stubGlobal('fetch', vi.fn());
@@ -90,11 +119,31 @@ const ada = {
   role: 'admin' as const,
 };
 
+function mockAuthedSession(tickets: unknown = emptyTickets) {
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (url === '/api/tickets') {
+      return jsonResponse(200, tickets);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+}
+
 test('successful login shows the shell', async () => {
   const user = userEvent.setup();
-  vi.mocked(fetch).mockResolvedValue(
-    jsonResponse(200, { accessToken: 'token-abc', user: ada }),
-  );
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === '/api/auth/login') {
+      return jsonResponse(200, { accessToken: 'token-abc', user: ada });
+    }
+    if (url === '/api/tickets') {
+      return jsonResponse(200, emptyTickets);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
 
   renderApp(['/login']);
 
@@ -113,7 +162,7 @@ test('successful login shows the shell', async () => {
 
 test('bootstrap with a valid token hydrates the shell from /api/auth/me', async () => {
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockResolvedValue(jsonResponse(200, ada));
+  mockAuthedSession();
 
   renderApp(['/']);
 
@@ -159,6 +208,9 @@ test('sign out returns to login and later requests do not send Bearer', async ()
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
     }
+    if (url === '/api/tickets') {
+      return jsonResponse(200, emptyTickets);
+    }
     if (url === '/api/auth/login') {
       return unauthorized;
     }
@@ -186,7 +238,7 @@ test('sign out returns to login and later requests do not send Bearer', async ()
 
 test('authenticated visit to /login is sent to the shell at /', async () => {
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockResolvedValue(jsonResponse(200, ada));
+  mockAuthedSession();
 
   renderApp(['/login']);
 
@@ -218,6 +270,9 @@ test('mid-session 401 shows the session expired alert on login', async () => {
       meCalls += 1;
       return meCalls === 1 ? jsonResponse(200, ada) : unauthorized;
     }
+    if (url === '/api/tickets') {
+      return jsonResponse(200, emptyTickets);
+    }
     throw new Error(`unexpected fetch ${url}`);
   });
 
@@ -244,9 +299,157 @@ test('reload of login ignores leftover sessionExpired history state', () => {
   expect(screen.queryByText('Your session expired. Sign in again.')).toBeNull();
 });
 
+test('signed-in home shows the Ticket List instead of the old placeholder', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockAuthedSession(sampleTickets);
+
+  renderApp(['/']);
+
+  expect(await screen.findByRole('heading', { name: 'Tickets' })).toBeDefined();
+  expect(screen.getByText('High: patient portal MFA reset')).toBeDefined();
+  expect(screen.queryByText(/You are signed in as/)).toBeNull();
+});
+
+test('Ticket List rows render Title, Status, Priority, Client, Assignee, creator, and updatedAt', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockAuthedSession(sampleTickets);
+
+  renderApp(['/']);
+
+  expect(
+    await screen.findByText('High: patient portal MFA reset'),
+  ).toBeDefined();
+  expect(screen.getByText('Open')).toBeDefined();
+  expect(screen.getByText('High')).toBeDefined();
+  expect(screen.getByText('Contoso Health')).toBeDefined();
+  expect(screen.getByText('Unassigned')).toBeDefined();
+  expect(screen.getByText('Resolved: SSO redirect loop')).toBeDefined();
+  expect(screen.getByText('Resolved')).toBeDefined();
+  expect(screen.getByText('Low')).toBeDefined();
+  expect(screen.getByText('Initech Soft')).toBeDefined();
+  expect(screen.getByText('Sam Supervisor')).toBeDefined();
+  expect(screen.getAllByText('Alex Agent').length).toBeGreaterThan(0);
+  expect(screen.getByText('1 Aug 2026, 12:00')).toBeDefined();
+  expect(screen.getByText('30 Jul 2026, 09:15')).toBeDefined();
+  expect(screen.getByRole('columnheader', { name: 'Title' })).toBeDefined();
+  expect(screen.getByRole('columnheader', { name: 'Status' })).toBeDefined();
+  expect(screen.getByRole('columnheader', { name: 'Priority' })).toBeDefined();
+  expect(screen.getByRole('columnheader', { name: 'Client' })).toBeDefined();
+  expect(screen.getByRole('columnheader', { name: 'Assignee' })).toBeDefined();
+  expect(
+    screen.getByRole('columnheader', { name: 'Created by' }),
+  ).toBeDefined();
+  expect(screen.getByRole('columnheader', { name: 'Updated' })).toBeDefined();
+});
+
+test('empty Ticket List shows an empty state', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockAuthedSession(emptyTickets);
+
+  renderApp(['/']);
+
+  expect(await screen.findByText('No tickets to show.')).toBeDefined();
+  expect(screen.queryByRole('columnheader', { name: 'Title' })).toBeNull();
+});
+
+test('in-flight Ticket List shows loading before rows', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  let resolveTickets!: (value: Response) => void;
+  const ticketsPending = new Promise<Response>((resolve) => {
+    resolveTickets = resolve;
+  });
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (url === '/api/tickets') {
+      return ticketsPending;
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/']);
+
+  expect(await screen.findByText('Loading tickets…')).toBeDefined();
+  expect(screen.queryByText('No tickets to show.')).toBeNull();
+  expect(screen.queryByText('High: patient portal MFA reset')).toBeNull();
+
+  await act(async () => {
+    resolveTickets(jsonResponse(200, sampleTickets));
+  });
+
+  expect(
+    await screen.findByText('High: patient portal MFA reset'),
+  ).toBeDefined();
+  expect(screen.queryByText('Loading tickets…')).toBeNull();
+});
+
+test('failed Ticket List fetch shows error copy without the raw server body', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (url === '/api/tickets') {
+      return jsonResponse(500, { message: 'Internal boom stack' });
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/']);
+
+  expect(
+    await screen.findByText("Couldn't load tickets. Try again."),
+  ).toBeDefined();
+  expect(screen.queryByText('Internal boom stack')).toBeNull();
+});
+
+test('Ticket List uses /api/tickets with the session Bearer token', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockAuthedSession(sampleTickets);
+
+  renderApp(['/']);
+
+  expect(
+    await screen.findByText('High: patient portal MFA reset'),
+  ).toBeDefined();
+  const ticketsCall = vi
+    .mocked(fetch)
+    .mock.calls.find(([url]) => url === '/api/tickets');
+  expect(ticketsCall).toBeDefined();
+  expect(new Headers(ticketsCall?.[1]?.headers).get('Authorization')).toBe(
+    'Bearer token-abc',
+  );
+});
+
+test('Ticket List 401 signs the User out', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (url === '/api/tickets') {
+      return unauthorized;
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/']);
+
+  expect(await screen.findByRole('button', { name: 'Sign in' })).toBeDefined();
+  expect(
+    await screen.findByText('Your session expired. Sign in again.'),
+  ).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
+  expect(localStorage.getItem('accessToken')).toBeNull();
+});
+
 test('clearing the token from another tab leaves the shell', async () => {
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockResolvedValue(jsonResponse(200, ada));
+  mockAuthedSession();
 
   renderApp(['/']);
 
