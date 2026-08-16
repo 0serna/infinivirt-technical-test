@@ -1,6 +1,11 @@
 import { AppShell, Button, Group, Text, Title } from '@mantine/core';
 import { useAuth } from '../auth/AuthProvider';
-import { ROLE_LABEL } from '../auth/role-label';
+
+const ROLE_LABEL = {
+  agent: 'Agent',
+  supervisor: 'Supervisor',
+  admin: 'Administrator',
+} as const;
 
 export function StaffShell() {
   const { user, signOut } = useAuth();

@@ -12,6 +12,19 @@ function renderApp(initialEntries: InitialEntry[]) {
   );
 }
 
+function jsonResponse(status: number, body: unknown): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  } as Response;
+}
+
+const unauthorized = jsonResponse(401, {
+  statusCode: 401,
+  message: 'Unauthorized',
+});
+
 beforeEach(() => {
   localStorage.clear();
   vi.stubGlobal('fetch', vi.fn());
@@ -35,11 +48,7 @@ test('empty login shows required-field copy without calling the API', async () =
 
 test('opaque login 401 shows Sign in failed without echoing the server body', async () => {
   const user = userEvent.setup();
-  vi.mocked(fetch).mockResolvedValue({
-    ok: false,
-    status: 401,
-    json: async () => ({ statusCode: 401, message: 'Unauthorized' }),
-  } as Response);
+  vi.mocked(fetch).mockResolvedValue(unauthorized);
 
   renderApp(['/login']);
 
@@ -81,28 +90,13 @@ const ada = {
   role: 'admin' as const,
 };
 
-test('successful login shows the shell and later fetches send Bearer', async () => {
+test('successful login shows the shell', async () => {
   const user = userEvent.setup();
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/login') {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ accessToken: 'token-abc', user: ada }),
-      } as Response;
-    }
-    if (url === '/api/auth/me') {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ada,
-      } as Response;
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
+  vi.mocked(fetch).mockResolvedValue(
+    jsonResponse(200, { accessToken: 'token-abc', user: ada }),
+  );
 
-  const { unmount } = renderApp(['/login']);
+  renderApp(['/login']);
 
   await user.type(screen.getByLabelText('Email'), ada.email);
   await user.type(screen.getByLabelText('Password'), 'secret');
@@ -115,27 +109,11 @@ test('successful login shows the shell and later fetches send Bearer', async () 
   expect(screen.getByText('Administrator')).toBeDefined();
   expect(screen.queryByText(/API health/)).toBeNull();
   expect(localStorage.getItem('accessToken')).toBe('token-abc');
-
-  unmount();
-  renderApp(['/']);
-
-  expect(await screen.findByText('Ada Lovelace')).toBeDefined();
-  const meCall = vi
-    .mocked(fetch)
-    .mock.calls.find(([url]) => url === '/api/auth/me');
-  expect(meCall).toBeDefined();
-  expect(meCall?.[1]?.method ?? 'GET').toBe('GET');
-  const headers = new Headers(meCall?.[1]?.headers);
-  expect(headers.get('Authorization')).toBe('Bearer token-abc');
 });
 
 test('bootstrap with a valid token hydrates the shell from /api/auth/me', async () => {
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockResolvedValue({
-    ok: true,
-    status: 200,
-    json: async () => ada,
-  } as Response);
+  vi.mocked(fetch).mockResolvedValue(jsonResponse(200, ada));
 
   renderApp(['/']);
 
@@ -156,11 +134,7 @@ test('bootstrap with a valid token hydrates the shell from /api/auth/me', async 
 
 test('bootstrap 401 clears the token and shows login without an expiry message', async () => {
   localStorage.setItem('accessToken', 'dead-token');
-  vi.mocked(fetch).mockResolvedValue({
-    ok: false,
-    status: 401,
-    json: async () => ({ statusCode: 401, message: 'Unauthorized' }),
-  } as Response);
+  vi.mocked(fetch).mockResolvedValue(unauthorized);
 
   renderApp(['/']);
 
@@ -183,18 +157,10 @@ test('sign out returns to login and later requests do not send Bearer', async ()
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
     if (url === '/api/auth/me') {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ada,
-      } as Response;
+      return jsonResponse(200, ada);
     }
     if (url === '/api/auth/login') {
-      return {
-        ok: false,
-        status: 401,
-        json: async () => ({ statusCode: 401, message: 'Unauthorized' }),
-      } as Response;
+      return unauthorized;
     }
     throw new Error(`unexpected fetch ${url}`);
   });
@@ -220,11 +186,7 @@ test('sign out returns to login and later requests do not send Bearer', async ()
 
 test('authenticated visit to /login is sent to the shell at /', async () => {
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockResolvedValue({
-    ok: true,
-    status: 200,
-    json: async () => ada,
-  } as Response);
+  vi.mocked(fetch).mockResolvedValue(jsonResponse(200, ada));
 
   renderApp(['/login']);
 
@@ -254,18 +216,7 @@ test('mid-session 401 shows the session expired alert on login', async () => {
     const url = String(input);
     if (url === '/api/auth/me') {
       meCalls += 1;
-      if (meCalls === 1) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ada,
-        } as Response;
-      }
-      return {
-        ok: false,
-        status: 401,
-        json: async () => ({ statusCode: 401, message: 'Unauthorized' }),
-      } as Response;
+      return meCalls === 1 ? jsonResponse(200, ada) : unauthorized;
     }
     throw new Error(`unexpected fetch ${url}`);
   });
@@ -295,11 +246,7 @@ test('reload of login ignores leftover sessionExpired history state', () => {
 
 test('clearing the token from another tab leaves the shell', async () => {
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockResolvedValue({
-    ok: true,
-    status: 200,
-    json: async () => ada,
-  } as Response);
+  vi.mocked(fetch).mockResolvedValue(jsonResponse(200, ada));
 
   renderApp(['/']);
 

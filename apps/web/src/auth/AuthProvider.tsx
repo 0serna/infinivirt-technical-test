@@ -7,23 +7,29 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { apiFetch, setUnauthorizedListener } from './api';
-import type { PublicUser } from './public-user';
+import type { Role } from '@support-ticketing/shared';
 import {
   ACCESS_TOKEN_KEY,
+  apiFetch,
   clearAccessToken,
   getAccessToken,
   setAccessToken,
-} from './token';
+  setUnauthorizedListener,
+} from './api';
 
 export type SignInResult = 'ok' | 'unauthorized' | 'unreachable';
 
-export type LoginRedirectState = { sessionExpired: true } | null;
+export type PublicUser = {
+  id: string;
+  email: string;
+  displayName: string;
+  role: Role;
+};
 
 type AuthValue = {
   user: PublicUser | null;
   isReady: boolean;
-  loginRedirectState: LoginRedirectState;
+  sessionExpired: boolean;
   signIn: (email: string, password: string) => Promise<SignInResult>;
   signOut: () => void;
 };
@@ -33,8 +39,7 @@ const AuthContext = createContext<AuthValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<PublicUser | null>(null);
   const [isReady, setIsReady] = useState(false);
-  const [loginRedirectState, setLoginRedirectState] =
-    useState<LoginRedirectState>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -48,11 +53,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void apiFetch('/api/auth/me')
       .then(async (response) => {
         if (cancelled) {
-          return;
-        }
-        if (response.status === 401) {
-          setUser(null);
-          setIsReady(true);
           return;
         }
         if (!response.ok) {
@@ -76,14 +76,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     function onStorage(event: StorageEvent) {
-      if (event.key !== ACCESS_TOKEN_KEY) {
+      if (event.key !== ACCESS_TOKEN_KEY || event.newValue != null) {
         return;
       }
-      if (event.newValue == null) {
-        clearAccessToken();
-        setLoginRedirectState(null);
-        setUser(null);
-      }
+      clearAccessToken();
+      setSessionExpired(false);
+      setUser(null);
     }
     window.addEventListener('storage', onStorage);
     return () => {
@@ -97,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     setUnauthorizedListener(() => {
-      setLoginRedirectState({ sessionExpired: true });
+      setSessionExpired(true);
       setUser(null);
     });
     return () => {
@@ -123,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user: PublicUser;
         };
         setAccessToken(data.accessToken);
-        setLoginRedirectState(null);
+        setSessionExpired(false);
         setUser(data.user);
         return 'ok';
       } catch {
@@ -135,13 +133,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(() => {
     clearAccessToken();
-    setLoginRedirectState(null);
+    setSessionExpired(false);
     setUser(null);
   }, []);
 
   const value = useMemo(
-    () => ({ user, isReady, loginRedirectState, signIn, signOut }),
-    [user, isReady, loginRedirectState, signIn, signOut],
+    () => ({ user, isReady, sessionExpired, signIn, signOut }),
+    [user, isReady, sessionExpired, signIn, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

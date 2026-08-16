@@ -1,9 +1,26 @@
 import { MantineProvider } from '@mantine/core';
-import { Route, Routes } from 'react-router-dom';
-import { AuthProvider } from './auth/AuthProvider';
+import type { ReactNode } from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { LoginPage } from './pages/LoginPage';
-import { GuestRoute, ProtectedRoute } from './routes/AuthRoutes';
 import { StaffShell } from './shell/StaffShell';
+
+function AuthGate({
+  allow,
+  children,
+}: {
+  allow: 'guest' | 'user';
+  children: ReactNode;
+}) {
+  const { user, isReady } = useAuth();
+  if (!isReady) {
+    return null;
+  }
+  if (allow === 'guest') {
+    return user ? <Navigate to="/" replace /> : children;
+  }
+  return user ? children : <Navigate to="/login" replace />;
+}
 
 export function App() {
   return (
@@ -13,17 +30,17 @@ export function App() {
           <Route
             path="/login"
             element={
-              <GuestRoute>
+              <AuthGate allow="guest">
                 <LoginPage />
-              </GuestRoute>
+              </AuthGate>
             }
           />
           <Route
             path="/"
             element={
-              <ProtectedRoute>
+              <AuthGate allow="user">
                 <StaffShell />
-              </ProtectedRoute>
+              </AuthGate>
             }
           />
         </Routes>
