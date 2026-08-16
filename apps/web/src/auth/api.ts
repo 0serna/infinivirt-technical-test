@@ -1,6 +1,16 @@
-import { getAccessToken } from './token';
+import { clearAccessToken, getAccessToken } from './token';
 
-export function apiFetch(
+type UnauthorizedListener = () => void;
+
+let unauthorizedListener: UnauthorizedListener | null = null;
+
+export function setUnauthorizedListener(
+  listener: UnauthorizedListener | null,
+): void {
+  unauthorizedListener = listener;
+}
+
+export async function apiFetch(
   input: string,
   init: RequestInit = {},
 ): Promise<Response> {
@@ -12,5 +22,10 @@ export function apiFetch(
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
-  return fetch(input, { ...init, headers });
+  const response = await fetch(input, { ...init, headers });
+  if (response.status === 401 && input !== '/api/auth/login') {
+    clearAccessToken();
+    unauthorizedListener?.();
+  }
+  return response;
 }

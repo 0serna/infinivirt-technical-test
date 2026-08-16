@@ -1,4 +1,4 @@
-const ACCESS_TOKEN_KEY = 'accessToken';
+export const ACCESS_TOKEN_KEY = 'accessToken';
 
 export function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY);

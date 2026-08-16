@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { App } from './App';
@@ -244,4 +244,69 @@ test('unauthenticated visit to / is sent to login without showing the shell', as
     screen.queryByRole('heading', { name: 'Support Ticketing' }),
   ).toBeNull();
   expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+});
+
+test('mid-session 401 shows the session expired alert on login', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  let meCalls = 0;
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === '/api/auth/me') {
+      meCalls += 1;
+      if (meCalls === 1) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ada,
+        } as Response;
+      }
+      return {
+        ok: false,
+        status: 401,
+        json: async () => ({ statusCode: 401, message: 'Unauthorized' }),
+      } as Response;
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/']);
+
+  await user.click(await screen.findByRole('button', { name: 'Refresh' }));
+
+  expect(await screen.findByRole('button', { name: 'Sign in' })).toBeDefined();
+  expect(
+    await screen.findByText('Your session expired. Sign in again.'),
+  ).toBeDefined();
+  expect(screen.queryByText('Unauthorized')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
+  expect(localStorage.getItem('accessToken')).toBeNull();
+});
+
+test('clearing the token from another tab leaves the shell', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  vi.mocked(fetch).mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ada,
+  } as Response);
+
+  renderApp(['/']);
+
+  expect(await screen.findByRole('button', { name: 'Sign out' })).toBeDefined();
+
+  act(() => {
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'accessToken',
+        oldValue: 'token-abc',
+        newValue: null,
+      }),
+    );
+  });
+
+  expect(await screen.findByRole('button', { name: 'Sign in' })).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
+  expect(screen.queryByText('Your session expired. Sign in again.')).toBeNull();
+  expect(localStorage.getItem('accessToken')).toBeNull();
 });

@@ -3,12 +3,14 @@ import { useAuth } from '../auth/AuthProvider';
 import type { ReactNode } from 'react';
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, isReady } = useAuth();
+  const { user, isReady, loginRedirectState } = useAuth();
   if (!isReady) {
     return null;
   }
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return (
+      <Navigate to="/login" replace state={loginRedirectState ?? undefined} />
+    );
   }
   return children;
 }

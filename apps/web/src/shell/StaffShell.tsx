@@ -1,4 +1,5 @@
 import { AppShell, Button, Group, Text, Title } from '@mantine/core';
+import { apiFetch } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
 import { ROLE_LABEL } from '../auth/role-label';
 
@@ -26,6 +27,16 @@ export function StaffShell() {
       </AppShell.Header>
       <AppShell.Main>
         <Text>You are signed in as {user.displayName}.</Text>
+        <Button
+          type="button"
+          variant="default"
+          mt="md"
+          onClick={() => {
+            void apiFetch('/api/auth/me');
+          }}
+        >
+          Refresh
+        </Button>
       </AppShell.Main>
     </AppShell>
   );

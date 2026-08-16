@@ -7,15 +7,23 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { apiFetch } from './api';
+import { apiFetch, setUnauthorizedListener } from './api';
 import type { PublicUser } from './public-user';
-import { clearAccessToken, getAccessToken, setAccessToken } from './token';
+import {
+  ACCESS_TOKEN_KEY,
+  clearAccessToken,
+  getAccessToken,
+  setAccessToken,
+} from './token';
 
 export type SignInResult = 'ok' | 'unauthorized' | 'unreachable';
+
+export type LoginRedirectState = { sessionExpired: true } | null;
 
 type AuthValue = {
   user: PublicUser | null;
   isReady: boolean;
+  loginRedirectState: LoginRedirectState;
   signIn: (email: string, password: string) => Promise<SignInResult>;
   signOut: () => void;
 };
@@ -25,6 +33,8 @@ const AuthContext = createContext<AuthValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<PublicUser | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [loginRedirectState, setLoginRedirectState] =
+    useState<LoginRedirectState>(null);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -65,6 +75,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    function onStorage(event: StorageEvent) {
+      if (event.key !== ACCESS_TOKEN_KEY) {
+        return;
+      }
+      if (event.newValue == null) {
+        clearAccessToken();
+        setLoginRedirectState(null);
+        setUser(null);
+      }
+    }
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setUnauthorizedListener(null);
+      return;
+    }
+    setUnauthorizedListener(() => {
+      setLoginRedirectState({ sessionExpired: true });
+      setUser(null);
+    });
+    return () => {
+      setUnauthorizedListener(null);
+    };
+  }, [user]);
+
   const signIn = useCallback(
     async (email: string, password: string): Promise<SignInResult> => {
       try {
@@ -83,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user: PublicUser;
         };
         setAccessToken(data.accessToken);
+        setLoginRedirectState(null);
         setUser(data.user);
         return 'ok';
       } catch {
@@ -94,12 +136,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(() => {
     clearAccessToken();
+    setLoginRedirectState(null);
     setUser(null);
   }, []);
 
   const value = useMemo(
-    () => ({ user, isReady, signIn, signOut }),
-    [user, isReady, signIn, signOut],
+    () => ({ user, isReady, loginRedirectState, signIn, signOut }),
+    [user, isReady, loginRedirectState, signIn, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
