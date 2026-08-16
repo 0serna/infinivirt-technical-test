@@ -7,7 +7,7 @@ Internal platform for registering, assigning, and tracking customer support tick
 ### Actors
 
 **User**:
-Authenticated company staff (Administrator, Agent, or Supervisor). Login identity is a unique email; also has a display name (not required to be unique). Operates the platform with a login.
+Authenticated company staff (Administrator, Agent, or Supervisor). Login identity is a unique email; also has a display name (not required to be unique).
 _Avoid_: Account, operator, employee
 
 **Client**:

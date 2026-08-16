@@ -2,13 +2,11 @@ FROM node:24-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/api ./apps/api
 
-RUN npm ci
-RUN npm run build -w @support-ticketing/api
+RUN npm ci && npm run build -w @support-ticketing/api
 
 FROM node:24-alpine AS runner
 WORKDIR /app

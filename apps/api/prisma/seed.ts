@@ -22,8 +22,8 @@ const hoursAgo = (hours: number): Date =>
 
 const daysAgo = (days: number): Date => hoursAgo(days * 24);
 
-/** Stable UUID from a seed key so re-runs target the same rows. */
-function seedId(key: string): string {
+/** Deterministic UUID so re-runs upsert the same ticket rows. */
+function stableSeedUuid(key: string): string {
   const hex = createHash('sha256')
     .update(`support-ticketing-seed:${key}`)
     .digest('hex');
@@ -108,7 +108,7 @@ function buildTickets(): SeedTicket[] {
       assigneeEmail: 'agent@example.com',
       createdByEmail: 'supervisor@example.com',
       createdAt: daysAgo(10),
-      updatedAt: hoursAgo(72),
+      updatedAt: daysAgo(3),
       resolvedAt: null,
       closedAt: null,
       statusHistory: [
@@ -715,7 +715,6 @@ function buildTickets(): SeedTicket[] {
           changedAt: daysAgo(6),
         },
       ],
-      // >2 assignment-history rows: null→user, user→user, user→null, null→user
       assignments: [
         {
           fromAssigneeEmail: null,
@@ -872,22 +871,18 @@ function buildTickets(): SeedTicket[] {
   ];
 }
 
-async function seedUsers(passwordHash: string): Promise<Map<string, string>> {
+async function seedUsers(): Promise<Map<string, string>> {
   const byEmail = new Map<string, string>();
   for (const user of USERS) {
+    const fields = {
+      displayName: user.displayName,
+      passwordHash: DEMO_PASSWORD_HASH,
+      role: user.role,
+    };
     const row = await prisma.user.upsert({
       where: { email: user.email },
-      create: {
-        email: user.email,
-        displayName: user.displayName,
-        passwordHash,
-        role: user.role,
-      },
-      update: {
-        displayName: user.displayName,
-        passwordHash,
-        role: user.role,
-      },
+      create: { email: user.email, ...fields },
+      update: fields,
     });
     byEmail.set(user.email, row.id);
   }
@@ -912,7 +907,7 @@ async function replaceTicketGraph(
   usersByEmail: Map<string, string>,
   clientsByName: Map<string, string>,
 ): Promise<void> {
-  const ticketId = seedId(ticket.key);
+  const ticketId = stableSeedUuid(ticket.key);
   const clientId = clientsByName.get(ticket.clientName);
   const createdById = usersByEmail.get(ticket.createdByEmail);
   if (!clientId || !createdById) {
@@ -935,7 +930,7 @@ async function replaceTicketGraph(
     description: ticket.description,
     status: ticket.status,
     priority: ticket.priority,
-    assigneeId: assigneeId ?? null,
+    assigneeId,
     createdById,
     createdAt: ticket.createdAt,
     updatedAt: ticket.updatedAt,
@@ -943,22 +938,11 @@ async function replaceTicketGraph(
     closedAt: ticket.closedAt,
   };
 
+  const { id, ...update } = data;
   await prisma.ticket.upsert({
-    where: { id: ticketId },
+    where: { id },
     create: data,
-    update: {
-      clientId: data.clientId,
-      title: data.title,
-      description: data.description,
-      status: data.status,
-      priority: data.priority,
-      assigneeId: data.assigneeId,
-      createdById: data.createdById,
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt,
-      resolvedAt: data.resolvedAt,
-      closedAt: data.closedAt,
-    },
+    update,
   });
 
   await prisma.comment.deleteMany({ where: { ticketId } });
@@ -1003,8 +987,8 @@ async function replaceTicketGraph(
       data: {
         id: randomUUID(),
         ticketId,
-        fromAssigneeId: fromAssigneeId ?? null,
-        toAssigneeId: toAssigneeId ?? null,
+        fromAssigneeId,
+        toAssigneeId,
         changedById,
         changedAt: row.changedAt,
       },
@@ -1041,7 +1025,7 @@ async function replaceTicketGraph(
 }
 
 async function main(): Promise<void> {
-  const usersByEmail = await seedUsers(DEMO_PASSWORD_HASH);
+  const usersByEmail = await seedUsers();
   const clientsByName = await seedClients();
   const tickets = buildTickets();
 

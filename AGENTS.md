@@ -30,7 +30,7 @@
 - `npm run lint:fix`: apply Biome safe lint fixes.
 - `npm run typecheck`: typecheck all workspaces.
 
-Host migrate uses `localhost` in `DATABASE_URL`; Compose services use hostname `postgres` (see `.env.example` and README).
+Host vs Compose `DATABASE_URL` hostname: see README (Host CLI) and `.env.example`.
 
 ## Agent skills
 

@@ -1,11 +1,10 @@
 -- Operational queries for the Support Ticketing domain.
 -- Run against a migrated + seeded database (see README).
 --
--- Rolling window for queries 4 and 8 (shared definition):
---   NOW() - INTERVAL '30 days'
--- Projection fields: tickets.resolved_at, tickets.closed_at, tickets.created_at.
+-- Rolling window for queries 4 and 8: NOW() - INTERVAL '30 days'
+-- Query 8 may exceed 100% (more closed_at than created_at in the window).
 -- Reopen (closed → open) clears resolved_at/closed_at on the Ticket projection;
--- that can under-count queries 4 and 5 relative to status history.
+-- that can under-count or distort queries 4 and 5 vs status history.
 
 -- =============================================================================
 -- 1. Ticket counts by Status per Client
@@ -124,8 +123,6 @@ ORDER BY assignment_history_count DESC, t.title;
 -- =============================================================================
 -- 8. Percent closed vs created in the last 30 days (same window as query 4)
 --     100 * count(closed_at in window) / count(created_at in window)
---     May exceed 100% when more Tickets close in the window than were created
---     (e.g. backlog closed later than create).
 -- =============================================================================
 SELECT
   closed_in_window,
