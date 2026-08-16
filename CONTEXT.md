@@ -7,11 +7,11 @@ Internal platform for registering, assigning, and tracking customer support tick
 ### Actors
 
 **User**:
-Authenticated company staff (Administrator, Agent, or Supervisor). Operates the platform with a login.
+Authenticated company staff (Administrator, Agent, or Supervisor). Login identity is a unique email; also has a display name (not required to be unique).
 _Avoid_: Account, operator, employee
 
 **Client**:
-Person or organization receiving support. A business record; does not authenticate in the first release.
+Person or organization receiving support. A business record identified by a unique name; does not authenticate in the first release.
 _Avoid_: Customer, account, company (when referring to the subject of a ticket)
 
 **Role**:
@@ -21,15 +21,19 @@ _Avoid_: Profile, permission set, flat unrelated roles
 ### Core
 
 **Ticket**:
-Unit of support work tied to a single Client. Aggregate root: status, priority, assignment, and comments live on it. Created by a User on behalf of the Client. Current-cycle fields: Status, Priority, Assignee (nullable), description, created_by, created_at, updated_at, resolved_at (nullable), closed_at (nullable).
+Unit of support work tied to a single Client for its lifetime (Client does not change after create). Aggregate root: status, priority, assignment, and comments live on it. Created by a User on behalf of the Client. Current-cycle fields: Title, Status, Priority, Assignee (nullable), description, created_by, created_at, updated_at, resolved_at (nullable), closed_at (nullable).
 _Avoid_: Request, case, issue, incident (as a synonym for the aggregate)
+
+**Title**:
+Short label of a Ticket for queues and lists. Distinct from description, which is the body.
+_Avoid_: Subject, summary (as synonyms that replace Title)
 
 **Assignee**:
 The single User responsible for the Ticket at a given time. May be null if the ticket is unassigned.
 _Avoid_: Owner, handler
 
 **Reassignment**:
-Change of a Ticket's Assignee. Every change (including the first assignment null→user) is stored in an append-only history; `assignee` on the Ticket is the current projection. “Reassigned more than twice” means more than two rows in that history.
+Change of a Ticket's Assignee. Every change — first assignment (`null`→user), reassignment (user→user), and unassignment (user→`null`) — is stored in an append-only history; `assignee` on the Ticket is the current projection. “Reassigned more than twice” means more than two rows in that history.
 _Avoid_: Transfer, handoff (as an entity)
 
 **Comment**:
@@ -51,8 +55,8 @@ Ticket in operational load: Status `open` or `in_progress`. Does not include `re
 _Avoid_: Active, pending (as the metric definition)
 
 **Priority**:
-Fixed urgency of a Ticket: `low`, `medium`, `high`, or `critical`. Default on create: `medium`.
-_Avoid_: Severity (unless split later), custom priorities
+Urgency of a Ticket: `low`, `medium`, `high`, or `critical`. Default on create: `medium`. May change over the Ticket's life; only the current value is kept (no append-only Priority history, unlike Status and Assignee).
+_Avoid_: Severity (unless split later), custom priorities; treating Priority as immutable
 
 ### Authorization (cascade)
 

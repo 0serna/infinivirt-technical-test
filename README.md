@@ -10,3 +10,47 @@ docker compose up --build
 Web: http://localhost:5173 · API: http://localhost:3000 · Postgres: localhost:5432
 
 Stop with `docker compose down`.
+
+## Database migrations
+
+Prisma lives in `@support-ticketing/api`. Migrations run on API container startup; seed does not (see `docs/adr/0005-migrate-on-api-startup.md`).
+
+### Host CLI (migrate / seed from your machine)
+
+`.env.example` sets `DATABASE_URL` with hostname `postgres` for Compose. From the host, point at the published Postgres port instead:
+
+```bash
+DATABASE_URL=postgresql://support:support@localhost:5432/support_ticketing npm run db:migrate
+DATABASE_URL=postgresql://support:support@localhost:5432/support_ticketing npm run db:seed
+```
+
+- `npm run db:migrate` — apply pending migrations (`prisma migrate deploy`)
+- `npm run db:migrate:dev` — create/apply migrations during schema development (`prisma migrate dev`)
+- `npm run db:seed` — idempotent domain seed (`prisma db seed`); safe to re-run
+
+### Demo users (seed)
+
+| Email | Role | Password |
+| --- | --- | --- |
+| `agent@example.com` | agent | `DemoPassword123!` |
+| `supervisor@example.com` | supervisor | `DemoPassword123!` |
+| `admin@example.com` | admin | `DemoPassword123!` |
+
+Passwords are stored as bcrypt hashes (cost ~10). The plaintext above is documented only for local demo login; it is not written into the database as plaintext.
+
+## Operational SQL (`db/queries.sql`)
+
+After migrate + seed, run the eight operational queries against Postgres:
+
+```bash
+# Detect the published host port if 5432 is already taken (e.g. 15432):
+docker compose port postgres 5432
+
+# Via the Compose Postgres container (works regardless of host port mapping):
+docker compose exec -T postgres psql -U support -d support_ticketing < db/queries.sql
+
+# Or from the host with psql (replace PORT with the published port):
+PGPASSWORD=support psql -h localhost -p PORT -U support -d support_ticketing -f db/queries.sql
+```
+
+Window, credit, ratio, and reopen semantics live in the comments in `db/queries.sql`.
