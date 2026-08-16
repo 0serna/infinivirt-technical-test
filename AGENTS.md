@@ -23,6 +23,7 @@
 - `npm run test:e2e`: run API end-to-end tests.
 - `npm run db:migrate`: apply Prisma migrations (`prisma migrate deploy` in the API workspace).
 - `npm run db:migrate:dev`: create/apply Prisma migrations during schema development.
+- `npm run db:seed`: idempotent domain seed (`prisma db seed` in the API workspace); not run on API startup.
 - `npm run format`: write Biome formatting.
 - `npm run format:check`: verify Biome formatting without writing.
 - `npm run lint`: lint with Biome; warnings fail the command.

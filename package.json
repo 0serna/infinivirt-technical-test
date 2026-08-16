@@ -14,6 +14,7 @@
     "test:e2e": "npm run test:e2e -w @support-ticketing/api",
     "db:migrate": "npm run db:migrate -w @support-ticketing/api",
     "db:migrate:dev": "npm run db:migrate:dev -w @support-ticketing/api",
+    "db:seed": "npm run db:seed -w @support-ticketing/api",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint --error-on-warnings .",
