@@ -1,0 +1,11 @@
+.wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.form {
+  width: min(24rem, 100%);
+}
