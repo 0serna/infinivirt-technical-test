@@ -44,6 +44,14 @@ _Avoid_: Note, message, reply (as a domain type)
 Change of Ticket Status recorded in an append-only history (from, to, at, by). Status on the Ticket is the current projection. On reopen (`closed` → `open`), `resolved_at` and `closed_at` on the Ticket are cleared; history keeps prior cycles.
 _Avoid_: Overwriting columns with no history; status derived only from history with no projection
 
+**List Scope**:
+The set of Tickets a User may consult — the Ticket List and any later single-Ticket consult. Agent: Tickets where they are Assignee or `created_by` (unassigned Tickets they did not create are out). Supervisor and Administrator: all Tickets. A Ticket outside this set is not consultable; consult does not announce that it exists. Distinct from the Operational Dashboard, which counts Open Tickets assigned to the Agent.
+_Avoid_: “within list scope” without this set; treating consult as assignee-only; a shared unassigned queue for Agents; equating List Scope with who may update; a table-only recorte that a direct consult can bypass
+
+**Ticket List**:
+Consult view of Tickets in the User’s List Scope, all Status values unless filtered. Each row includes Title, Status, Priority, Client, Assignee (nullable), `created_by`, and `updatedAt`. Narrows by Status, Priority, and Client; Supervisor and Administrator may also narrow by Assignee, including unassigned (`Assignee` null). Filter choices come from Tickets already in List Scope; they do not require listing the Client or User catalogs.
+_Avoid_: Search-by-Title as a required list dimension; Assignee as a filter that widens an Agent’s List Scope; treating list filters as Administrator catalog access
+
 ### Status and priority
 
 **Ticket Status**:
@@ -61,7 +69,7 @@ _Avoid_: Severity (unless split later), custom priorities; treating Priority as 
 ### Authorization (cascade)
 
 **Agent**:
-May list tickets (within list scope), create tickets, update and change Status only when Assignee, add `public` Comments, move to `resolved` when Assignee.
+May consult Tickets in their List Scope, create tickets, update and change Status only when Assignee, add `public` Comments, move to `resolved` when Assignee.
 
 **Supervisor**:
 Everything an Agent can do, plus: list all tickets, reassign, see team metrics, review stale/overdue tickets, `internal` Comments. Does not close or reopen. Does not edit fields/status on a ticket they are not Assignee of (except reassignment).
