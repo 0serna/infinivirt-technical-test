@@ -1,15 +1,10 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import type { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { type PublicUser, toPublicUser } from './public-user';
 
-export type PublicUser = {
-  id: string;
-  email: string;
-  displayName: string;
-  role: Role;
-};
+export type { PublicUser } from './public-user';
 
 export type LoginResult = {
   accessToken: string;
@@ -24,6 +19,10 @@ export class AuthService {
   ) {}
 
   async login(email: string, password: string): Promise<LoginResult> {
+    if (!isNonEmptyString(email) || !isNonEmptyString(password)) {
+      throw new UnauthorizedException();
+    }
+
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
       throw new UnauthorizedException();
@@ -38,7 +37,7 @@ export class AuthService {
 
     return {
       accessToken,
-      user: this.toPublicUser(user),
+      user: toPublicUser(user),
     };
   }
 
@@ -47,20 +46,10 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException();
     }
-    return this.toPublicUser(user);
+    return toPublicUser(user);
   }
+}
 
-  private toPublicUser(user: {
-    id: string;
-    email: string;
-    displayName: string;
-    role: Role;
-  }): PublicUser {
-    return {
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-      role: user.role,
-    };
-  }
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
 }

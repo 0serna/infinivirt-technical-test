@@ -3,6 +3,7 @@ import {
   type ExecutionContext,
   ForbiddenException,
   Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { hasMinimumRole, type Role } from '@support-ticketing/shared';
@@ -24,7 +25,10 @@ export class RolesGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const userRole = request.user?.role;
-    if (!userRole || !hasMinimumRole(userRole, minimumRole)) {
+    if (!userRole) {
+      throw new UnauthorizedException();
+    }
+    if (!hasMinimumRole(userRole, minimumRole)) {
       throw new ForbiddenException();
     }
 

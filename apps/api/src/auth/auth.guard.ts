@@ -8,8 +8,8 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
-import type { PublicUser } from './auth.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
+import { type PublicUser, toPublicUser } from './public-user';
 
 export type AuthenticatedRequest = Request & {
   user?: PublicUser;
@@ -60,12 +60,7 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException();
     }
 
-    request.user = {
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-      role: user.role,
-    };
+    request.user = toPublicUser(user);
     return true;
   }
 

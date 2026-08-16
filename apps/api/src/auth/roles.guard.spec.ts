@@ -1,6 +1,10 @@
-import { type ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  type ExecutionContext,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { Role } from '@prisma/client';
+import type { Role } from '@support-ticketing/shared';
 import { RolesGuard } from './roles.guard';
 
 function createContext(userRole?: Role): ExecutionContext {
@@ -70,11 +74,11 @@ describe('RolesGuard', () => {
     );
   });
 
-  it('rejects when the request has no User', () => {
+  it('rejects with 401 when the request has no User', () => {
     reflectorGetAllAndOverride.mockReturnValue('agent');
 
     expect(() => guard.canActivate(createContext())).toThrow(
-      ForbiddenException,
+      UnauthorizedException,
     );
   });
 });

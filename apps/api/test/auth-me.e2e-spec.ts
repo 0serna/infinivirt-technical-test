@@ -4,9 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Test, type TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-
-const DEMO_PASSWORD = 'DemoPassword123!';
-const AGENT_EMAIL = 'agent@example.com';
+import { AGENT_EMAIL, DEMO_PASSWORD } from './demo-credentials';
 
 describe('Auth me (e2e)', () => {
   let app: INestApplication;
@@ -53,6 +51,26 @@ describe('Auth me (e2e)', () => {
     await request(app.getHttpServer())
       .get('/auth/me')
       .set('Authorization', 'Bearer not-a-valid-jwt')
+      .expect(401);
+  });
+
+  it('GET /auth/me with an expired token returns 401', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: AGENT_EMAIL, password: DEMO_PASSWORD })
+      .expect(200);
+
+    const jwt = new JwtService({
+      secret: process.env.JWT_SECRET,
+    });
+    const expiredToken = await jwt.signAsync(
+      { sub: login.body.user.id as string },
+      { expiresIn: 0 },
+    );
+
+    await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${expiredToken}`)
       .expect(401);
   });
 

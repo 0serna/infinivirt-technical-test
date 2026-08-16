@@ -3,9 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-
-const DEMO_PASSWORD = 'DemoPassword123!';
-const AGENT_EMAIL = 'agent@example.com';
+import { AGENT_EMAIL, DEMO_PASSWORD } from './demo-credentials';
 
 function decodeJwtPayload(token: string): {
   sub?: string;
@@ -76,7 +74,13 @@ describe('Auth login (e2e)', () => {
       .send({ email: AGENT_EMAIL, password: 'WrongPassword!' })
       .expect(401);
 
+    const missingPassword = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: AGENT_EMAIL })
+      .expect(401);
+
     expect(unknownEmail.body).toEqual(wrongPassword.body);
+    expect(unknownEmail.body).toEqual(missingPassword.body);
     expect(unknownEmail.body).not.toMatchObject({
       message: expect.stringMatching(/user|email|password|found|invalid/i),
     });
