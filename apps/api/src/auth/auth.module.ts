@@ -5,6 +5,7 @@ import type { StringValue } from 'ms';
 import { AuthController } from './auth.controller';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
+import { RolesGuard } from './roles.guard';
 
 @Module({
   imports: [
@@ -26,11 +27,19 @@ import { AuthService } from './auth.service';
   providers: [
     AuthService,
     AuthGuard,
+    RolesGuard,
     {
       provide: APP_GUARD,
       useExisting: AuthGuard,
     },
+    {
+      provide: APP_GUARD,
+      useExisting: RolesGuard,
+    },
   ],
-  exports: [JwtModule, AuthGuard],
+  exports: [JwtModule, AuthGuard, RolesGuard],
 })
 export class AuthModule {}
+
+export { RequireRole } from './require-role.decorator';
+export { RolesGuard } from './roles.guard';

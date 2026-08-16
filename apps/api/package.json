@@ -10,6 +10,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:seed": "prisma db seed",
+    "test": "jest --config ./test/jest-unit.json",
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "prisma": {
@@ -21,6 +22,7 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/platform-express": "^11.1.6",
     "@prisma/client": "^6.19.3",
+    "@support-ticketing/shared": "*",
     "bcrypt": "^6.0.0",
     "prisma": "^6.19.3",
     "reflect-metadata": "^0.2.2",
