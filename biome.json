@@ -27,6 +27,9 @@
   "javascript": {
     "formatter": {
       "quoteStyle": "single"
+    },
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
     }
   },
   "linter": {
@@ -49,6 +52,16 @@
       ],
       "javascript": {
         "globals": ["vi"]
+      }
+    },
+    {
+      "includes": ["apps/api/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useImportType": "off"
+          }
+        }
       }
     }
   ]
