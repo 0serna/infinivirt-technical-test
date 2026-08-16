@@ -50,7 +50,9 @@ ORDER BY t.updated_at ASC;
 
 -- =============================================================================
 -- 4. User with most Tickets having resolved_at in the last 30 days
---     (Ticket projection; credit = current assignee)
+--     Inclusion uses Ticket projection (resolved_at in window).
+--     Credit = User who recorded the latest Status Transition to `resolved`
+--     for that Ticket (ticket_status_history.changed_by_id) — not current Assignee.
 -- =============================================================================
 SELECT
   u.id AS user_id,
@@ -59,7 +61,16 @@ SELECT
   u.role,
   COUNT(*)::bigint AS resolved_in_window_count
 FROM tickets t
-JOIN users u ON u.id = t.assignee_id
+JOIN ticket_status_history h
+  ON h.ticket_id = t.id
+ AND h.to_status = 'resolved'
+ AND h.changed_at = (
+   SELECT MAX(h2.changed_at)
+   FROM ticket_status_history h2
+   WHERE h2.ticket_id = t.id
+     AND h2.to_status = 'resolved'
+ )
+JOIN users u ON u.id = h.changed_by_id
 WHERE t.resolved_at IS NOT NULL
   AND t.resolved_at >= NOW() - INTERVAL '30 days'
 GROUP BY u.id, u.email, u.display_name, u.role

@@ -102,7 +102,7 @@ function buildTickets(): SeedTicket[] {
       key: 'stale-open-acme',
       clientName: 'Acme Logistics',
       title: 'Stale open: billing portal timeout',
-      description: 'Customer cannot load invoices; last touch was days ago.',
+      description: 'Client cannot load invoices; last touch was days ago.',
       status: TicketStatus.open,
       priority: Priority.medium,
       assigneeEmail: 'agent@example.com',
@@ -130,7 +130,7 @@ function buildTickets(): SeedTicket[] {
       comments: [
         {
           authorEmail: 'agent@example.com',
-          body: 'Waiting on customer network details.',
+          body: 'Waiting on Client network details.',
           visibility: CommentVisibility.public,
           createdAt: daysAgo(9),
         },
@@ -218,7 +218,7 @@ function buildTickets(): SeedTicket[] {
       comments: [
         {
           authorEmail: 'admin@example.com',
-          body: 'P1 — keep customer updated hourly.',
+          body: 'P1 — keep the Client updated hourly.',
           visibility: CommentVisibility.internal,
           createdAt: hoursAgo(18),
         },
@@ -605,7 +605,7 @@ function buildTickets(): SeedTicket[] {
       key: 'closed-recent-globex',
       clientName: 'Globex Energy',
       title: 'Closed: invoice PDF encoding',
-      description: 'UTF-8 fix shipped; customer confirmed.',
+      description: 'UTF-8 fix shipped; Client confirmed.',
       status: TicketStatus.closed,
       priority: Priority.medium,
       assigneeEmail: 'agent@example.com',
@@ -651,7 +651,7 @@ function buildTickets(): SeedTicket[] {
       comments: [
         {
           authorEmail: 'admin@example.com',
-          body: 'Closing after customer confirmation.',
+          body: 'Closing after Client confirmation.',
           visibility: CommentVisibility.public,
           createdAt: daysAgo(1),
         },
@@ -745,7 +745,7 @@ function buildTickets(): SeedTicket[] {
       comments: [
         {
           authorEmail: 'supervisor@example.com',
-          body: 'Unassigned briefly while clarifying ownership.',
+          body: 'Unassigned briefly while clarifying the Assignee.',
           visibility: CommentVisibility.internal,
           createdAt: daysAgo(5),
         },
@@ -762,7 +762,7 @@ function buildTickets(): SeedTicket[] {
       clientName: 'Northwind Retail',
       title: 'Reopened: returns portal blank page',
       description:
-        'Was closed after hotfix; customer reports regression. Projection timestamps cleared on reopen.',
+        'Was closed after hotfix; Client reports regression. Projection timestamps cleared on reopen.',
       status: TicketStatus.open,
       priority: Priority.high,
       assigneeEmail: 'agent@example.com',

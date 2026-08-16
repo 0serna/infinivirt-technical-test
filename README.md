@@ -57,4 +57,6 @@ Queries **4** and **8** share the same rolling window: `NOW() - INTERVAL '30 day
 
 Query **8** is `100 * count(closed_at in window) / count(created_at in window)`. The ratio **may exceed 100%** when more Tickets close in the window than were created in it (for example, backlog closed later than create).
 
+Query **4** includes Tickets by projection (`resolved_at` in the window) and credits the User who recorded the latest Status Transition to `resolved` (not the current Assignee).
+
 **Reopen caveat:** reopening a Ticket (`closed` → `open`) clears `resolved_at` and `closed_at` on the Ticket projection while status history keeps prior cycles. That can under-count or distort projection-based metrics in queries **4** (resolutions in the last 30 days) and **5** (average resolution time by Priority).
