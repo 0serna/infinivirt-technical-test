@@ -8,8 +8,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type { AuthenticatedRequest } from './auth.guard';
-import { AuthService, type LoginResult, type PublicUser } from './auth.service';
-import type { LoginDto } from './login.dto';
+import { AuthService, type LoginResult } from './auth.service';
+import type { PublicUser } from './public-user';
 import { Public } from './public.decorator';
 
 @Controller('auth')
@@ -19,7 +19,9 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(200)
-  login(@Body() body: LoginDto): Promise<LoginResult> {
+  login(
+    @Body() body: { email: string; password: string },
+  ): Promise<LoginResult> {
     return this.authService.login(body.email, body.password);
   }
 

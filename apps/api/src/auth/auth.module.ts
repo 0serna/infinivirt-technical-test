@@ -40,6 +40,3 @@ import { RolesGuard } from './roles.guard';
   exports: [JwtModule, AuthGuard, RolesGuard],
 })
 export class AuthModule {}
-
-export { RequireRole } from './require-role.decorator';
-export { RolesGuard } from './roles.guard';

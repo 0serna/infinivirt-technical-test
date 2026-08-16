@@ -4,8 +4,6 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { type PublicUser, toPublicUser } from './public-user';
 
-export type { PublicUser } from './public-user';
-
 export type LoginResult = {
   accessToken: string;
   user: PublicUser;
