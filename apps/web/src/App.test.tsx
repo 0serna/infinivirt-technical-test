@@ -1,9 +1,10 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, type InitialEntry } from 'react-router-dom';
 import { App } from './App';
+import { apiFetch } from './auth/api';
 
-function renderApp(initialEntries: string[]) {
+function renderApp(initialEntries: InitialEntry[]) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <App />
@@ -247,7 +248,6 @@ test('unauthenticated visit to / is sent to login without showing the shell', as
 });
 
 test('mid-session 401 shows the session expired alert on login', async () => {
-  const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
   let meCalls = 0;
   vi.mocked(fetch).mockImplementation(async (input) => {
@@ -271,8 +271,11 @@ test('mid-session 401 shows the session expired alert on login', async () => {
   });
 
   renderApp(['/']);
+  expect(await screen.findByRole('button', { name: 'Sign out' })).toBeDefined();
 
-  await user.click(await screen.findByRole('button', { name: 'Refresh' }));
+  await act(async () => {
+    await apiFetch('/api/auth/me');
+  });
 
   expect(await screen.findByRole('button', { name: 'Sign in' })).toBeDefined();
   expect(
@@ -281,6 +284,13 @@ test('mid-session 401 shows the session expired alert on login', async () => {
   expect(screen.queryByText('Unauthorized')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
   expect(localStorage.getItem('accessToken')).toBeNull();
+});
+
+test('reload of login ignores leftover sessionExpired history state', () => {
+  renderApp([{ pathname: '/login', state: { sessionExpired: true } }]);
+
+  expect(screen.getByRole('button', { name: 'Sign in' })).toBeDefined();
+  expect(screen.queryByText('Your session expired. Sign in again.')).toBeNull();
 });
 
 test('clearing the token from another tab leaves the shell', async () => {

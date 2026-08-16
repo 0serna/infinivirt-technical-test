@@ -51,7 +51,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         if (response.status === 401) {
-          clearAccessToken();
           setUser(null);
           setIsReady(true);
           return;
