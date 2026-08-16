@@ -1,3 +1,11 @@
+class ResizeObserverStub {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
+window.ResizeObserver = ResizeObserverStub;
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query: string) => ({

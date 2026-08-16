@@ -1,7 +1,14 @@
-import { Alert, Stack, Table, Text, Title } from '@mantine/core';
-import type { Priority, TicketStatus } from '@support-ticketing/shared';
+import { Alert, Group, Select, Stack, Table, Text, Title } from '@mantine/core';
+import {
+  hasMinimumRole,
+  PRIORITIES,
+  TICKET_STATUSES,
+  type Priority,
+  type TicketStatus,
+} from '@support-ticketing/shared';
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../auth/api';
+import { useAuth } from '../auth/AuthProvider';
 
 type TicketListRow = {
   id: string;
@@ -13,6 +20,11 @@ type TicketListRow = {
   createdBy: { id: string; displayName: string };
   updatedAt: string;
   createdAt: string;
+};
+
+type FilterOptions = {
+  clients: Array<{ id: string; name: string }>;
+  assignees: Array<{ id: string; displayName: string }>;
 };
 
 const STATUS_LABEL: Record<TicketStatus, string> = {
@@ -37,14 +49,56 @@ function formatUpdatedAt(value: string): string {
   }).format(new Date(value));
 }
 
+function ticketsUrl(filters: {
+  status: string | null;
+  priority: string | null;
+  clientId: string | null;
+  assigneeId: string | null;
+  includeAssignee: boolean;
+}): string {
+  const params = new URLSearchParams();
+  if (filters.status) {
+    params.set('status', filters.status);
+  }
+  if (filters.priority) {
+    params.set('priority', filters.priority);
+  }
+  if (filters.clientId) {
+    params.set('clientId', filters.clientId);
+  }
+  if (filters.includeAssignee && filters.assigneeId) {
+    params.set('assigneeId', filters.assigneeId);
+  }
+  const query = params.toString();
+  return query === '' ? '/api/tickets' : `/api/tickets?${query}`;
+}
+
 export function TicketList() {
+  const { user } = useAuth();
+  const includeAssignee =
+    user != null && hasMinimumRole(user.role, 'supervisor');
+  const [status, setStatus] = useState<string | null>(null);
+  const [priority, setPriority] = useState<string | null>(null);
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [tickets, setTickets] = useState<TicketListRow[] | null>(null);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(
+    null,
+  );
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    void apiFetch('/api/tickets')
+    void apiFetch(
+      ticketsUrl({
+        status,
+        priority,
+        clientId,
+        assigneeId,
+        includeAssignee,
+      }),
+    )
       .then(async (response) => {
         if (cancelled || response.status === 401) {
           return;
@@ -53,8 +107,13 @@ export function TicketList() {
           setFailed(true);
           return;
         }
-        const body = (await response.json()) as { tickets?: TicketListRow[] };
+        const body = (await response.json()) as {
+          tickets?: TicketListRow[];
+          filterOptions?: FilterOptions;
+        };
+        setFailed(false);
         setTickets(Array.isArray(body.tickets) ? body.tickets : []);
+        setFilterOptions(body.filterOptions ?? { clients: [], assignees: [] });
       })
       .catch(() => {
         if (!cancelled) {
@@ -65,11 +124,57 @@ export function TicketList() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [status, priority, clientId, assigneeId, includeAssignee]);
 
   return (
     <Stack>
       <Title order={2}>Tickets</Title>
+      {filterOptions ? (
+        <Group>
+          <Select
+            label="Status"
+            clearable
+            value={status}
+            onChange={setStatus}
+            data={TICKET_STATUSES.map((value) => ({
+              value,
+              label: STATUS_LABEL[value],
+            }))}
+          />
+          <Select
+            label="Priority"
+            clearable
+            value={priority}
+            onChange={setPriority}
+            data={PRIORITIES.map((value) => ({
+              value,
+              label: PRIORITY_LABEL[value],
+            }))}
+          />
+          <Select
+            label="Client"
+            clearable
+            value={clientId}
+            onChange={setClientId}
+            data={filterOptions.clients.map((client) => ({
+              value: client.id,
+              label: client.name,
+            }))}
+          />
+          {includeAssignee ? (
+            <Select
+              label="Assignee"
+              clearable
+              value={assigneeId}
+              onChange={setAssigneeId}
+              data={filterOptions.assignees.map((assignee) => ({
+                value: assignee.id,
+                label: assignee.displayName,
+              }))}
+            />
+          ) : null}
+        </Group>
+      ) : null}
       {failed ? (
         <Alert>Couldn't load tickets. Try again.</Alert>
       ) : tickets === null ? (

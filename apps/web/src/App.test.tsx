@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, type InitialEntry } from 'react-router-dom';
 import { App } from './App';
@@ -25,9 +25,24 @@ const unauthorized = jsonResponse(401, {
   message: 'Unauthorized',
 });
 
-const emptyTickets = { tickets: [] };
+const emptyTickets = {
+  tickets: [],
+  filterOptions: { clients: [], assignees: [] },
+};
+
+const sampleFilterOptions = {
+  clients: [
+    { id: 'client-1', name: 'Contoso Health' },
+    { id: 'client-2', name: 'Initech Soft' },
+  ],
+  assignees: [
+    { id: 'user-3', displayName: 'Sam Supervisor' },
+    { id: 'unassigned', displayName: 'Unassigned' },
+  ],
+};
 
 const sampleTickets = {
+  filterOptions: sampleFilterOptions,
   tickets: [
     {
       id: 'ticket-1',
@@ -119,13 +134,42 @@ const ada = {
   role: 'admin' as const,
 };
 
-function mockAuthedSession(tickets: unknown = emptyTickets) {
+const alex = {
+  id: 'user-2',
+  email: 'agent@example.com',
+  displayName: 'Alex Agent',
+  role: 'agent' as const,
+};
+
+const sam = {
+  id: 'user-3',
+  email: 'supervisor@example.com',
+  displayName: 'Sam Supervisor',
+  role: 'supervisor' as const,
+};
+
+function isTicketsUrl(url: string): boolean {
+  return url === '/api/tickets' || url.startsWith('/api/tickets?');
+}
+
+function filterControl(name: string) {
+  return screen.getByRole('combobox', { name });
+}
+
+function filterOption(name: string) {
+  return screen.getByRole('option', { name, hidden: true });
+}
+
+function mockAuthedSession(
+  tickets: unknown = emptyTickets,
+  user: typeof ada | typeof alex | typeof sam = ada,
+) {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
     if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
+      return jsonResponse(200, user);
     }
-    if (url === '/api/tickets') {
+    if (isTicketsUrl(url)) {
       return jsonResponse(200, tickets);
     }
     throw new Error(`unexpected fetch ${url}`);
@@ -139,7 +183,7 @@ test('successful login shows the shell', async () => {
     if (url === '/api/auth/login') {
       return jsonResponse(200, { accessToken: 'token-abc', user: ada });
     }
-    if (url === '/api/tickets') {
+    if (isTicketsUrl(url)) {
       return jsonResponse(200, emptyTickets);
     }
     throw new Error(`unexpected fetch ${url}`);
@@ -208,7 +252,7 @@ test('sign out returns to login and later requests do not send Bearer', async ()
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
     }
-    if (url === '/api/tickets') {
+    if (isTicketsUrl(url)) {
       return jsonResponse(200, emptyTickets);
     }
     if (url === '/api/auth/login') {
@@ -270,7 +314,7 @@ test('mid-session 401 shows the session expired alert on login', async () => {
       meCalls += 1;
       return meCalls === 1 ? jsonResponse(200, ada) : unauthorized;
     }
-    if (url === '/api/tickets') {
+    if (isTicketsUrl(url)) {
       return jsonResponse(200, emptyTickets);
     }
     throw new Error(`unexpected fetch ${url}`);
@@ -319,16 +363,17 @@ test('Ticket List rows render Title, Status, Priority, Client, Assignee, creator
   expect(
     await screen.findByText('High: patient portal MFA reset'),
   ).toBeDefined();
-  expect(screen.getByText('Open')).toBeDefined();
-  expect(screen.getByText('High')).toBeDefined();
-  expect(screen.getByText('Contoso Health')).toBeDefined();
-  expect(screen.getByText('Unassigned')).toBeDefined();
-  expect(screen.getByText('Resolved: SSO redirect loop')).toBeDefined();
-  expect(screen.getByText('Resolved')).toBeDefined();
-  expect(screen.getByText('Low')).toBeDefined();
-  expect(screen.getByText('Initech Soft')).toBeDefined();
-  expect(screen.getByText('Sam Supervisor')).toBeDefined();
-  expect(screen.getAllByText('Alex Agent').length).toBeGreaterThan(0);
+  const table = screen.getByRole('table');
+  expect(within(table).getByText('Open')).toBeDefined();
+  expect(within(table).getByText('High')).toBeDefined();
+  expect(within(table).getByText('Contoso Health')).toBeDefined();
+  expect(within(table).getByText('Unassigned')).toBeDefined();
+  expect(within(table).getByText('Resolved: SSO redirect loop')).toBeDefined();
+  expect(within(table).getByText('Resolved')).toBeDefined();
+  expect(within(table).getByText('Low')).toBeDefined();
+  expect(within(table).getByText('Initech Soft')).toBeDefined();
+  expect(within(table).getByText('Sam Supervisor')).toBeDefined();
+  expect(within(table).getAllByText('Alex Agent').length).toBeGreaterThan(0);
   expect(screen.getByText('1 Aug 2026, 12:00')).toBeDefined();
   expect(screen.getByText('30 Jul 2026, 09:15')).toBeDefined();
   expect(screen.getByRole('columnheader', { name: 'Title' })).toBeDefined();
@@ -363,7 +408,7 @@ test('in-flight Ticket List shows loading before rows', async () => {
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
     }
-    if (url === '/api/tickets') {
+    if (isTicketsUrl(url)) {
       return ticketsPending;
     }
     throw new Error(`unexpected fetch ${url}`);
@@ -392,7 +437,7 @@ test('failed Ticket List fetch shows error copy without the raw server body', as
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
     }
-    if (url === '/api/tickets') {
+    if (isTicketsUrl(url)) {
       return jsonResponse(500, { message: 'Internal boom stack' });
     }
     throw new Error(`unexpected fetch ${url}`);
@@ -431,7 +476,7 @@ test('Ticket List 401 signs the User out', async () => {
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
     }
-    if (url === '/api/tickets') {
+    if (isTicketsUrl(url)) {
       return unauthorized;
     }
     throw new Error(`unexpected fetch ${url}`);
@@ -469,4 +514,98 @@ test('clearing the token from another tab leaves the shell', async () => {
   expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
   expect(screen.queryByText('Your session expired. Sign in again.')).toBeNull();
   expect(localStorage.getItem('accessToken')).toBeNull();
+});
+
+test('Agent Ticket List has Status, Priority, and Client filters and no Assignee filter', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockAuthedSession(sampleTickets, alex);
+
+  renderApp(['/']);
+
+  expect(await screen.findByRole('combobox', { name: 'Status' })).toBeDefined();
+  expect(filterControl('Priority')).toBeDefined();
+  expect(filterControl('Client')).toBeDefined();
+  expect(screen.queryByRole('combobox', { name: 'Assignee' })).toBeNull();
+});
+
+test('Supervisor Ticket List has an Assignee filter including unassigned from filterOptions', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  mockAuthedSession(sampleTickets, sam);
+
+  renderApp(['/']);
+
+  await user.click(await screen.findByRole('combobox', { name: 'Assignee' }));
+  expect(filterOption('Unassigned')).toBeDefined();
+  expect(filterOption('Sam Supervisor')).toBeDefined();
+});
+
+test('Administrator Ticket List has an Assignee filter including unassigned from filterOptions', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  mockAuthedSession(sampleTickets);
+
+  renderApp(['/']);
+
+  await user.click(await screen.findByRole('combobox', { name: 'Assignee' }));
+  expect(filterOption('Unassigned')).toBeDefined();
+  expect(filterOption('Sam Supervisor')).toBeDefined();
+});
+
+test('Ticket List filter choices come from filterOptions and do not list Client or User catalogs', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  mockAuthedSession({
+    ...sampleTickets,
+    filterOptions: {
+      clients: [{ id: 'client-1', name: 'Contoso Health' }],
+      assignees: [{ id: 'unassigned', displayName: 'Unassigned' }],
+    },
+  });
+
+  renderApp(['/']);
+
+  await user.click(await screen.findByRole('combobox', { name: 'Client' }));
+  expect(filterOption('Contoso Health')).toBeDefined();
+  expect(
+    screen.queryByRole('option', { name: 'Acme Logistics', hidden: true }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole('option', { name: 'Initech Soft', hidden: true }),
+  ).toBeNull();
+
+  const catalogCalls = vi
+    .mocked(fetch)
+    .mock.calls.filter(([url]) =>
+      ['/api/clients', '/api/users'].includes(String(url)),
+    );
+  expect(catalogCalls).toEqual([]);
+});
+
+test('choosing Status and Client refetches tickets with those query params', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isTicketsUrl(url)) {
+      return jsonResponse(200, sampleTickets);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/']);
+
+  await user.click(await screen.findByRole('combobox', { name: 'Status' }));
+  await user.click(filterOption('Open'));
+  await user.click(filterControl('Client'));
+  await user.click(filterOption('Contoso Health'));
+
+  const ticketUrls = vi
+    .mocked(fetch)
+    .mock.calls.map(([url]) => String(url))
+    .filter((url) => isTicketsUrl(url));
+  expect(ticketUrls).toContain('/api/tickets?status=open&clientId=client-1');
 });
