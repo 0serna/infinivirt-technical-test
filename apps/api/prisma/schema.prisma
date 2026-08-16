@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  agent
+  supervisor
+  admin
+}
+
+enum TicketStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum Priority {
+  low
+  medium
+  high
+  critical
+}
+
+enum CommentVisibility {
+  public
+  internal
+}
+
+model User {
+  id           String @id @default(uuid()) @db.Uuid
+  email        String @unique
+  displayName  String @map("display_name")
+  passwordHash String @map("password_hash")
+  role         Role
+
+  ticketsCreated       Ticket[]               @relation("TicketCreatedBy")
+  ticketsAssigned      Ticket[]               @relation("TicketAssignee")
+  statusChanges        TicketStatusHistory[]  @relation("StatusChangedBy")
+  assignmentsChanged   TicketAssignment[]     @relation("AssignmentChangedBy")
+  assignmentsFrom      TicketAssignment[]     @relation("AssignmentFrom")
+  assignmentsTo        TicketAssignment[]     @relation("AssignmentTo")
+  comments             Comment[]
+
+  @@map("users")
+}
+
+model Client {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @unique
+
+  tickets Ticket[]
+
+  @@map("clients")
+}
+
+model Ticket {
+  id          String       @id @default(uuid()) @db.Uuid
+  clientId    String       @map("client_id") @db.Uuid
+  title       String
+  description String
+  status      TicketStatus
+  priority    Priority     @default(medium)
+  assigneeId  String?      @map("assignee_id") @db.Uuid
+  createdById String       @map("created_by_id") @db.Uuid
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  resolvedAt  DateTime?    @map("resolved_at")
+  closedAt    DateTime?    @map("closed_at")
+
+  client      Client                @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  assignee    User?                 @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  createdBy   User                  @relation("TicketCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  statusHistory TicketStatusHistory[]
+  assignments TicketAssignment[]
+  comments    Comment[]
+
+  @@index([status])
+  @@index([assigneeId, status])
+  @@index([clientId])
+  @@index([updatedAt])
+  @@map("tickets")
+}
+
+model TicketStatusHistory {
+  id          String        @id @default(uuid()) @db.Uuid
+  ticketId    String        @map("ticket_id") @db.Uuid
+  fromStatus  TicketStatus? @map("from_status")
+  toStatus    TicketStatus  @map("to_status")
+  changedById String        @map("changed_by_id") @db.Uuid
+  changedAt   DateTime      @default(now()) @map("changed_at")
+
+  ticket    Ticket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  changedBy User   @relation("StatusChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@map("ticket_status_history")
+}
+
+model TicketAssignment {
+  id             String    @id @default(uuid()) @db.Uuid
+  ticketId       String    @map("ticket_id") @db.Uuid
+  fromAssigneeId String?   @map("from_assignee_id") @db.Uuid
+  toAssigneeId   String?   @map("to_assignee_id") @db.Uuid
+  changedById    String    @map("changed_by_id") @db.Uuid
+  changedAt      DateTime  @default(now()) @map("changed_at")
+
+  ticket       Ticket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  fromAssignee User?  @relation("AssignmentFrom", fields: [fromAssigneeId], references: [id], onDelete: Restrict)
+  toAssignee   User?  @relation("AssignmentTo", fields: [toAssigneeId], references: [id], onDelete: Restrict)
+  changedBy    User   @relation("AssignmentChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@map("ticket_assignments")
+}
+
+model Comment {
+  id         String            @id @default(uuid()) @db.Uuid
+  ticketId   String            @map("ticket_id") @db.Uuid
+  authorId   String            @map("author_id") @db.Uuid
+  body       String
+  visibility CommentVisibility
+  createdAt  DateTime          @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@map("comments")
+}
