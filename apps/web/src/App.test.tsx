@@ -12,6 +12,7 @@ test('placeholder shows Support Ticketing health from /api/health', async () => 
 
   render(<App />);
 
+  expect(screen.getByText('Support Ticketing')).toBeDefined();
   expect(await screen.findByText('ok')).toBeDefined();
   expect(vi.mocked(fetch)).toHaveBeenCalledWith('/api/health');
 });

@@ -1,6 +1,27 @@
+import { MantineProvider, Text, Title } from '@mantine/core';
+import { ROLES, type Role } from '@support-ticketing/shared';
 import { useEffect, useState } from 'react';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
+
+const knownRoles: readonly Role[] = ROLES;
 
 export function App() {
+  if (knownRoles.length === 0) {
+    throw new Error('Role catalog is empty');
+  }
+
+  return (
+    <MantineProvider defaultColorScheme="light">
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<PlaceholderPage />} />
+        </Routes>
+      </BrowserRouter>
+    </MantineProvider>
+  );
+}
+
+function PlaceholderPage() {
   const [health, setHealth] = useState<string | null>(null);
 
   useEffect(() => {
@@ -11,10 +32,10 @@ export function App() {
 
   return (
     <main>
-      <h1>Support Ticketing</h1>
-      <p>
+      <Title order={1}>Support Ticketing</Title>
+      <Text>
         API health: <span>{health ?? 'loading'}</span>
-      </p>
+      </Text>
     </main>
   );
 }
