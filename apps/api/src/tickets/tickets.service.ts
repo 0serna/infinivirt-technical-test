@@ -12,7 +12,9 @@ import {
   type CreateTicketCommentBody,
   hasMinimumRole,
   isLegalStatusEdge,
+  mayRecordReassignment,
   mayRecordStatusTransition,
+  type PatchTicketAssigneeBody,
   type PatchTicketStatusBody,
   PRIORITIES,
   type Priority,
@@ -40,6 +42,9 @@ type ScopedTicket = Omit<TicketListRow, 'updatedAt' | 'createdAt'> & {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const ticketPersonSelect = { id: true, displayName: true } as const;
+const historyAsc = [{ changedAt: 'asc' as const }, { id: 'asc' as const }];
+
 const ticketDetailSelect = {
   id: true,
   title: true,
@@ -51,15 +56,24 @@ const ticketDetailSelect = {
   resolvedAt: true,
   closedAt: true,
   client: { select: { id: true, name: true } },
-  assignee: { select: { id: true, displayName: true } },
-  createdBy: { select: { id: true, displayName: true } },
+  assignee: { select: ticketPersonSelect },
+  createdBy: { select: ticketPersonSelect },
   statusHistory: {
-    orderBy: [{ changedAt: 'asc' as const }, { id: 'asc' as const }],
+    orderBy: historyAsc,
     select: {
       fromStatus: true,
       toStatus: true,
       changedAt: true,
-      changedBy: { select: { id: true, displayName: true } },
+      changedBy: { select: ticketPersonSelect },
+    },
+  },
+  assignments: {
+    orderBy: historyAsc,
+    select: {
+      changedAt: true,
+      fromAssignee: { select: ticketPersonSelect },
+      toAssignee: { select: ticketPersonSelect },
+      changedBy: { select: ticketPersonSelect },
     },
   },
   comments: {
@@ -69,7 +83,7 @@ const ticketDetailSelect = {
       body: true,
       visibility: true,
       createdAt: true,
-      author: { select: { id: true, displayName: true } },
+      author: { select: ticketPersonSelect },
     },
   },
 } satisfies Prisma.TicketSelect;
@@ -126,6 +140,16 @@ function parseAssigneeFilter(value?: string): AssigneeFilter | undefined {
     return { kind: 'unassigned' };
   }
   return { kind: 'user', id: requireUuid(value, 'assigneeId') };
+}
+
+function parseAssigneeId(value: unknown): string | null {
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== 'string') {
+    throw new BadRequestException('Invalid assigneeId');
+  }
+  return requireUuid(value, 'assigneeId');
 }
 
 function matchesFilters(
@@ -198,6 +222,7 @@ function toTicketDetail(ticket: TicketDetailRecord): TicketDetail {
     resolvedAt,
     closedAt,
     statusHistory,
+    assignments,
     comments,
     ...rest
   } = ticket;
@@ -210,6 +235,12 @@ function toTicketDetail(ticket: TicketDetailRecord): TicketDetail {
     statusHistory: statusHistory.map((row) => ({
       from: row.fromStatus,
       to: row.toStatus,
+      changedAt: row.changedAt.toISOString(),
+      changedBy: row.changedBy,
+    })),
+    assignments: assignments.map((row) => ({
+      from: row.fromAssignee,
+      to: row.toAssignee,
       changedAt: row.changedAt.toISOString(),
       changedBy: row.changedBy,
     })),
@@ -344,6 +375,54 @@ export class TicketsService {
             authorId: user.id,
             body: commentBody,
             visibility,
+          },
+        },
+      },
+    });
+
+    return this.getById(user, ticket.id);
+  }
+
+  async recordReassignment(
+    user: PublicUser,
+    id: string,
+    body: PatchTicketAssigneeBody,
+  ): Promise<TicketDetail> {
+    const toAssigneeId = parseAssigneeId(body?.assigneeId);
+    const ticket = await this.requireScopedTicket(user, id, {
+      id: true,
+      assigneeId: true,
+    });
+
+    // List Scope (non-existence) is checked first — never leak via 403.
+    if (!mayRecordReassignment(user.role)) {
+      throw new ForbiddenException();
+    }
+
+    if (toAssigneeId === ticket.assigneeId) {
+      return this.getById(user, ticket.id);
+    }
+
+    if (toAssigneeId !== null) {
+      const target = await this.prisma.user.findUnique({
+        where: { id: toAssigneeId },
+        select: { id: true },
+      });
+      if (!target) {
+        throw new BadRequestException('Unknown assigneeId');
+      }
+    }
+
+    await this.prisma.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        assigneeId: toAssigneeId,
+        updatedAt: new Date(),
+        assignments: {
+          create: {
+            fromAssigneeId: ticket.assigneeId,
+            toAssigneeId,
+            changedById: user.id,
           },
         },
       },

@@ -12,6 +12,7 @@ import {
 import type {
   CreateTicketBody,
   CreateTicketCommentBody,
+  PatchTicketAssigneeBody,
   PatchTicketStatusBody,
   TicketDetail,
   TicketListEnvelope,
@@ -69,6 +70,20 @@ export class TicketsController {
     @Body() body: CreateTicketCommentBody,
   ): Promise<TicketDetail> {
     return this.ticketsService.createComment(requireUser(request), id, body);
+  }
+
+  @Patch(':id/assignee')
+  @RequireRole('agent')
+  recordReassignment(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: PatchTicketAssigneeBody,
+  ): Promise<TicketDetail> {
+    return this.ticketsService.recordReassignment(
+      requireUser(request),
+      id,
+      body,
+    );
   }
 
   @Patch(':id')

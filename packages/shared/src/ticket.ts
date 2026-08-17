@@ -69,6 +69,13 @@ export type TicketStatusHistoryRow = {
   changedBy: TicketListPerson;
 };
 
+export type TicketAssignmentHistoryRow = {
+  from: TicketListPerson | null;
+  to: TicketListPerson | null;
+  changedAt: string;
+  changedBy: TicketListPerson;
+};
+
 export const COMMENT_VISIBILITIES = ['public', 'internal'] as const;
 
 export type CommentVisibility = (typeof COMMENT_VISIBILITIES)[number];
@@ -86,12 +93,25 @@ export type TicketDetail = TicketListRow & {
   resolvedAt: string | null;
   closedAt: string | null;
   statusHistory: TicketStatusHistoryRow[];
+  assignments: TicketAssignmentHistoryRow[];
   comments: TicketComment[];
 };
 
 /** Actor names only `to`. `from` is always the current Status. */
 export type PatchTicketStatusBody = {
   status: TicketStatus;
+};
+
+/** Dedicated Reassignment body. `null` clears Assignee (unassign). */
+export type PatchTicketAssigneeBody = {
+  assigneeId: string | null;
+};
+
+/** Read-only staff catalog row for Assignee picker. Not User administration. */
+export type UserCatalogRow = {
+  id: string;
+  displayName: string;
+  role: Role;
 };
 
 /** Visibility omitted defaults to `public`. */
@@ -157,6 +177,10 @@ export function nextRecordableStatus(args: {
   })
     ? to
     : null;
+}
+
+export function mayRecordReassignment(role: Role): boolean {
+  return hasMinimumRole(role, 'supervisor');
 }
 
 export const EMPTY_TICKET_LIST_FILTER_OPTIONS: TicketListFilterOptions = {

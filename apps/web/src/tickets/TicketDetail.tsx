@@ -7,6 +7,7 @@ import {
   Button,
   Group,
   Menu,
+  Select,
   Stack,
   Switch,
   Text,
@@ -18,13 +19,17 @@ import {
   type CommentVisibility,
   type CreateTicketCommentBody,
   hasMinimumRole,
+  mayRecordReassignment,
   nextRecordableStatus,
+  type PatchTicketAssigneeBody,
   type PatchTicketStatusBody,
   type Priority,
+  type TicketAssignmentHistoryRow,
   type TicketComment,
   type TicketDetail as TicketDetailBody,
   type TicketStatus,
   type TicketStatusHistoryRow,
+  type UserCatalogRow,
 } from '@support-ticketing/shared';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -85,9 +90,44 @@ function PersonInstant({
   at: string;
 }) {
   return (
-    <Text size="xs" c="dimmed" title={person.id}>
-      {person.displayName} ({person.id}) · {formatTicketInstant(at)}
+    <Text size="xs" c="dimmed">
+      {person.displayName} · {formatTicketInstant(at)}
     </Text>
+  );
+}
+
+function TimelineRow({
+  label,
+  person,
+  at,
+  latest,
+}: {
+  label: string;
+  person: { id: string; displayName: string };
+  at: string;
+  latest: boolean;
+}) {
+  return (
+    <Group align="flex-start" gap="sm" wrap="nowrap">
+      <Box
+        style={{
+          width: 10,
+          height: 10,
+          borderRadius: 999,
+          marginTop: 6,
+          background: latest
+            ? 'var(--mantine-color-blue-6)'
+            : 'var(--mantine-color-gray-4)',
+          flexShrink: 0,
+        }}
+      />
+      <Stack gap={2}>
+        <Text size="sm" fw={600}>
+          {label}
+        </Text>
+        <PersonInstant person={person} at={at} />
+      </Stack>
+    </Group>
   );
 }
 
@@ -98,37 +138,58 @@ function StatusTimeline({ history }: { history: TicketStatusHistoryRow[] }) {
         Status history
       </Text>
       {history.map((row, index) => (
-        <Group
+        <TimelineRow
           key={`${row.changedAt}-${row.to}-${row.changedBy.id}`}
-          align="flex-start"
-          gap="sm"
-          wrap="nowrap"
-        >
-          <Box
-            style={{
-              width: 10,
-              height: 10,
-              borderRadius: 999,
-              marginTop: 6,
-              background:
-                index === history.length - 1
-                  ? 'var(--mantine-color-blue-6)'
-                  : 'var(--mantine-color-gray-4)',
-              flexShrink: 0,
-            }}
-          />
-          <Stack gap={2}>
-            <Text size="sm" fw={600}>
-              {row.from ? STATUS_LABEL[row.from] : 'Created'} →{' '}
-              {STATUS_LABEL[row.to]}
-            </Text>
-            <PersonInstant person={row.changedBy} at={row.changedAt} />
-          </Stack>
-        </Group>
+          label={`${row.from ? STATUS_LABEL[row.from] : 'Created'} → ${STATUS_LABEL[row.to]}`}
+          person={row.changedBy}
+          at={row.changedAt}
+          latest={index === history.length - 1}
+        />
       ))}
     </Stack>
   );
 }
+
+function assigneeLabel(person: { displayName: string } | null): string {
+  return person?.displayName ?? 'Unassigned';
+}
+
+function AssignmentTimeline({
+  history,
+}: {
+  history: TicketAssignmentHistoryRow[];
+}) {
+  return (
+    <Stack gap="sm" aria-label="Assignment history">
+      <Text fw={600} size="sm">
+        Assignment history
+      </Text>
+      {history.length === 0 ? (
+        <Text size="sm" c="dimmed">
+          No assignments yet.
+        </Text>
+      ) : (
+        history.map((row, index) => (
+          <TimelineRow
+            key={`${row.changedAt}-${row.from?.id ?? 'none'}-${row.to?.id ?? 'none'}-${row.changedBy.id}`}
+            label={`${assigneeLabel(row.from)} → ${assigneeLabel(row.to)}`}
+            person={row.changedBy}
+            at={row.changedAt}
+            latest={index === history.length - 1}
+          />
+        ))
+      )}
+    </Stack>
+  );
+}
+
+type AssigneeControls = {
+  users: UserCatalogRow[];
+  usersLoading: boolean;
+  busy: boolean;
+  error: boolean;
+  onRecordReassignment: (assigneeId: string | null) => Promise<boolean>;
+};
 
 function CommentThread({ comments }: { comments: TicketComment[] }) {
   return (
@@ -162,12 +223,12 @@ function CommentThread({ comments }: { comments: TicketComment[] }) {
 }
 
 function CommentComposer({
-  disabled,
+  busy,
   error,
   allowInternal,
   onSubmit,
 }: {
-  disabled: boolean;
+  busy: boolean;
   error: boolean;
   allowInternal: boolean;
   onSubmit: (body: string, visibility: CommentVisibility) => Promise<boolean>;
@@ -186,7 +247,7 @@ function CommentComposer({
       onSubmit={(event) => {
         event.preventDefault();
         const body = draft.trim();
-        if (body.length === 0 || disabled) {
+        if (body.length === 0 || busy) {
           return;
         }
         void onSubmit(body, visibility).then((ok) => {
@@ -204,7 +265,7 @@ function CommentComposer({
           setDraft(event.currentTarget.value);
         }}
         minRows={3}
-        disabled={disabled}
+        disabled={busy}
       />
       {allowInternal ? (
         <Switch
@@ -213,11 +274,11 @@ function CommentComposer({
           onChange={(event) => {
             setVisibility(event.currentTarget.checked ? 'internal' : 'public');
           }}
-          disabled={disabled}
+          disabled={busy}
           aria-label="Visibility"
         />
       ) : null}
-      <Button type="submit" loading={disabled} disabled={draft.trim() === ''}>
+      <Button type="submit" loading={busy} disabled={draft.trim() === ''}>
         Add comment
       </Button>
       {error ? (
@@ -229,16 +290,87 @@ function CommentComposer({
   );
 }
 
-function PropertiesColumn({ ticket }: { ticket: TicketDetailBody }) {
+function PropertiesColumn({
+  ticket,
+  assigneeControls,
+}: {
+  ticket: TicketDetailBody;
+  assigneeControls: AssigneeControls | null;
+}) {
+  const [draftAssigneeId, setDraftAssigneeId] = useState<string | null>(
+    ticket.assignee?.id ?? null,
+  );
+
+  useEffect(() => {
+    setDraftAssigneeId(ticket.assignee?.id ?? null);
+  }, [ticket.assignee?.id]);
+
+  const currentId = ticket.assignee?.id ?? null;
+  const busy = assigneeControls?.busy ?? false;
+  const canSave =
+    draftAssigneeId !== null && draftAssigneeId !== currentId && !busy;
+
   return (
     <Stack gap="md" aria-label="Ticket properties">
       <Text fw={600} size="sm">
         Properties
       </Text>
       <MetaItem label="Client">{ticket.client.name}</MetaItem>
-      <MetaItem label="Assignee">
-        {ticket.assignee?.displayName ?? 'Unassigned'}
-      </MetaItem>
+      {assigneeControls ? (
+        <Stack gap="sm" aria-label="Assignee controls">
+          <Select
+            label="Assignee"
+            placeholder={
+              assigneeControls.usersLoading ? 'Loading users…' : 'Unassigned'
+            }
+            data={assigneeControls.users.map((row) => ({
+              value: row.id,
+              label: `${row.displayName} (${row.role})`,
+            }))}
+            value={draftAssigneeId}
+            onChange={setDraftAssigneeId}
+            disabled={busy || assigneeControls.usersLoading}
+            clearable={false}
+            searchable
+          />
+          <Group gap="sm">
+            <Button
+              type="button"
+              variant="light"
+              loading={busy}
+              disabled={!canSave}
+              onClick={() => {
+                if (draftAssigneeId) {
+                  void assigneeControls.onRecordReassignment(draftAssigneeId);
+                }
+              }}
+            >
+              {currentId === null ? 'Assign' : 'Change assignee'}
+            </Button>
+            {currentId !== null ? (
+              <Button
+                type="button"
+                variant="default"
+                loading={busy}
+                onClick={() => {
+                  void assigneeControls.onRecordReassignment(null);
+                }}
+              >
+                Clear assignee
+              </Button>
+            ) : null}
+          </Group>
+          {assigneeControls.error ? (
+            <Text c="red" size="sm">
+              Couldn't update this ticket's assignee.
+            </Text>
+          ) : null}
+        </Stack>
+      ) : (
+        <MetaItem label="Assignee">
+          {ticket.assignee?.displayName ?? 'Unassigned'}
+        </MetaItem>
+      )}
       <MetaItem label="Created by">{ticket.createdBy.displayName}</MetaItem>
       <MetaItem label="Created">
         {formatTicketInstant(ticket.createdAt)}
@@ -276,6 +408,11 @@ export function TicketDetail() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [commentError, setCommentError] = useState(false);
   const [isCommenting, setIsCommenting] = useState(false);
+  const [assigneeError, setAssigneeError] = useState(false);
+  const [isReassigning, setIsReassigning] = useState(false);
+  const [users, setUsers] = useState<UserCatalogRow[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const canReassign = user !== null && mayRecordReassignment(user.role);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
   useEffect(() => {
@@ -287,6 +424,7 @@ export function TicketDetail() {
     setState({ kind: 'loading' });
     setTransitionError(false);
     setCommentError(false);
+    setAssigneeError(false);
 
     void apiFetch(`/api/tickets/${id}`)
       .then(async (response) => {
@@ -314,6 +452,41 @@ export function TicketDetail() {
       cancelled = true;
     };
   }, [id, reloadToken]);
+
+  useEffect(() => {
+    if (!canReassign) {
+      setUsers([]);
+      setUsersLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setUsersLoading(true);
+    void apiFetch('/api/users')
+      .then(async (response) => {
+        if (cancelled || response.status === 401) {
+          return;
+        }
+        if (!response.ok) {
+          setUsers([]);
+          return;
+        }
+        const body = (await response.json()) as unknown;
+        setUsers(Array.isArray(body) ? (body as UserCatalogRow[]) : []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUsers([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setUsersLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canReassign]);
 
   if (state.kind === 'loading') {
     return <Text>Loading ticket…</Text>;
@@ -407,6 +580,18 @@ export function TicketDetail() {
     );
   }
 
+  async function recordReassignment(
+    assigneeId: string | null,
+  ): Promise<boolean> {
+    const body: PatchTicketAssigneeBody = { assigneeId };
+    return mutateTicket(
+      `/api/tickets/${id}/assignee`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+      setIsReassigning,
+      setAssigneeError,
+    );
+  }
+
   return (
     <Stack gap="lg">
       <Breadcrumbs separator="›" separatorMargin="xs">
@@ -487,11 +672,24 @@ export function TicketDetail() {
             : '1fr',
         }}
       >
-        <PropertiesColumn ticket={ticket} />
+        <PropertiesColumn
+          ticket={ticket}
+          assigneeControls={
+            canReassign
+              ? {
+                  users,
+                  usersLoading,
+                  busy: isReassigning,
+                  error: assigneeError,
+                  onRecordReassignment: recordReassignment,
+                }
+              : null
+          }
+        />
         <Stack gap="md">
           <CommentThread comments={ticket.comments} />
           <CommentComposer
-            disabled={isCommenting}
+            busy={isCommenting}
             error={commentError}
             allowInternal={
               user !== null && hasMinimumRole(user.role, 'supervisor')
@@ -499,7 +697,10 @@ export function TicketDetail() {
             onSubmit={createComment}
           />
         </Stack>
-        <StatusTimeline history={ticket.statusHistory} />
+        <Stack gap="md">
+          <StatusTimeline history={ticket.statusHistory} />
+          <AssignmentTimeline history={ticket.assignments} />
+        </Stack>
       </Box>
     </Stack>
   );

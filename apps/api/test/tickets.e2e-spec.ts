@@ -11,6 +11,8 @@ function titles(body: { tickets?: Array<{ title?: string }> }): string[] {
   return (body.tickets ?? []).map((ticket) => ticket.title ?? '');
 }
 
+type TicketPerson = { id: string; displayName: string };
+
 type TicketDetailBody = {
   id: string;
   title: string;
@@ -19,12 +21,18 @@ type TicketDetailBody = {
   updatedAt: string;
   resolvedAt: string | null;
   closedAt: string | null;
-  assignee: { id: string; displayName: string } | null;
+  assignee: TicketPerson | null;
   statusHistory: Array<{
     from: string | null;
     to: string;
     changedAt: string;
-    changedBy: { id: string; displayName: string };
+    changedBy: TicketPerson;
+  }>;
+  assignments: Array<{
+    from: TicketPerson | null;
+    to: TicketPerson | null;
+    changedAt: string;
+    changedBy: TicketPerson;
   }>;
   comments: Array<{
     id: string;
@@ -474,8 +482,8 @@ describe('Tickets get by id (e2e)', () => {
           author: { id: expect.any(String), displayName: 'Alex Agent' },
         },
       ],
+      assignments: [],
     });
-    expect(body).not.toHaveProperty('assignments');
   });
 
   it('Agent GET of a Ticket where they are Assignee includes full Status Transition history oldest first', async () => {
@@ -523,7 +531,47 @@ describe('Tickets get by id (e2e)', () => {
         author: { id: expect.any(String), displayName: 'Alex Agent' },
       },
     ]);
-    expect(body).not.toHaveProperty('assignments');
+    expect(body.assignments).toEqual([
+      {
+        from: null,
+        to: { id: expect.any(String), displayName: 'Alex Agent' },
+        changedAt: expect.any(String),
+        changedBy: {
+          id: expect.any(String),
+          displayName: 'Sam Supervisor',
+        },
+      },
+    ]);
+  });
+
+  it('Agent GET of an in-scope Ticket includes full Reassignment history oldest first', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const body = await ticketByTitle(
+      app,
+      accessToken,
+      'Reassigned often: customs form mapping',
+    );
+
+    expect(body.assignee).toEqual({
+      id: expect.any(String),
+      displayName: 'Alex Agent',
+    });
+    expect(
+      body.assignments.map((row) => [
+        row.from?.displayName ?? null,
+        row.to?.displayName ?? null,
+        row.changedBy.displayName,
+      ]),
+    ).toEqual([
+      [null, 'Alex Agent', 'Sam Supervisor'],
+      ['Alex Agent', 'Sam Supervisor', 'Ada Admin'],
+      ['Sam Supervisor', null, 'Ada Admin'],
+      [null, 'Alex Agent', 'Sam Supervisor'],
+    ]);
+    const changedAt = body.assignments.map((row) => Date.parse(row.changedAt));
+    for (let index = 1; index < changedAt.length; index += 1) {
+      expect(changedAt[index]).toBeGreaterThanOrEqual(changedAt[index - 1]);
+    }
   });
 
   it('Agent GET includes public and internal Comments oldest first on an in-scope Ticket', async () => {
@@ -1343,8 +1391,8 @@ describe('Tickets create (e2e)', () => {
         },
       ],
       comments: [],
+      assignments: [],
     });
-    expect(response.body).not.toHaveProperty('assignments');
     expect(
       await prisma.ticketAssignment.count({
         where: { ticketId: response.body.id as string },
@@ -1447,7 +1495,7 @@ describe('Tickets create (e2e)', () => {
           changedBy: { id: userId, displayName },
         },
       ]);
-      expect(response.body).not.toHaveProperty('assignments');
+      expect(response.body.assignments).toEqual([]);
 
       const listed = await request(app.getHttpServer())
         .get('/tickets')
@@ -1555,5 +1603,344 @@ describe('Tickets create (e2e)', () => {
     expect(JSON.stringify(response.body)).not.toMatch(/TicketsService/);
 
     expect(await listedTicketCount(app, accessToken)).toBe(beforeCount);
+  });
+});
+
+type UserCatalogPerson = {
+  id: string;
+  displayName: string;
+  role: string;
+};
+
+async function staffCatalog(
+  app: INestApplication,
+  accessToken: string,
+): Promise<UserCatalogPerson[]> {
+  const response = await request(app.getHttpServer())
+    .get('/users')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .expect(200);
+  return response.body as UserCatalogPerson[];
+}
+
+async function createOpenTicket(
+  app: INestApplication,
+  accessToken: string,
+  title: string,
+): Promise<TicketDetailBody> {
+  const clientId = await seededClientId(app, accessToken);
+  const response = await request(app.getHttpServer())
+    .post('/tickets')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({
+      clientId,
+      title,
+      description: 'Reassignment e2e harness ticket.',
+    })
+    .expect(201);
+  return response.body;
+}
+
+describe('Tickets Reassignment (e2e)', () => {
+  it('PATCH /tickets/:id/assignee without a token returns the same opaque 401 as GET /auth/me', async () => {
+    const me = await request(app.getHttpServer()).get('/auth/me').expect(401);
+    const patched = await request(app.getHttpServer())
+      .patch('/tickets/00000000-0000-4000-8000-000000000001/assignee')
+      .send({ assigneeId: null })
+      .expect(401);
+
+    expect(patched.body).toEqual(me.body);
+  });
+
+  it.each([
+    { roleLabel: 'Supervisor', email: SUPERVISOR_EMAIL },
+    { roleLabel: 'Administrator', email: ADMIN_EMAIL },
+  ] as const)(
+    '$roleLabel can first-assign, reassign, and unassign with history and updatedAt bumps',
+    async ({ email }) => {
+      const actor = await login(app, email);
+      const catalog = await staffCatalog(app, actor.accessToken);
+      const agent = catalog.find((row) => row.displayName === 'Alex Agent');
+      const supervisor = catalog.find(
+        (row) => row.displayName === 'Sam Supervisor',
+      );
+      expect(agent).toBeDefined();
+      expect(supervisor).toBeDefined();
+
+      const created = await createOpenTicket(
+        app,
+        actor.accessToken,
+        `Reassign e2e: ${email} matrix ${Date.now()}`,
+      );
+      expect(created.assignee).toBeNull();
+      expect(created.assignments).toEqual([]);
+      const birthUpdatedAt = created.updatedAt;
+
+      const firstAssign = await request(app.getHttpServer())
+        .patch(`/tickets/${created.id}/assignee`)
+        .set('Authorization', `Bearer ${actor.accessToken}`)
+        .send({ assigneeId: agent?.id })
+        .expect(200);
+
+      expect(firstAssign.body.assignee).toEqual({
+        id: agent?.id,
+        displayName: 'Alex Agent',
+      });
+      expect(firstAssign.body.assignments).toEqual([
+        {
+          from: null,
+          to: { id: agent?.id, displayName: 'Alex Agent' },
+          changedAt: expect.any(String),
+          changedBy: {
+            id: actor.userId,
+            displayName: expect.any(String),
+          },
+        },
+      ]);
+      expect(Date.parse(firstAssign.body.updatedAt)).toBeGreaterThan(
+        Date.parse(birthUpdatedAt),
+      );
+
+      const afterFirstUpdatedAt = firstAssign.body.updatedAt as string;
+
+      const reassign = await request(app.getHttpServer())
+        .patch(`/tickets/${created.id}/assignee`)
+        .set('Authorization', `Bearer ${actor.accessToken}`)
+        .send({ assigneeId: supervisor?.id })
+        .expect(200);
+
+      expect(reassign.body.assignee).toEqual({
+        id: supervisor?.id,
+        displayName: 'Sam Supervisor',
+      });
+      expect(reassign.body.assignments).toHaveLength(2);
+      expect(reassign.body.assignments[1]).toEqual({
+        from: { id: agent?.id, displayName: 'Alex Agent' },
+        to: { id: supervisor?.id, displayName: 'Sam Supervisor' },
+        changedAt: expect.any(String),
+        changedBy: {
+          id: actor.userId,
+          displayName: expect.any(String),
+        },
+      });
+      expect(Date.parse(reassign.body.updatedAt)).toBeGreaterThan(
+        Date.parse(afterFirstUpdatedAt),
+      );
+
+      const afterReassignUpdatedAt = reassign.body.updatedAt as string;
+
+      const unassign = await request(app.getHttpServer())
+        .patch(`/tickets/${created.id}/assignee`)
+        .set('Authorization', `Bearer ${actor.accessToken}`)
+        .send({ assigneeId: null })
+        .expect(200);
+
+      expect(unassign.body.assignee).toBeNull();
+      expect(unassign.body.assignments).toHaveLength(3);
+      expect(unassign.body.assignments[2]).toEqual({
+        from: { id: supervisor?.id, displayName: 'Sam Supervisor' },
+        to: null,
+        changedAt: expect.any(String),
+        changedBy: {
+          id: actor.userId,
+          displayName: expect.any(String),
+        },
+      });
+      expect(Date.parse(unassign.body.updatedAt)).toBeGreaterThan(
+        Date.parse(afterReassignUpdatedAt),
+      );
+    },
+  );
+
+  it('Supervisor may self-assign and may Reassign a closed Ticket', async () => {
+    const supervisor = await login(app, SUPERVISOR_EMAIL);
+    const admin = await login(app, ADMIN_EMAIL);
+    const catalog = await staffCatalog(app, supervisor.accessToken);
+    const self = catalog.find((row) => row.id === supervisor.userId);
+    expect(self).toBeDefined();
+
+    const created = await createOpenTicket(
+      app,
+      supervisor.accessToken,
+      `Reassign e2e: self-assign closed ${Date.now()}`,
+    );
+
+    const selfAssign = await request(app.getHttpServer())
+      .patch(`/tickets/${created.id}/assignee`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .send({ assigneeId: supervisor.userId })
+      .expect(200);
+    expect(selfAssign.body.assignee).toEqual({
+      id: supervisor.userId,
+      displayName: self?.displayName,
+    });
+
+    await request(app.getHttpServer())
+      .patch(`/tickets/${created.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .send({ status: 'in_progress' })
+      .expect(200);
+    await request(app.getHttpServer())
+      .patch(`/tickets/${created.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .send({ status: 'resolved' })
+      .expect(200);
+    await request(app.getHttpServer())
+      .patch(`/tickets/${created.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .send({ status: 'closed' })
+      .expect(200);
+
+    const before = await request(app.getHttpServer())
+      .get(`/tickets/${created.id}`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .expect(200);
+    expect(before.body.status).toBe('closed');
+
+    const catalogAgent = catalog.find(
+      (row) => row.displayName === 'Alex Agent',
+    );
+    const onClosed = await request(app.getHttpServer())
+      .patch(`/tickets/${created.id}/assignee`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .send({ assigneeId: catalogAgent?.id })
+      .expect(200);
+
+    expect(onClosed.body.status).toBe('closed');
+    expect(onClosed.body.assignee).toEqual({
+      id: catalogAgent?.id,
+      displayName: 'Alex Agent',
+    });
+    expect(onClosed.body.assignments.length).toBeGreaterThan(
+      before.body.assignments.length,
+    );
+  });
+
+  it('no-op same assignee (including null→null) appends no row and does not bump updatedAt', async () => {
+    const supervisor = await login(app, SUPERVISOR_EMAIL);
+    const catalog = await staffCatalog(app, supervisor.accessToken);
+    const agent = catalog.find((row) => row.displayName === 'Alex Agent');
+
+    const created = await createOpenTicket(
+      app,
+      supervisor.accessToken,
+      `Reassign e2e: noop ${Date.now()}`,
+    );
+
+    const nullNoop = await request(app.getHttpServer())
+      .patch(`/tickets/${created.id}/assignee`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .send({ assigneeId: null })
+      .expect(200);
+    expect(nullNoop.body.assignee).toBeNull();
+    expect(nullNoop.body.assignments).toEqual([]);
+    expect(nullNoop.body.updatedAt).toBe(created.updatedAt);
+
+    const assigned = await request(app.getHttpServer())
+      .patch(`/tickets/${created.id}/assignee`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .send({ assigneeId: agent?.id })
+      .expect(200);
+    expect(assigned.body.assignments).toHaveLength(1);
+    const afterAssignUpdatedAt = assigned.body.updatedAt as string;
+
+    const sameNoop = await request(app.getHttpServer())
+      .patch(`/tickets/${created.id}/assignee`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .send({ assigneeId: agent?.id })
+      .expect(200);
+    expect(sameNoop.body.assignments).toHaveLength(1);
+    expect(sameNoop.body.updatedAt).toBe(afterAssignUpdatedAt);
+    expect(sameNoop.body.assignee).toEqual(assigned.body.assignee);
+  });
+
+  it('Agent in List Scope receives HTTP 403 and Ticket is unchanged', async () => {
+    const agent = await login(app, AGENT_EMAIL);
+    const supervisor = await login(app, SUPERVISOR_EMAIL);
+    const catalog = await staffCatalog(app, supervisor.accessToken);
+    const target = catalog.find((row) => row.displayName === 'Sam Supervisor');
+
+    const before = await ticketByTitle(
+      app,
+      agent.accessToken,
+      'High: patient portal MFA reset',
+    );
+    expect(before.assignee).toBeNull();
+
+    await request(app.getHttpServer())
+      .patch(`/tickets/${before.id}/assignee`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .send({ assigneeId: target?.id })
+      .expect(403);
+
+    const after = await ticketByTitle(
+      app,
+      agent.accessToken,
+      'High: patient portal MFA reset',
+    );
+    expect(after.assignee).toBeNull();
+    expect(after.updatedAt).toBe(before.updatedAt);
+    expect(after.assignments).toEqual(before.assignments);
+  });
+
+  it('Agent PATCH outside List Scope or unknown id matches opaque GET 404', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const unknownId = '00000000-0000-4000-8000-000000000099';
+    const warehouse = await ticketByTitle(
+      app,
+      (await login(app, SUPERVISOR_EMAIL)).accessToken,
+      'High: warehouse scanner pairing',
+    );
+
+    const getUnknown = await request(app.getHttpServer())
+      .get(`/tickets/${unknownId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(404);
+    const patchUnknown = await request(app.getHttpServer())
+      .patch(`/tickets/${unknownId}/assignee`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ assigneeId: null })
+      .expect(404);
+    const patchHidden = await request(app.getHttpServer())
+      .patch(`/tickets/${warehouse.id}/assignee`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ assigneeId: null })
+      .expect(404);
+
+    expect(patchUnknown.body).toEqual(getUnknown.body);
+    expect(patchHidden.body).toEqual(getUnknown.body);
+    expect(JSON.stringify(patchHidden.body)).not.toMatch(/warehouse scanner/);
+  });
+
+  it('non-null unknown assigneeId rejects without Ticket not-found masquerade and writes no row', async () => {
+    const supervisor = await login(app, SUPERVISOR_EMAIL);
+    const created = await createOpenTicket(
+      app,
+      supervisor.accessToken,
+      `Reassign e2e: unknown assignee ${Date.now()}`,
+    );
+    const unknownUserId = '00000000-0000-4000-8000-000000000088';
+
+    const getUnknownTicket = await request(app.getHttpServer())
+      .get(`/tickets/${unknownUserId}`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .expect(404);
+
+    const response = await request(app.getHttpServer())
+      .patch(`/tickets/${created.id}/assignee`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .send({ assigneeId: unknownUserId })
+      .expect(400);
+
+    expect(response.body).not.toEqual(getUnknownTicket.body);
+    expect(response.body).not.toHaveProperty('stack');
+
+    const after = await request(app.getHttpServer())
+      .get(`/tickets/${created.id}`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .expect(200);
+    expect(after.body.assignee).toBeNull();
+    expect(after.body.assignments).toEqual([]);
+    expect(after.body.updatedAt).toBe(created.updatedAt);
   });
 });
