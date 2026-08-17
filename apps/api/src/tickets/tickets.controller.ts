@@ -10,6 +10,7 @@ import type {
   TicketListFilters,
 } from '@support-ticketing/shared';
 import type { AuthenticatedRequest } from '../auth/auth.guard';
+import { RequireRole } from '../auth/require-role.decorator';
 import { TicketsService } from './tickets.service';
 
 @Controller('tickets')
@@ -17,6 +18,7 @@ export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
 
   @Get()
+  @RequireRole('agent')
   list(
     @Req() request: AuthenticatedRequest,
     @Query() query: TicketListFilters,
