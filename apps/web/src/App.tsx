@@ -9,7 +9,6 @@ import { DashboardPage } from './dashboard/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { StaffShell } from './shell/StaffShell';
 import { theme } from './theme';
-import { TicketCreate } from './tickets/TicketCreate';
 import { TicketDetail } from './tickets/TicketDetail';
 import { TicketList } from './tickets/TicketList';
 
@@ -32,7 +31,11 @@ function AuthGate({
 
 export function App() {
   return (
-    <MantineProvider theme={theme} defaultColorScheme="light">
+    <MantineProvider
+      theme={theme}
+      defaultColorScheme="light"
+      env={import.meta.env.MODE === 'test' ? 'test' : undefined}
+    >
       <AuthProvider>
         <Routes>
           <Route
@@ -54,7 +57,6 @@ export function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="tickets" element={<TicketList />} />
-            <Route path="tickets/new" element={<TicketCreate />} />
             <Route path="tickets/:id" element={<TicketDetail />} />
             <Route path="admin/clients" element={<AdminClientsPage />} />
             <Route path="admin/users" element={<AdminUsersPage />} />

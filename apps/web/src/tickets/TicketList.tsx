@@ -1,7 +1,6 @@
 import {
   Alert,
   Anchor,
-  Avatar,
   Badge,
   Button,
   Card,
@@ -41,6 +40,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
+import { PersonCell } from '../components/PersonCell';
+import { TicketCreateModal } from './TicketCreateModal';
 import { LoadingState } from '../components/LoadingState';
 import {
   formatTicketInstant,
@@ -132,15 +133,6 @@ function assigneeSelectData(options: TicketListFilterOptions) {
   return people;
 }
 
-function PersonCell({ name }: { name: string }) {
-  return (
-    <Group gap="xs" wrap="nowrap">
-      <Avatar name={name} color="indigo" radius="xl" size={26} />
-      <Text size="sm">{name}</Text>
-    </Group>
-  );
-}
-
 export function TicketList() {
   const { user } = useAuth();
   const includeAssignee =
@@ -155,6 +147,7 @@ export function TicketList() {
     useState<TicketListFilterOptions | null>(null);
   const [failed, setFailed] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [createOpened, setCreateOpened] = useState(false);
 
   function setFilter(key: keyof TicketListFilters, value: string | null) {
     setSearchParams(
@@ -217,9 +210,8 @@ export function TicketList() {
           Tickets
         </Title>
         <Button
-          component={Link}
-          to="/tickets/new"
           leftSection={<IconPlus size={16} stroke={1.8} />}
+          onClick={() => setCreateOpened(true)}
         >
           New ticket
         </Button>
@@ -392,6 +384,10 @@ export function TicketList() {
           </Table.ScrollContainer>
         </Card>
       )}
+      <TicketCreateModal
+        opened={createOpened}
+        onClose={() => setCreateOpened(false)}
+      />
     </Stack>
   );
 }

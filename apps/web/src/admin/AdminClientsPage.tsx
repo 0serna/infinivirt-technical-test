@@ -1,11 +1,16 @@
 import {
   Alert,
+  Badge,
   Button,
+  Card,
+  Center,
   Group,
+  Modal,
   Stack,
   Table,
   Text,
   TextInput,
+  ThemeIcon,
   Title,
 } from '@mantine/core';
 import type {
@@ -13,6 +18,15 @@ import type {
   CreateClientBody,
   UpdateClientBody,
 } from '@support-ticketing/shared';
+import {
+  IconAlertCircle,
+  IconBuildings,
+  IconPencil,
+  IconPlus,
+  IconRefresh,
+  IconRestore,
+  IconTrash,
+} from '@tabler/icons-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { apiFetch } from '../auth/api';
@@ -30,10 +44,11 @@ export function AdminClientsPage() {
   const { user } = useAuth();
   const [list, setList] = useState<ListState>({ kind: 'loading' });
   const [reloadToken, setReloadToken] = useState(0);
+  const [createOpened, setCreateOpened] = useState(false);
   const [name, setName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<AdminClientRow | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [rowError, setRowError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -88,6 +103,18 @@ export function AdminClientsPage() {
     });
   }
 
+  function openCreate() {
+    setFormError(null);
+    setName('');
+    setCreateOpened(true);
+  }
+
+  function closeRename() {
+    setRenaming(null);
+    setRenameValue('');
+    setRowError(null);
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = name.trim();
@@ -119,6 +146,7 @@ export function AdminClientsPage() {
       }
       const created = (await response.json()) as AdminClientRow;
       setName('');
+      setCreateOpened(false);
       upsertClient(created);
     } catch {
       setFormError("Couldn't create this Client.");
@@ -177,8 +205,7 @@ export function AdminClientsPage() {
       const updated = (await response.json()) as AdminClientRow;
       upsertClient(updated);
       if (action === 'rename') {
-        setRenamingId(null);
-        setRenameValue('');
+        closeRename();
       }
     } catch {
       setRowError("Couldn't update this Client.");
@@ -188,145 +215,223 @@ export function AdminClientsPage() {
   }
 
   return (
-    <Stack>
-      <Title order={2}>Clients</Title>
-      <form onSubmit={handleSubmit}>
-        <Group align="flex-end" wrap="nowrap">
-          <TextInput
-            label="Name"
-            value={name}
-            onChange={(event) => setName(event.currentTarget.value)}
-            style={{ flex: 1 }}
-          />
-          <Button type="submit" loading={submitting}>
-            Create Client
-          </Button>
-        </Group>
-      </form>
-      {formError ? <Alert color="red">{formError}</Alert> : null}
-      {rowError ? <Alert color="red">{rowError}</Alert> : null}
+    <Stack gap="lg">
+      <Group justify="space-between" align="center">
+        <Title order={2} size="h3">
+          Clients
+        </Title>
+        <Button
+          leftSection={<IconPlus size={16} stroke={1.8} />}
+          onClick={openCreate}
+        >
+          New Client
+        </Button>
+      </Group>
+      {rowError !== null && renaming === null ? (
+        <Alert color="red" icon={<IconAlertCircle size={16} />}>
+          {rowError}
+        </Alert>
+      ) : null}
       {list.kind === 'error' ? (
-        <Alert>
+        <Alert color="red" icon={<IconAlertCircle size={16} />}>
           <Stack gap="sm">
             <Text>Couldn't load Clients.</Text>
-            <Button
-              type="button"
-              variant="default"
-              onClick={() => {
-                setList({ kind: 'loading' });
-                setReloadToken((token) => token + 1);
-              }}
-            >
-              Try again
-            </Button>
+            <Group>
+              <Button
+                type="button"
+                variant="default"
+                leftSection={<IconRefresh size={14} stroke={1.8} />}
+                onClick={() => {
+                  setList({ kind: 'loading' });
+                  setReloadToken((token) => token + 1);
+                }}
+              >
+                Try again
+              </Button>
+            </Group>
           </Stack>
         </Alert>
       ) : list.kind === 'loading' ? (
         <LoadingState label="Loading Clients…" />
+      ) : list.clients.length === 0 ? (
+        <Card withBorder radius="md">
+          <Center py="xl">
+            <Stack align="center" gap="sm">
+              <ThemeIcon size={48} radius="xl" variant="light" color="gray">
+                <IconBuildings size={24} stroke={1.5} />
+              </ThemeIcon>
+              <Text c="dimmed">No Clients to show.</Text>
+            </Stack>
+          </Center>
+        </Card>
       ) : (
-        <Table>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Name</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Actions</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {list.clients.map((client) => {
-              const isDeleted = client.deletedAt !== null;
-              const isRenaming = renamingId === client.id;
-              const busy = busyId === client.id;
-              return (
-                <Table.Tr key={client.id}>
-                  <Table.Td>
-                    {isRenaming ? (
-                      <TextInput
-                        aria-label={`Rename ${client.name}`}
-                        value={renameValue}
-                        onChange={(event) =>
-                          setRenameValue(event.currentTarget.value)
-                        }
-                      />
-                    ) : (
-                      client.name
-                    )}
-                  </Table.Td>
-                  <Table.Td>{isDeleted ? 'Soft-deleted' : 'Current'}</Table.Td>
-                  <Table.Td>
-                    <Group gap="xs" wrap="nowrap">
-                      {isDeleted ? (
-                        <Button
-                          type="button"
-                          variant="default"
-                          size="xs"
-                          loading={busy}
-                          onClick={() => void runRowAction(client, 'restore')}
-                        >
-                          Restore
-                        </Button>
-                      ) : isRenaming ? (
-                        <>
-                          <Button
-                            type="button"
-                            size="xs"
-                            loading={busy}
-                            onClick={() =>
-                              void runRowAction(client, 'rename', renameValue)
-                            }
-                          >
-                            Save
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="default"
-                            size="xs"
-                            disabled={busy}
-                            onClick={() => {
-                              setRenamingId(null);
-                              setRenameValue('');
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            type="button"
-                            variant="default"
-                            size="xs"
-                            disabled={busy}
-                            onClick={() => {
-                              setRowError(null);
-                              setRenamingId(client.id);
-                              setRenameValue(client.name);
-                            }}
-                          >
-                            Rename
-                          </Button>
-                          <Button
-                            type="button"
-                            color="red"
-                            variant="light"
-                            size="xs"
-                            loading={busy}
-                            onClick={() =>
-                              void runRowAction(client, 'soft-delete')
-                            }
-                          >
-                            Soft-delete
-                          </Button>
-                        </>
-                      )}
-                    </Group>
-                  </Table.Td>
+        <Card withBorder radius="md" p={0}>
+          <Table.ScrollContainer minWidth={520}>
+            <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Name</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th ta="right">Actions</Table.Th>
                 </Table.Tr>
-              );
-            })}
-          </Table.Tbody>
-        </Table>
+              </Table.Thead>
+              <Table.Tbody>
+                {list.clients.map((client) => {
+                  const isDeleted = client.deletedAt !== null;
+                  const busy = busyId === client.id;
+                  return (
+                    <Table.Tr key={client.id}>
+                      <Table.Td>
+                        <Text size="sm" fw={500}>
+                          {client.name}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge
+                          color={isDeleted ? 'gray' : 'teal'}
+                          variant="light"
+                          radius="sm"
+                        >
+                          {isDeleted ? 'Soft-deleted' : 'Current'}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap="xs" wrap="nowrap" justify="flex-end">
+                          {isDeleted ? (
+                            <Button
+                              type="button"
+                              variant="default"
+                              size="xs"
+                              loading={busy}
+                              leftSection={
+                                <IconRestore size={14} stroke={1.8} />
+                              }
+                              onClick={() =>
+                                void runRowAction(client, 'restore')
+                              }
+                            >
+                              Restore
+                            </Button>
+                          ) : (
+                            <>
+                              <Button
+                                type="button"
+                                variant="default"
+                                size="xs"
+                                disabled={busy}
+                                leftSection={
+                                  <IconPencil size={14} stroke={1.8} />
+                                }
+                                onClick={() => {
+                                  setRowError(null);
+                                  setRenaming(client);
+                                  setRenameValue(client.name);
+                                }}
+                              >
+                                Rename
+                              </Button>
+                              <Button
+                                type="button"
+                                color="red"
+                                variant="light"
+                                size="xs"
+                                loading={busy}
+                                leftSection={
+                                  <IconTrash size={14} stroke={1.8} />
+                                }
+                                onClick={() =>
+                                  void runRowAction(client, 'soft-delete')
+                                }
+                              >
+                                Soft-delete
+                              </Button>
+                            </>
+                          )}
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Card>
       )}
+      <Modal
+        opened={createOpened}
+        onClose={() => setCreateOpened(false)}
+        title="New Client"
+        centered
+      >
+        <form onSubmit={handleSubmit}>
+          <Stack gap="sm">
+            <TextInput
+              label="Name"
+              value={name}
+              onChange={(event) => setName(event.currentTarget.value)}
+              data-autofocus
+            />
+            {formError !== null ? (
+              <Alert color="red" icon={<IconAlertCircle size={16} />}>
+                {formError}
+              </Alert>
+            ) : null}
+            <Group justify="flex-end">
+              <Button
+                type="button"
+                variant="default"
+                onClick={() => setCreateOpened(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" loading={submitting}>
+                Create Client
+              </Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
+      <Modal
+        opened={renaming !== null}
+        onClose={closeRename}
+        title="Rename Client"
+        centered
+      >
+        {renaming !== null ? (
+          <Stack gap="sm">
+            <TextInput
+              aria-label={`Rename ${renaming.name}`}
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.currentTarget.value)}
+              data-autofocus
+            />
+            {rowError !== null ? (
+              <Alert color="red" icon={<IconAlertCircle size={16} />}>
+                {rowError}
+              </Alert>
+            ) : null}
+            <Group justify="flex-end">
+              <Button
+                type="button"
+                variant="default"
+                disabled={busyId === renaming.id}
+                onClick={closeRename}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                loading={busyId === renaming.id}
+                onClick={() =>
+                  void runRowAction(renaming, 'rename', renameValue)
+                }
+              >
+                Save
+              </Button>
+            </Group>
+          </Stack>
+        ) : null}
+      </Modal>
     </Stack>
   );
 }

@@ -83,6 +83,7 @@ test('Administrator /admin/clients lists Clients and can create one via POST', a
   expect(within(table).getByText('Contoso Health')).toBeDefined();
   expect(within(table).getByText('Acme Logistics')).toBeDefined();
 
+  await user.click(screen.getByRole('button', { name: 'New Client' }));
   await user.type(screen.getByLabelText('Name'), 'New Client Co');
   await user.click(screen.getByRole('button', { name: 'Create Client' }));
 
@@ -231,6 +232,7 @@ test('Administrator sees an error when Client create fails', async () => {
 
   renderApp(['/admin/clients']);
   expect(await screen.findByRole('heading', { name: 'Clients' })).toBeDefined();
+  await user.click(screen.getByRole('button', { name: 'New Client' }));
   await user.type(screen.getByLabelText('Name'), 'Broken Co');
   await user.click(screen.getByRole('button', { name: 'Create Client' }));
   expect(await screen.findByText("Couldn't create this Client.")).toBeDefined();

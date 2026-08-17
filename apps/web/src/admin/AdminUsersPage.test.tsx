@@ -95,6 +95,7 @@ test('Administrator /admin/users lists Users and can create one via POST', async
   expect(within(table).getByText('ada@example.com')).toBeDefined();
   expect(within(table).getByText('Alex Turing')).toBeDefined();
 
+  await user.click(screen.getByRole('button', { name: 'New User' }));
   await user.type(screen.getByLabelText('Email'), 'new.agent@example.com');
   await user.type(screen.getByLabelText('Display name'), 'New Agent');
   await user.type(screen.getByLabelText('Password'), 'InitialPass123!');

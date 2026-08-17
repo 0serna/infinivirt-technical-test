@@ -1,4 +1,4 @@
-import { act, screen } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   ada,
@@ -63,12 +63,28 @@ function mockCreateSession({
   });
 }
 
+async function openCreateModal() {
+  const user = userEvent.setup();
+  renderApp(['/tickets']);
+  await user.click(await screen.findByRole('button', { name: 'New ticket' }));
+  return user;
+}
+
+function createDialog() {
+  return within(screen.getByRole('dialog', { name: 'New ticket' }));
+}
+
 async function openClientSelect(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole('combobox', { name: 'Client' }));
+  await user.click(
+    await createDialog().findByRole('combobox', { name: 'Client' }),
+  );
 }
 
 function clientOption(name: string) {
-  return screen.getByRole('option', { name, hidden: true });
+  // Closed Ticket List filter Selects keep hidden options in the DOM; the
+  // modal's Select mounts later in the portal, so the last match is ours.
+  const matches = screen.getAllByRole('option', { name, hidden: true });
+  return matches[matches.length - 1];
 }
 
 async function fillCreateFields(
@@ -79,11 +95,12 @@ async function fillCreateFields(
     description,
   }: { client: string; title: string; description: string },
 ) {
+  const dialog = createDialog();
   await openClientSelect(user);
   await user.click(clientOption(client));
-  await user.type(screen.getByRole('textbox', { name: 'Title' }), title);
+  await user.type(dialog.getByRole('textbox', { name: 'Title' }), title);
   await user.type(
-    screen.getByRole('textbox', { name: 'Description' }),
+    dialog.getByRole('textbox', { name: 'Description' }),
     description,
   );
 }
@@ -99,14 +116,10 @@ function ticketPostCalls() {
 }
 
 test('Ticket List New ticket opens the create form without treating new as a Ticket id', async () => {
-  const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
   mockCreateSession();
 
-  renderApp(['/tickets']);
-
-  expect(await screen.findByRole('heading', { name: 'Tickets' })).toBeDefined();
-  await user.click(screen.getByRole('link', { name: 'New ticket' }));
+  await openCreateModal();
 
   expect(
     await screen.findByRole('heading', { name: 'New ticket' }),
@@ -126,11 +139,10 @@ test('Ticket List New ticket opens the create form without treating new as a Tic
 });
 
 test('create form loads Clients from GET /api/clients not Ticket List filterOptions', async () => {
-  const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
   mockCreateSession();
 
-  renderApp(['/tickets/new']);
+  const user = await openCreateModal();
 
   await openClientSelect(user);
   expect(clientOption('Acme Logistics')).toBeDefined();
@@ -150,28 +162,30 @@ test('create form shows Client, Title, description, and Priority defaulting to m
   localStorage.setItem('accessToken', 'token-abc');
   mockCreateSession();
 
-  renderApp(['/tickets/new']);
+  await openCreateModal();
 
-  expect(await screen.findByRole('combobox', { name: 'Client' })).toBeDefined();
-  expect(screen.getByRole('textbox', { name: 'Title' })).toBeDefined();
-  expect(screen.getByRole('textbox', { name: 'Description' })).toBeDefined();
-  expect(screen.getByRole('combobox', { name: 'Priority' })).toBeDefined();
-  expect(screen.getByDisplayValue('Medium')).toBeDefined();
-  expect(screen.queryByRole('combobox', { name: 'Assignee' })).toBeNull();
-  expect(screen.getByRole('button', { name: 'Create ticket' })).toBeDefined();
+  const dialog = createDialog();
+  expect(await dialog.findByRole('combobox', { name: 'Client' })).toBeDefined();
+  expect(dialog.getByRole('textbox', { name: 'Title' })).toBeDefined();
+  expect(dialog.getByRole('textbox', { name: 'Description' })).toBeDefined();
+  expect(dialog.getByRole('combobox', { name: 'Priority' })).toBeDefined();
+  expect(dialog.getByDisplayValue('Medium')).toBeDefined();
+  expect(dialog.queryByRole('combobox', { name: 'Assignee' })).toBeNull();
+  expect(dialog.getByRole('button', { name: 'Create ticket' })).toBeDefined();
 });
 
 test('client-side validation blocks submit when Client, Title, or description is missing', async () => {
-  const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
   mockCreateSession();
 
-  renderApp(['/tickets/new']);
+  const user = await openCreateModal();
 
   expect(
-    await screen.findByRole('button', { name: 'Create ticket' }),
+    await createDialog().findByRole('button', { name: 'Create ticket' }),
   ).toBeDefined();
-  await user.click(screen.getByRole('button', { name: 'Create ticket' }));
+  await user.click(
+    createDialog().getByRole('button', { name: 'Create ticket' }),
+  );
 
   expect(
     await screen.findByText('Client, Title, and description are required.'),
@@ -183,7 +197,9 @@ test('client-side validation blocks submit when Client, Title, or description is
     title: '   ',
     description: 'Has a description.',
   });
-  await user.click(screen.getByRole('button', { name: 'Create ticket' }));
+  await user.click(
+    createDialog().getByRole('button', { name: 'Create ticket' }),
+  );
 
   expect(
     await screen.findByText('Client, Title, and description are required.'),
@@ -192,7 +208,6 @@ test('client-side validation blocks submit when Client, Title, or description is
 });
 
 test('successful create posts the Ticket and navigates to the new Ticket detail', async () => {
-  const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
   const created = {
     ...sampleTicketDetail,
@@ -217,16 +232,18 @@ test('successful create posts the Ticket and navigates to the new Ticket detail'
     },
   });
 
-  renderApp(['/tickets/new']);
+  const user = await openCreateModal();
 
   await fillCreateFields(user, {
     client: 'Acme Logistics',
     title: 'Printer offline at front desk',
     description: 'Receipt printer shows offline since this morning.',
   });
-  await user.click(screen.getByRole('combobox', { name: 'Priority' }));
-  await user.click(screen.getByRole('option', { name: 'High', hidden: true }));
-  await user.click(screen.getByRole('button', { name: 'Create ticket' }));
+  await user.click(createDialog().getByRole('combobox', { name: 'Priority' }));
+  await user.click(clientOption('High'));
+  await user.click(
+    createDialog().getByRole('button', { name: 'Create ticket' }),
+  );
 
   expect(
     await screen.findByRole('heading', {
@@ -237,7 +254,6 @@ test('successful create posts the Ticket and navigates to the new Ticket detail'
 });
 
 test('submit is disabled while create is in flight', async () => {
-  const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
   let resolvePost!: (value: Response) => void;
   const pending = new Promise<Response>((resolve) => {
@@ -256,7 +272,7 @@ test('submit is disabled while create is in flight', async () => {
     onPost: () => pending,
   });
 
-  renderApp(['/tickets/new']);
+  const user = await openCreateModal();
 
   await fillCreateFields(user, {
     client: 'Contoso Health',
@@ -264,7 +280,7 @@ test('submit is disabled while create is in flight', async () => {
     description: 'Intermittent VPN drops for warehouse staff.',
   });
 
-  const submit = screen.getByRole('button', { name: 'Create ticket' });
+  const submit = createDialog().getByRole('button', { name: 'Create ticket' });
   await user.click(submit);
 
   expect((submit as HTMLButtonElement).disabled).toBe(true);
@@ -279,20 +295,21 @@ test('submit is disabled while create is in flight', async () => {
 });
 
 test('failed create shows English error copy without the raw server body', async () => {
-  const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
   mockCreateSession({
     onPost: () => jsonResponse(500, { message: 'Internal boom stack' }),
   });
 
-  renderApp(['/tickets/new']);
+  const user = await openCreateModal();
 
   await fillCreateFields(user, {
     client: 'Contoso Health',
     title: 'Should fail',
     description: 'Body that will not create.',
   });
-  await user.click(screen.getByRole('button', { name: 'Create ticket' }));
+  await user.click(
+    createDialog().getByRole('button', { name: 'Create ticket' }),
+  );
 
   expect(await screen.findByText("Couldn't create this ticket.")).toBeDefined();
   expect(screen.queryByText('Internal boom stack')).toBeNull();
@@ -306,13 +323,16 @@ test('failed Client catalog load shows error copy without the raw server body', 
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
     }
+    if (isTicketsUrl(url)) {
+      return jsonResponse(200, sampleTickets);
+    }
     if (isClientsUrl(url)) {
       return jsonResponse(500, { message: 'Catalog boom stack' });
     }
     throw new Error(`unexpected fetch ${url}`);
   });
 
-  renderApp(['/tickets/new']);
+  await openCreateModal();
 
   expect(await screen.findByText("Couldn't load clients.")).toBeDefined();
   expect(screen.queryByText('Catalog boom stack')).toBeNull();
