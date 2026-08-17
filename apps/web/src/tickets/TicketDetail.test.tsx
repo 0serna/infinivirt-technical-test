@@ -457,7 +457,7 @@ test('failed Comment create shows error copy without the raw server body', async
   expect(within(thread).queryByText('Should fail.')).toBeNull();
 });
 
-test('Supervisor Comment composer offers visibility defaulting to public and can post internal', async () => {
+test('Supervisor Comment composer defaults to internal and can post public', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
   const updated = {
@@ -474,6 +474,21 @@ test('Supervisor Comment composer offers visibility defaulting to public and can
       },
     ],
   };
+  const updatedPublic = {
+    ...updated,
+    updatedAt: '2026-08-16T14:06:00.000Z',
+    comments: [
+      ...updated.comments,
+      {
+        id: 'comment-public',
+        body: 'Public update for the Client.',
+        visibility: 'public' as const,
+        createdAt: '2026-08-16T14:06:00.000Z',
+        author: { id: 'user-3', displayName: 'Sam Supervisor' },
+      },
+    ],
+  };
+  let postCount = 0;
   vi.mocked(fetch).mockImplementation(async (input, init) => {
     const url = String(input);
     const method = (init?.method ?? 'GET').toUpperCase();
@@ -484,9 +499,106 @@ test('Supervisor Comment composer offers visibility defaulting to public and can
       return jsonResponse(200, sampleTickets);
     }
     if (url === '/api/tickets/ticket-1/comments' && method === 'POST') {
+      postCount += 1;
+      if (postCount === 1) {
+        expect(init?.body).toBe(
+          JSON.stringify({
+            body: 'Internal: escalate if firmware lag persists.',
+            visibility: 'internal',
+          }),
+        );
+        return jsonResponse(201, updated);
+      }
       expect(init?.body).toBe(
         JSON.stringify({
-          body: 'Internal: escalate if firmware lag persists.',
+          body: 'Public update for the Client.',
+          visibility: 'public',
+        }),
+      );
+      return jsonResponse(201, updatedPublic);
+    }
+    if (isTicketDetailUrl(url)) {
+      return jsonResponse(200, sampleTicketDetail);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  expect(
+    (screen.getByRole('switch', { name: 'Visibility' }) as HTMLInputElement)
+      .checked,
+  ).toBe(true);
+  expect(screen.getByText('Internal')).toBeDefined();
+  await user.type(
+    screen.getByRole('textbox', { name: 'Comment' }),
+    'Internal: escalate if firmware lag persists.',
+  );
+  await user.click(screen.getByRole('button', { name: 'Add comment' }));
+
+  const thread = await screen.findByLabelText('Comments');
+  expect(
+    within(thread).getByText('Internal: escalate if firmware lag persists.'),
+  ).toBeDefined();
+  expect(within(thread).getByLabelText('Visibility: Internal')).toBeDefined();
+
+  expect(
+    (screen.getByRole('switch', { name: 'Visibility' }) as HTMLInputElement)
+      .checked,
+  ).toBe(true);
+  await user.click(screen.getByRole('switch', { name: 'Visibility' }));
+  expect(
+    (screen.getByRole('switch', { name: 'Visibility' }) as HTMLInputElement)
+      .checked,
+  ).toBe(false);
+  await user.type(
+    screen.getByRole('textbox', { name: 'Comment' }),
+    'Public update for the Client.',
+  );
+  await user.click(screen.getByRole('button', { name: 'Add comment' }));
+
+  expect(
+    await within(screen.getByLabelText('Comments')).findByText(
+      'Public update for the Client.',
+    ),
+  ).toBeDefined();
+});
+
+test('Administrator Comment composer defaults to internal without changing visibility', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const updated = {
+    ...sampleTicketDetail,
+    updatedAt: '2026-08-16T14:10:00.000Z',
+    comments: [
+      ...sampleTicketDetail.comments,
+      {
+        id: 'comment-admin-internal',
+        body: 'Administrator internal note for staff.',
+        visibility: 'internal' as const,
+        createdAt: '2026-08-16T14:10:00.000Z',
+        author: { id: 'user-1', displayName: 'Ada Lovelace' },
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isTicketsUrl(url)) {
+      return jsonResponse(200, sampleTickets);
+    }
+    if (url === '/api/tickets/ticket-1/comments' && method === 'POST') {
+      expect(init?.body).toBe(
+        JSON.stringify({
+          body: 'Administrator internal note for staff.',
           visibility: 'internal',
         }),
       );
@@ -505,90 +617,21 @@ test('Supervisor Comment composer offers visibility defaulting to public and can
       name: 'High: patient portal MFA reset',
     }),
   ).toBeDefined();
-  const visibility = screen.getByRole('combobox', {
-    name: 'Visibility',
-  }) as HTMLInputElement;
-  expect(visibility).toBeDefined();
-  expect(visibility.value).toBe('Public');
-  await user.click(visibility);
-  await user.click(
-    screen.getByRole('option', { name: 'Internal', hidden: true }),
-  );
+  expect(
+    (screen.getByRole('switch', { name: 'Visibility' }) as HTMLInputElement)
+      .checked,
+  ).toBe(true);
   await user.type(
     screen.getByRole('textbox', { name: 'Comment' }),
-    'Internal: escalate if firmware lag persists.',
+    'Administrator internal note for staff.',
   );
   await user.click(screen.getByRole('button', { name: 'Add comment' }));
 
   const thread = await screen.findByLabelText('Comments');
   expect(
-    within(thread).getByText('Internal: escalate if firmware lag persists.'),
+    within(thread).getByText('Administrator internal note for staff.'),
   ).toBeDefined();
   expect(within(thread).getByLabelText('Visibility: Internal')).toBeDefined();
-});
-
-test('Administrator Comment composer defaults to public without changing visibility', async () => {
-  const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
-  const updated = {
-    ...sampleTicketDetail,
-    updatedAt: '2026-08-16T14:10:00.000Z',
-    comments: [
-      ...sampleTicketDetail.comments,
-      {
-        id: 'comment-admin-public',
-        body: 'Administrator public note for Client.',
-        visibility: 'public' as const,
-        createdAt: '2026-08-16T14:10:00.000Z',
-        author: { id: 'user-1', displayName: 'Ada Lovelace' },
-      },
-    ],
-  };
-  vi.mocked(fetch).mockImplementation(async (input, init) => {
-    const url = String(input);
-    const method = (init?.method ?? 'GET').toUpperCase();
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    if (url === '/api/tickets/ticket-1/comments' && method === 'POST') {
-      expect(init?.body).toBe(
-        JSON.stringify({
-          body: 'Administrator public note for Client.',
-          visibility: 'public',
-        }),
-      );
-      return jsonResponse(201, updated);
-    }
-    if (isTicketDetailUrl(url)) {
-      return jsonResponse(200, sampleTicketDetail);
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
-
-  renderApp(['/tickets/ticket-1']);
-
-  expect(
-    await screen.findByRole('heading', {
-      name: 'High: patient portal MFA reset',
-    }),
-  ).toBeDefined();
-  expect(
-    (screen.getByRole('combobox', { name: 'Visibility' }) as HTMLInputElement)
-      .value,
-  ).toBe('Public');
-  await user.type(
-    screen.getByRole('textbox', { name: 'Comment' }),
-    'Administrator public note for Client.',
-  );
-  await user.click(screen.getByRole('button', { name: 'Add comment' }));
-
-  const thread = await screen.findByLabelText('Comments');
-  expect(
-    within(thread).getByText('Administrator public note for Client.'),
-  ).toBeDefined();
 });
 
 test('Agent Assignee can record the next forward Status Transition', async () => {

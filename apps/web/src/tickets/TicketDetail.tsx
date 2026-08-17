@@ -7,15 +7,14 @@ import {
   Button,
   Group,
   Menu,
-  Select,
-  SimpleGrid,
   Stack,
+  Switch,
   Text,
   Textarea,
   Title,
 } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import {
-  COMMENT_VISIBILITIES,
   type CommentVisibility,
   type CreateTicketCommentBody,
   hasMinimumRole,
@@ -173,8 +172,12 @@ function CommentComposer({
   allowInternal: boolean;
   onSubmit: (body: string, visibility: CommentVisibility) => Promise<boolean>;
 }) {
+  const defaultVisibility: CommentVisibility = allowInternal
+    ? 'internal'
+    : 'public';
   const [draft, setDraft] = useState('');
-  const [visibility, setVisibility] = useState<CommentVisibility>('public');
+  const [visibility, setVisibility] =
+    useState<CommentVisibility>(defaultVisibility);
 
   return (
     <Stack
@@ -190,7 +193,7 @@ function CommentComposer({
           (ok) => {
             if (ok) {
               setDraft('');
-              setVisibility('public');
+              setVisibility(defaultVisibility);
             }
           },
         );
@@ -207,23 +210,18 @@ function CommentComposer({
         aria-label="Comment"
       />
       {allowInternal ? (
-        <Select
-          label="Visibility"
-          value={visibility}
-          onChange={(value) => {
-            if (
-              value !== null &&
-              (COMMENT_VISIBILITIES as readonly string[]).includes(value)
-            ) {
-              setVisibility(value as CommentVisibility);
-            }
+        <Switch
+          label={
+            visibility === 'internal'
+              ? COMMENT_VISIBILITY_LABEL.internal
+              : COMMENT_VISIBILITY_LABEL.public
+          }
+          checked={visibility === 'internal'}
+          onChange={(event) => {
+            setVisibility(event.currentTarget.checked ? 'internal' : 'public');
           }}
-          data={COMMENT_VISIBILITIES.map((value) => ({
-            value,
-            label: COMMENT_VISIBILITY_LABEL[value],
-          }))}
-          allowDeselect={false}
           disabled={disabled}
+          aria-label="Visibility"
         />
       ) : null}
       <Group>
@@ -240,6 +238,37 @@ function CommentComposer({
   );
 }
 
+function PropertiesColumn({ ticket }: { ticket: TicketDetailBody }) {
+  return (
+    <Stack gap="md" aria-label="Ticket properties">
+      <Text fw={600} size="sm">
+        Properties
+      </Text>
+      <MetaItem label="Client">{ticket.client.name}</MetaItem>
+      <MetaItem label="Assignee">
+        {ticket.assignee?.displayName ?? 'Unassigned'}
+      </MetaItem>
+      <MetaItem label="Created by">{ticket.createdBy.displayName}</MetaItem>
+      <MetaItem label="Created">
+        {formatTicketInstant(ticket.createdAt)}
+      </MetaItem>
+      <MetaItem label="Updated">
+        {formatTicketInstant(ticket.updatedAt)}
+      </MetaItem>
+      {ticket.resolvedAt ? (
+        <MetaItem label="Resolved">
+          {formatTicketInstant(ticket.resolvedAt)}
+        </MetaItem>
+      ) : null}
+      {ticket.closedAt ? (
+        <MetaItem label="Closed">
+          {formatTicketInstant(ticket.closedAt)}
+        </MetaItem>
+      ) : null}
+    </Stack>
+  );
+}
+
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'missing' }
@@ -249,6 +278,7 @@ type LoadState =
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const isWide = useMediaQuery('(min-width: 62em)');
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [reloadToken, setReloadToken] = useState(0);
   const [transitionError, setTransitionError] = useState(false);
@@ -456,37 +486,30 @@ export function TicketDetail() {
           Couldn't update this ticket's status.
         </Text>
       ) : null}
-      <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
-        <MetaItem label="Client">{ticket.client.name}</MetaItem>
-        <MetaItem label="Assignee">
-          {ticket.assignee?.displayName ?? 'Unassigned'}
-        </MetaItem>
-        <MetaItem label="Created by">{ticket.createdBy.displayName}</MetaItem>
-        <MetaItem label="Created">
-          {formatTicketInstant(ticket.createdAt)}
-        </MetaItem>
-        <MetaItem label="Updated">
-          {formatTicketInstant(ticket.updatedAt)}
-        </MetaItem>
-        {ticket.resolvedAt ? (
-          <MetaItem label="Resolved">
-            {formatTicketInstant(ticket.resolvedAt)}
-          </MetaItem>
-        ) : null}
-        {ticket.closedAt ? (
-          <MetaItem label="Closed">
-            {formatTicketInstant(ticket.closedAt)}
-          </MetaItem>
-        ) : null}
-      </SimpleGrid>
-      <StatusTimeline history={ticket.statusHistory} />
-      <CommentThread comments={ticket.comments} />
-      <CommentComposer
-        disabled={isCommenting}
-        error={commentError}
-        allowInternal={user !== null && hasMinimumRole(user.role, 'supervisor')}
-        onSubmit={createComment}
-      />
+      <Box
+        style={{
+          display: 'grid',
+          gap: 24,
+          alignItems: 'start',
+          gridTemplateColumns: isWide
+            ? 'minmax(160px, 0.9fr) minmax(0, 2fr) minmax(180px, 1fr)'
+            : '1fr',
+        }}
+      >
+        <PropertiesColumn ticket={ticket} />
+        <Stack gap="md">
+          <CommentThread comments={ticket.comments} />
+          <CommentComposer
+            disabled={isCommenting}
+            error={commentError}
+            allowInternal={
+              user !== null && hasMinimumRole(user.role, 'supervisor')
+            }
+            onSubmit={createComment}
+          />
+        </Stack>
+        <StatusTimeline history={ticket.statusHistory} />
+      </Box>
     </Stack>
   );
 }
