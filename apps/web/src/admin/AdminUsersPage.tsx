@@ -30,22 +30,16 @@ type ListState =
 
 type RowAction = 'soft-delete' | 'restore';
 
-const ROLE_OPTIONS = [
-  { value: 'agent', label: 'Agent' },
-  { value: 'supervisor', label: 'Supervisor' },
-  { value: 'admin', label: 'Administrator' },
-] as const;
+const ROLE_LABEL = {
+  agent: 'Agent',
+  supervisor: 'Supervisor',
+  admin: 'Administrator',
+} as const;
 
-function roleLabel(role: Role): string {
-  switch (role) {
-    case 'agent':
-      return 'Agent';
-    case 'supervisor':
-      return 'Supervisor';
-    case 'admin':
-      return 'Administrator';
-  }
-}
+const ROLE_OPTIONS = ROLES.map((value) => ({
+  value,
+  label: ROLE_LABEL[value],
+}));
 
 export function AdminUsersPage() {
   const { user } = useAuth();
@@ -321,7 +315,7 @@ export function AdminUsersPage() {
           <Group align="flex-end" grow>
             <Select
               label="Role"
-              data={[...ROLE_OPTIONS]}
+              data={ROLE_OPTIONS}
               value={role}
               onChange={(value) => setRole(value as Role | null)}
             />
@@ -394,12 +388,12 @@ export function AdminUsersPage() {
                     {isEditing ? (
                       <Select
                         aria-label={`Edit role ${row.displayName}`}
-                        data={[...ROLE_OPTIONS]}
+                        data={ROLE_OPTIONS}
                         value={editRole}
                         onChange={(value) => setEditRole(value as Role | null)}
                       />
                     ) : (
-                      roleLabel(row.role)
+                      ROLE_LABEL[row.role]
                     )}
                   </Table.Td>
                   <Table.Td>{isDeleted ? 'Soft-deleted' : 'Current'}</Table.Td>

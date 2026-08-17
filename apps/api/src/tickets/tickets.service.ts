@@ -34,6 +34,7 @@ import {
   UNASSIGNED_ASSIGNEE_QUERY,
 } from '@support-ticketing/shared';
 import type { PublicUser } from '../auth/public-user';
+import { requireTrimmed } from '../http/require-trimmed';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ticketListRowSelect,
@@ -130,14 +131,6 @@ function requireUuid(value: string, field: string): string {
     throw new BadRequestException(`Invalid ${field}`);
   }
   return value;
-}
-
-function requireTrimmed(value: unknown, field: string): string {
-  const trimmed = typeof value === 'string' ? value.trim() : '';
-  if (trimmed.length === 0) {
-    throw new BadRequestException(`Invalid ${field}`);
-  }
-  return trimmed;
 }
 
 function parseAssigneeFilter(value?: string): AssigneeFilter | undefined {

@@ -5,7 +5,6 @@ import {
   alex,
   emptyTickets,
   isClientsUrl,
-  isDashboardUrl,
   jsonResponse,
   mockAuthedSession,
   renderApp,
@@ -60,15 +59,6 @@ test('Administrator /admin/clients lists Clients and can create one via POST', a
     const method = (init?.method ?? 'GET').toUpperCase();
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
-    }
-    if (isDashboardUrl(url)) {
-      return jsonResponse(200, {
-        kind: 'team',
-        openTotal: 0,
-        openByStatus: { open: 0, in_progress: 0 },
-        staleCount: 0,
-        stale: [],
-      });
     }
     if (isClientsUrl(url) && method === 'GET') {
       return jsonResponse(200, clients);

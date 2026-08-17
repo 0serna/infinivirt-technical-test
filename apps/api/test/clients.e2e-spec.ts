@@ -109,7 +109,6 @@ describe('Clients admin create (e2e)', () => {
         .expect(403);
 
       expect(response.body).not.toHaveProperty('stack');
-      expect(response.status).toBe(403);
     },
   );
 

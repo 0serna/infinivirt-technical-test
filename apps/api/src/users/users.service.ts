@@ -15,6 +15,7 @@ import {
 } from '@support-ticketing/shared';
 import { hashPassword } from '../auth/password';
 import { throwUniqueConflict } from '../http/prisma-unique-conflict';
+import { requireTrimmed } from '../http/require-trimmed';
 import { requireUuid } from '../http/require-uuid';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -54,36 +55,22 @@ function toAdminRow(user: UserRecord): AdminUserRow {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listCatalog(options?: {
-    includeDeleted?: boolean;
-  }): Promise<UserCatalogRow[] | AdminUserRow[]> {
+  async listCatalog(
+    includeDeleted = false,
+  ): Promise<UserCatalogRow[] | AdminUserRow[]> {
     const rows = await this.prisma.user.findMany({
-      where: options?.includeDeleted ? undefined : { deletedAt: null },
+      where: includeDeleted ? undefined : { deletedAt: null },
       select: USER_CATALOG_SELECT,
       orderBy: { displayName: 'asc' },
     });
-    return options?.includeDeleted
-      ? rows.map(toAdminRow)
-      : rows.map(toCatalogRow);
+    return includeDeleted ? rows.map(toAdminRow) : rows.map(toCatalogRow);
   }
 
   async create(body: CreateUserBody): Promise<AdminUserRow> {
-    const email = typeof body?.email === 'string' ? body.email.trim() : '';
-    const displayName =
-      typeof body?.displayName === 'string' ? body.displayName.trim() : '';
-    const password =
-      typeof body?.password === 'string' ? body.password.trim() : '';
+    const email = requireTrimmed(body?.email, 'email');
+    const displayName = requireTrimmed(body?.displayName, 'displayName');
+    const password = requireTrimmed(body?.password, 'password');
     const role = body?.role;
-
-    if (email.length === 0) {
-      throw new BadRequestException('Invalid email');
-    }
-    if (displayName.length === 0) {
-      throw new BadRequestException('Invalid displayName');
-    }
-    if (password.length === 0) {
-      throw new BadRequestException('Invalid password');
-    }
     if (!isRole(role)) {
       throw new BadRequestException('Invalid role');
     }
@@ -121,11 +108,7 @@ export class UsersService {
 
     let displayName: string | undefined;
     if (hasDisplayName) {
-      displayName =
-        typeof raw.displayName === 'string' ? raw.displayName.trim() : '';
-      if (displayName.length === 0) {
-        throw new BadRequestException('Invalid displayName');
-      }
+      displayName = requireTrimmed(raw.displayName, 'displayName');
     }
 
     let role: (typeof ROLES)[number] | undefined;
@@ -141,13 +124,8 @@ export class UsersService {
       throw new ConflictException();
     }
 
-    if (role !== undefined && existing.role === 'admin' && role !== 'admin') {
-      const adminCount = await this.prisma.user.count({
-        where: { role: 'admin', deletedAt: null },
-      });
-      if (adminCount <= 1) {
-        throw new ConflictException();
-      }
+    if (role !== undefined && role !== 'admin') {
+      await this.rejectIfSoleLiveAdmin(existing);
     }
 
     const updated = await this.prisma.user.update({
@@ -166,11 +144,7 @@ export class UsersService {
     body: ResetPasswordBody,
   ): Promise<AdminUserRow> {
     const userId = requireUuid(id, 'id');
-    const password =
-      typeof body?.password === 'string' ? body.password.trim() : '';
-    if (password.length === 0) {
-      throw new BadRequestException('Invalid password');
-    }
+    const password = requireTrimmed(body?.password, 'password');
 
     const existing = await this.requireUser(userId);
     if (existing.deletedAt !== null) {
@@ -195,14 +169,7 @@ export class UsersService {
       throw new ConflictException();
     }
 
-    if (existing.role === 'admin' && existing.deletedAt === null) {
-      const adminCount = await this.prisma.user.count({
-        where: { role: 'admin', deletedAt: null },
-      });
-      if (adminCount <= 1) {
-        throw new ConflictException();
-      }
-    }
+    await this.rejectIfSoleLiveAdmin(existing);
 
     const updated = await this.prisma.user.update({
       where: { id: userId },
@@ -236,6 +203,18 @@ export class UsersService {
       throw new NotFoundException();
     }
     return user;
+  }
+
+  private async rejectIfSoleLiveAdmin(user: UserRecord): Promise<void> {
+    if (user.role !== 'admin' || user.deletedAt !== null) {
+      return;
+    }
+    const liveAdmins = await this.prisma.user.count({
+      where: { role: 'admin', deletedAt: null },
+    });
+    if (liveAdmins <= 1) {
+      throw new ConflictException();
+    }
   }
 }
 

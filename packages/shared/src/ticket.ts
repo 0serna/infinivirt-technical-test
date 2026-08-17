@@ -9,27 +9,22 @@ export const TICKET_STATUSES = [
 
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
-/** Statuses that count as Open Ticket load (not resolved/closed). */
+/** Open Ticket load (not resolved/closed). */
 export const OPEN_TICKET_STATUSES = ['open', 'in_progress'] as const;
 
 export type OpenTicketStatus = (typeof OPEN_TICKET_STATUSES)[number];
 
-/**
- * Ticket List `status` query for Open Ticket load (multi-Status).
- * Prefer this over inventing a separate list endpoint for dashboard deep-links.
- */
+/** Prefer this over inventing a separate list endpoint for dashboard deep-links. */
 export const OPEN_TICKET_LOAD_STATUS_QUERY = 'open,in_progress';
 
-/** Ticket List `stale` query: `updated_at` older than 48h and Status ≠ closed. */
 export const TICKET_LIST_STALE_QUERY = '1';
 
-/** Ticket List `scope` query: Open Tickets where Assignee is the current User. */
+/** Open Tickets where Assignee is the current User. */
 export const TICKET_LIST_ASSIGNED_OPEN_SCOPE = 'assignedOpen';
 
-/** Stale Ticket age threshold (ADR 0011). */
+/** ADR 0011. */
 export const STALE_TICKET_MAX_AGE_HOURS = 48;
 
-/** Instant before which `updated_at` counts as Stale. */
 export function staleTicketCutoff(nowMs = Date.now()): Date {
   return new Date(nowMs - STALE_TICKET_MAX_AGE_HOURS * 60 * 60 * 1000);
 }
@@ -38,7 +33,7 @@ export const PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
 
 export type Priority = (typeof PRIORITIES)[number];
 
-/** Query value for Assignee null. Not a User id. */
+/** Not a User id. */
 export const UNASSIGNED_ASSIGNEE_QUERY = 'unassigned';
 
 export type TicketListPerson = {
@@ -57,18 +52,18 @@ export type ClientCatalogRow = {
   name: string;
 };
 
-/** Administrator Client catalog row, including soft-deleted. */
+/** Includes soft-deleted. */
 export type AdminClientRow = ClientCatalogRow & {
   /** ISO timestamp when soft-deleted; null when listed. */
   deletedAt: string | null;
 };
 
-/** Administrator Client create. Name must be non-empty after trim; uniqueness is global. */
+/** Name must be non-empty after trim; uniqueness is global. */
 export type CreateClientBody = {
   name: string;
 };
 
-/** Administrator Client rename. Name must be non-empty after trim; uniqueness is global. */
+/** Rename. Name must be non-empty after trim; uniqueness is global. */
 export type UpdateClientBody = {
   name: string;
 };
@@ -87,12 +82,7 @@ export type TicketListRow = {
 
 /**
  * Ticket List query filters (synced with `/tickets` URL search params).
- *
- * - `status`: one Status, or comma-separated multi-Status for Open Ticket load
- *   (`open,in_progress`). The API also accepts repeated `status` values.
- * - `stale`: `1` for Stale Tickets (`updated_at` older than 48h, Status ≠ closed).
- * - `scope`: `assignedOpen` for Open Tickets assigned to the current User
- *   (does not widen List Scope).
+ * The API also accepts repeated `status` values. `scope` does not widen List Scope.
  */
 export type TicketListFilters = {
   status?: string;
@@ -167,13 +157,13 @@ export type UserCatalogRow = {
   role: Role;
 };
 
-/** Administrator User catalog row, including soft-deleted. */
+/** Includes soft-deleted. */
 export type AdminUserRow = UserCatalogRow & {
   /** ISO timestamp when soft-deleted; null when listed. */
   deletedAt: string | null;
 };
 
-/** Administrator User create. Email/displayName/password non-empty after trim; role is enum. */
+/** Email, displayName, and password must be non-empty after trim. */
 export type CreateUserBody = {
   email: string;
   displayName: string;
@@ -181,16 +171,13 @@ export type CreateUserBody = {
   password: string;
 };
 
-/**
- * Administrator User update. Partial: displayName and/or role.
- * Email is immutable — clients must not send it.
- */
+/** Email is immutable — clients must not send it. */
 export type UpdateUserBody = {
   displayName?: string;
   role?: Role;
 };
 
-/** Administrator password reset. Password non-empty after trim. */
+/** Password must be non-empty after trim. */
 export type ResetPasswordBody = {
   password: string;
 };

@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -11,6 +10,7 @@ import type {
   UpdateClientBody,
 } from '@support-ticketing/shared';
 import { throwUniqueConflict } from '../http/prisma-unique-conflict';
+import { requireTrimmed } from '../http/require-trimmed';
 import { requireUuid } from '../http/require-uuid';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -37,33 +37,23 @@ function toAdminRow(client: ClientRecord): AdminClientRow {
   };
 }
 
-function requireName(body: { name?: unknown }): string {
-  const name = typeof body?.name === 'string' ? body.name.trim() : '';
-  if (name.length === 0) {
-    throw new BadRequestException('Invalid name');
-  }
-  return name;
-}
-
 @Injectable()
 export class ClientsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listCatalog(options?: {
-    includeDeleted?: boolean;
-  }): Promise<ClientCatalogRow[] | AdminClientRow[]> {
+  async listCatalog(
+    includeDeleted = false,
+  ): Promise<ClientCatalogRow[] | AdminClientRow[]> {
     const rows = await this.prisma.client.findMany({
-      where: options?.includeDeleted ? undefined : { deletedAt: null },
+      where: includeDeleted ? undefined : { deletedAt: null },
       select: clientSelect,
       orderBy: { name: 'asc' },
     });
-    return options?.includeDeleted
-      ? rows.map(toAdminRow)
-      : rows.map(toCatalogRow);
+    return includeDeleted ? rows.map(toAdminRow) : rows.map(toCatalogRow);
   }
 
   async create(body: CreateClientBody): Promise<AdminClientRow> {
-    const name = requireName(body);
+    const name = requireTrimmed(body?.name, 'name');
 
     try {
       const created = await this.prisma.client.create({
@@ -78,7 +68,7 @@ export class ClientsService {
 
   async update(id: string, body: UpdateClientBody): Promise<AdminClientRow> {
     const clientId = requireUuid(id, 'id');
-    const name = requireName(body);
+    const name = requireTrimmed(body?.name, 'name');
     const existing = await this.requireClient(clientId);
     if (existing.deletedAt !== null) {
       throw new ConflictException();

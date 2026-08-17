@@ -155,7 +155,6 @@ describe('Users admin create (e2e)', () => {
         .expect(403);
 
       expect(response.body).not.toHaveProperty('stack');
-      expect(response.status).toBe(403);
     },
   );
 
@@ -373,8 +372,6 @@ describe('Users admin update & password reset (e2e)', () => {
     );
     expect(admins.length).toBeGreaterThanOrEqual(1);
 
-    // Ensure only one admin exists for the demote rejection (create extras as agents).
-    // Seed Ada is admin; demote any other admins created by earlier tests first.
     for (const admin of admins) {
       if (admin.email === ADMIN_EMAIL) {
         continue;
@@ -718,7 +715,6 @@ describe('Users admin soft-delete & restore (e2e)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(409);
 
-    // Demote/soft-delete any other active admins so Ada is sole active admin
     const activeAdmins = (catalog.body as AdminUserRow[]).filter(
       (user) =>
         user.role === 'admin' &&

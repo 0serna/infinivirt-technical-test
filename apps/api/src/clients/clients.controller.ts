@@ -32,9 +32,9 @@ export class ClientsController {
     @Query('includeDeleted') includeDeleted?: string,
   ): Promise<ClientCatalogRow[] | AdminClientRow[]> {
     const user = requireUser(request);
-    return this.clientsService.listCatalog({
-      includeDeleted: adminIncludeDeleted(includeDeleted, user.role),
-    });
+    return this.clientsService.listCatalog(
+      adminIncludeDeleted(includeDeleted, user.role),
+    );
   }
 
   @Post()

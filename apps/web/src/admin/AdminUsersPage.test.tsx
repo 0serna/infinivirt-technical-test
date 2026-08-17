@@ -5,7 +5,6 @@ import {
   ada,
   alex,
   emptyTickets,
-  isDashboardUrl,
   isUsersUrl,
   jsonResponse,
   mockAuthedSession,
@@ -64,15 +63,6 @@ test('Administrator /admin/users lists Users and can create one via POST', async
     const method = (init?.method ?? 'GET').toUpperCase();
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
-    }
-    if (isDashboardUrl(url)) {
-      return jsonResponse(200, {
-        kind: 'team',
-        openTotal: 0,
-        openByStatus: { open: 0, in_progress: 0 },
-        staleCount: 0,
-        stale: [],
-      });
     }
     if (isUsersUrl(url) && method === 'GET') {
       return jsonResponse(200, users);

@@ -33,9 +33,9 @@ export class UsersController {
     @Query('includeDeleted') includeDeleted?: string,
   ): Promise<UserCatalogRow[] | AdminUserRow[]> {
     const user = requireUser(request);
-    return this.usersService.listCatalog({
-      includeDeleted: adminIncludeDeleted(includeDeleted, user.role),
-    });
+    return this.usersService.listCatalog(
+      adminIncludeDeleted(includeDeleted, user.role),
+    );
   }
 
   @Post()
