@@ -30,14 +30,25 @@
 - `npm run lint:fix`: apply Biome safe lint fixes.
 - `npm run typecheck`: typecheck all workspaces.
 
-Host vs Compose `DATABASE_URL` hostname and optional `POSTGRES_PORT`: see README (Host CLI) and `.env.example`.
+## DATABASE_URL (Compose vs host)
+
+Compose injects `.env` `DATABASE_URL` into the **API container**. That value must use the Compose service hostname and the **container** Postgres port:
+
+- **In `.env` (for `compose:up`)**: `postgresql://support:support@postgres:5432/support_ticketing`
+- **Never** put `localhost` (or the published host port) in `.env` `DATABASE_URL` — inside the API container `localhost` is the API itself, not Postgres (`P1001`).
+- **`POSTGRES_PORT`** only remaps the **host** publish (`host:container` → e.g. `15432:5432`). It does **not** change the URL inside Compose; keep `:5432` after `@postgres`.
+- **Host CLI** (`db:migrate`, `db:seed`, `test:e2e`): override for that command only, e.g.  
+  `DATABASE_URL=postgresql://support:support@localhost:${POSTGRES_PORT}/support_ticketing npm run db:seed`  
+  Do not rewrite `.env` back to `localhost` to run host tools.
+
+Canonical template: `.env.example`. More detail: README (Host CLI).
 
 ## Worktrees
 
 When creating or using a **new** git worktree:
 
-1. Copy `.env` from the **primary worktree** into the new worktree (prefer that over only copying `.env.example`, so JWT and local secrets stay aligned). Never commit `.env`.
-2. Reassign host-facing ports and related env so they do **not** collide with the primary stack or other worktrees already running Compose. At minimum set a free `POSTGRES_PORT`. Keep Compose `DATABASE_URL` on hostname `postgres`; for host `db:migrate` / `db:seed`, use `localhost` with **this** worktree’s `POSTGRES_PORT`.
+1. Prefer copying `.env.example` → `.env`, then set a free `POSTGRES_PORT` and keep `DATABASE_URL` on `@postgres:5432`. Copying another worktree’s `.env` is fine for JWT alignment, but **re-check** `DATABASE_URL` still uses `postgres` (not `localhost`) before `compose:up`. Never commit `.env`.
+2. Reassign host-facing ports so they do **not** collide with the primary stack or other worktrees. At minimum set a free `POSTGRES_PORT`. Host `db:migrate` / `db:seed` / `test:e2e` use `localhost` + **this** worktree’s `POSTGRES_PORT` via command override (see above).
 3. Before `compose:up`, confirm the API (`3000`) and web (`5173`) host ports are free for this worktree, or remap those Compose publish ports so this worktree does not fight another stack.
 
 ## Agent skills
