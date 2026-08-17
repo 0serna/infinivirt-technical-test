@@ -42,7 +42,7 @@ Passwords are stored as bcrypt hashes (cost ~10). The plaintext above is documen
 
 Staff sign in with `POST /auth/login` (`{ "email", "password" }`) and receive `{ accessToken, user }` suitable for `Authorization: Bearer <accessToken>`.
 
-## Operational SQL (`db/queries.sql`)
+## Operational SQL (`queries.sql`)
 
 After migrate + seed, run the eight operational queries against Postgres:
 
@@ -51,10 +51,10 @@ After migrate + seed, run the eight operational queries against Postgres:
 docker compose port postgres 5432
 
 # Via the Compose Postgres container (works regardless of host port mapping):
-docker compose exec -T postgres psql -U support -d support_ticketing < db/queries.sql
+docker compose exec -T postgres psql -U support -d support_ticketing < queries.sql
 
 # Or from the host with psql (replace PORT with the published port):
-PGPASSWORD=support psql -h localhost -p PORT -U support -d support_ticketing -f db/queries.sql
+PGPASSWORD=support psql -h localhost -p PORT -U support -d support_ticketing -f queries.sql
 ```
 
-Window, credit, ratio, and reopen semantics live in the comments in `db/queries.sql`.
+Window, credit, ratio, and reopen semantics live in the comments in `queries.sql`.

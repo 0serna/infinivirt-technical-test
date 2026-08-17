@@ -10,6 +10,7 @@
 ├── docs/
 │   ├── adr/
 │   └── agents/
+├── queries.sql           # eight operational SQL queries
 └── .github/
     └── workflows/        # CI quality gates
 ```
