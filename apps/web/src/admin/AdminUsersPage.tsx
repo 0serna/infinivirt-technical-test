@@ -13,7 +13,9 @@ import {
 import {
   ROLES,
   type CreateUserBody,
+  type ResetPasswordBody,
   type Role,
+  type UpdateUserBody,
   type UserCatalogRow,
 } from '@support-ticketing/shared';
 import { type FormEvent, useEffect, useState } from 'react';
@@ -53,6 +55,13 @@ export function AdminUsersPage() {
   const [password, setPassword] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editRole, setEditRole] = useState<Role | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [rowError, setRowError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
   useEffect(() => {
@@ -89,6 +98,19 @@ export function AdminUsersPage() {
 
   if (user?.role !== 'admin') {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  function upsertUser(updated: UserCatalogRow) {
+    setList((current) => {
+      if (current.kind !== 'ready') {
+        return current;
+      }
+      const without = current.users.filter((row) => row.id !== updated.id);
+      const users = [...without, updated].sort((a, b) =>
+        a.displayName.localeCompare(b.displayName),
+      );
+      return { kind: 'ready', users };
+    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -145,22 +167,91 @@ export function AdminUsersPage() {
       setDisplayName('');
       setRole('agent');
       setPassword('');
-      setList((current) => {
-        if (current.kind !== 'ready') {
-          return current;
-        }
-        if (current.users.some((row) => row.id === created.id)) {
-          return current;
-        }
-        const users = [...current.users, created].sort((a, b) =>
-          a.displayName.localeCompare(b.displayName),
-        );
-        return { kind: 'ready', users };
-      });
+      upsertUser(created);
     } catch {
       setFormError("Couldn't create this User.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function saveEdit(target: UserCatalogRow) {
+    const trimmedDisplayName = editDisplayName.trim();
+    if (trimmedDisplayName === '') {
+      setRowError('Display name is required.');
+      return;
+    }
+    if (editRole === null || !(ROLES as readonly string[]).includes(editRole)) {
+      setRowError('Role is required.');
+      return;
+    }
+
+    setRowError(null);
+    setBusyId(target.id);
+
+    const body: UpdateUserBody = {
+      displayName: trimmedDisplayName,
+      role: editRole,
+    };
+
+    try {
+      const response = await apiFetch(`/api/users/${target.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      if (response.status === 401) {
+        return;
+      }
+      if (response.status === 409) {
+        setRowError('Cannot demote the last Administrator.');
+        return;
+      }
+      if (!response.ok) {
+        setRowError("Couldn't update this User.");
+        return;
+      }
+      const updated = (await response.json()) as UserCatalogRow;
+      upsertUser(updated);
+      setEditingId(null);
+      setEditDisplayName('');
+      setEditRole(null);
+    } catch {
+      setRowError("Couldn't update this User.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function savePasswordReset(target: UserCatalogRow) {
+    const trimmedPassword = resetPassword.trim();
+    if (trimmedPassword === '') {
+      setRowError('Password is required.');
+      return;
+    }
+
+    setRowError(null);
+    setBusyId(target.id);
+
+    const body: ResetPasswordBody = { password: trimmedPassword };
+
+    try {
+      const response = await apiFetch(`/api/users/${target.id}/password`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      if (response.status === 401) {
+        return;
+      }
+      if (!response.ok) {
+        setRowError("Couldn't reset this password.");
+        return;
+      }
+      setResettingId(null);
+      setResetPassword('');
+    } catch {
+      setRowError("Couldn't reset this password.");
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -200,6 +291,7 @@ export function AdminUsersPage() {
         </Stack>
       </form>
       {formError ? <Alert color="red">{formError}</Alert> : null}
+      {rowError ? <Alert color="red">{rowError}</Alert> : null}
       {list.kind === 'error' ? (
         <Alert>
           <Stack gap="sm">
@@ -225,16 +317,143 @@ export function AdminUsersPage() {
               <Table.Th>Email</Table.Th>
               <Table.Th>Display name</Table.Th>
               <Table.Th>Role</Table.Th>
+              <Table.Th>Actions</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {list.users.map((row) => (
-              <Table.Tr key={row.id}>
-                <Table.Td>{row.email}</Table.Td>
-                <Table.Td>{row.displayName}</Table.Td>
-                <Table.Td>{roleLabel(row.role)}</Table.Td>
-              </Table.Tr>
-            ))}
+            {list.users.map((row) => {
+              const isEditing = editingId === row.id;
+              const isResetting = resettingId === row.id;
+              const busy = busyId === row.id;
+              return (
+                <Table.Tr key={row.id}>
+                  <Table.Td>{row.email}</Table.Td>
+                  <Table.Td>
+                    {isEditing ? (
+                      <TextInput
+                        aria-label={`Edit display name ${row.displayName}`}
+                        value={editDisplayName}
+                        onChange={(event) =>
+                          setEditDisplayName(event.currentTarget.value)
+                        }
+                      />
+                    ) : (
+                      row.displayName
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    {isEditing ? (
+                      <Select
+                        aria-label={`Edit role ${row.displayName}`}
+                        data={[...ROLE_OPTIONS]}
+                        value={editRole}
+                        onChange={(value) => setEditRole(value as Role | null)}
+                      />
+                    ) : (
+                      roleLabel(row.role)
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    <Stack gap="xs">
+                      <Group gap="xs" wrap="nowrap">
+                        {isEditing ? (
+                          <>
+                            <Button
+                              type="button"
+                              size="xs"
+                              loading={busy}
+                              onClick={() => void saveEdit(row)}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="default"
+                              size="xs"
+                              disabled={busy}
+                              onClick={() => {
+                                setEditingId(null);
+                                setEditDisplayName('');
+                                setEditRole(null);
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="default"
+                            size="xs"
+                            disabled={busy || isResetting}
+                            onClick={() => {
+                              setRowError(null);
+                              setResettingId(null);
+                              setResetPassword('');
+                              setEditingId(row.id);
+                              setEditDisplayName(row.displayName);
+                              setEditRole(row.role);
+                            }}
+                          >
+                            Edit
+                          </Button>
+                        )}
+                        {!isEditing && !isResetting ? (
+                          <Button
+                            type="button"
+                            variant="light"
+                            size="xs"
+                            disabled={busy}
+                            onClick={() => {
+                              setRowError(null);
+                              setEditingId(null);
+                              setEditDisplayName('');
+                              setEditRole(null);
+                              setResettingId(row.id);
+                              setResetPassword('');
+                            }}
+                          >
+                            Reset password
+                          </Button>
+                        ) : null}
+                      </Group>
+                      {isResetting ? (
+                        <Group gap="xs" wrap="nowrap" align="flex-end">
+                          <PasswordInput
+                            aria-label={`New password ${row.displayName}`}
+                            value={resetPassword}
+                            onChange={(event) =>
+                              setResetPassword(event.currentTarget.value)
+                            }
+                            style={{ flex: 1 }}
+                          />
+                          <Button
+                            type="button"
+                            size="xs"
+                            loading={busy}
+                            onClick={() => void savePasswordReset(row)}
+                          >
+                            Save password
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="default"
+                            size="xs"
+                            disabled={busy}
+                            onClick={() => {
+                              setResettingId(null);
+                              setResetPassword('');
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </Group>
+                      ) : null}
+                    </Stack>
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
           </Table.Tbody>
         </Table>
       )}

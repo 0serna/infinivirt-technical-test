@@ -1,3 +1,4 @@
+import type { UserCatalogRow } from '@support-ticketing/shared';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -125,4 +126,101 @@ test('Administrator /admin/users lists Users and can create one via POST', async
     role: 'agent',
     password: 'InitialPass123!',
   });
+});
+
+test('Administrator can edit displayName/role and reset a User password', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const users: UserCatalogRow[] = [
+    {
+      id: 'user-2',
+      email: 'agent@example.com',
+      displayName: 'Alex Agent',
+      role: 'agent',
+    },
+  ];
+
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isUsersUrl(url) && method === 'GET') {
+      return jsonResponse(200, users);
+    }
+    if (url === '/api/users/user-2' && method === 'PATCH') {
+      const body = JSON.parse(String(init?.body ?? '{}')) as {
+        displayName?: string;
+        role?: 'agent' | 'supervisor' | 'admin';
+      };
+      users[0] = {
+        ...users[0],
+        displayName: body.displayName ?? users[0].displayName,
+        role: body.role ?? users[0].role,
+      };
+      return jsonResponse(200, users[0]);
+    }
+    if (url === '/api/users/user-2/password' && method === 'PATCH') {
+      return jsonResponse(200, users[0]);
+    }
+    throw new Error(`unexpected fetch ${method} ${url}`);
+  });
+
+  renderApp(['/admin/users']);
+
+  const table = await screen.findByRole('table');
+  expect(within(table).getByText('Alex Agent')).toBeDefined();
+
+  await user.click(screen.getByRole('button', { name: 'Edit' }));
+  const displayNameInput = screen.getByLabelText(
+    'Edit display name Alex Agent',
+  );
+  await user.clear(displayNameInput);
+  await user.type(displayNameInput, 'Alex Renamed');
+  await user.click(
+    screen.getByRole('combobox', { name: 'Edit role Alex Agent' }),
+  );
+  const supervisorOptions = screen.getAllByRole('option', {
+    name: 'Supervisor',
+    hidden: true,
+  });
+  await user.click(supervisorOptions[supervisorOptions.length - 1]);
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+
+  expect(await within(table).findByText('Alex Renamed')).toBeDefined();
+  expect(within(table).getByText('Supervisor')).toBeDefined();
+
+  const patchCall = vi
+    .mocked(fetch)
+    .mock.calls.find(
+      ([url, init]) =>
+        String(url) === '/api/users/user-2' &&
+        (init?.method ?? 'GET').toUpperCase() === 'PATCH',
+    );
+  expect(patchCall).toBeDefined();
+  expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({
+    displayName: 'Alex Renamed',
+    role: 'supervisor',
+  });
+
+  await user.click(screen.getByRole('button', { name: 'Reset password' }));
+  await user.type(
+    screen.getByLabelText('New password Alex Renamed'),
+    'FreshPass123!',
+  );
+  await user.click(screen.getByRole('button', { name: 'Save password' }));
+
+  const resetCall = vi
+    .mocked(fetch)
+    .mock.calls.find(
+      ([url, init]) =>
+        String(url) === '/api/users/user-2/password' &&
+        (init?.method ?? 'GET').toUpperCase() === 'PATCH',
+    );
+  expect(resetCall).toBeDefined();
+  expect(JSON.parse(String(resetCall?.[1]?.body))).toEqual({
+    password: 'FreshPass123!',
+  });
+  expect(screen.queryByLabelText('New password Alex Renamed')).toBeNull();
 });

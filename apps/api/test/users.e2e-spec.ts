@@ -233,3 +233,218 @@ describe('Users admin create (e2e)', () => {
       .expect(409);
   });
 });
+
+describe('Users admin update & password reset (e2e)', () => {
+  it('Administrator PATCH /users/:id updates displayName and/or role; email stays immutable', async () => {
+    const stamp = Date.now();
+    const email = `update.me.${stamp}@example.com`;
+    const { accessToken } = await login(app, ADMIN_EMAIL);
+
+    const created = await request(app.getHttpServer())
+      .post('/users')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        email,
+        displayName: `Before Update ${stamp}`,
+        role: 'agent',
+        password: 'InitialPass123!',
+      })
+      .expect(201);
+
+    const renamed = await request(app.getHttpServer())
+      .patch(`/users/${created.body.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ displayName: `After Update ${stamp}` })
+      .expect(200);
+
+    expect(renamed.body).toEqual({
+      id: created.body.id,
+      email,
+      displayName: `After Update ${stamp}`,
+      role: 'agent',
+    });
+    expect(renamed.body).not.toHaveProperty('passwordHash');
+
+    const promoted = await request(app.getHttpServer())
+      .patch(`/users/${created.body.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ role: 'supervisor' })
+      .expect(200);
+
+    expect(promoted.body).toEqual({
+      id: created.body.id,
+      email,
+      displayName: `After Update ${stamp}`,
+      role: 'supervisor',
+    });
+
+    await request(app.getHttpServer())
+      .patch(`/users/${created.body.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        displayName: `Both Fields ${stamp}`,
+        role: 'agent',
+        email: `changed.${stamp}@example.com`,
+      })
+      .expect(400);
+
+    const catalog = await request(app.getHttpServer())
+      .get('/users')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    const row = (catalog.body as UserCatalogRow[]).find(
+      (user) => user.id === created.body.id,
+    );
+    expect(row).toEqual({
+      id: created.body.id,
+      email,
+      displayName: `After Update ${stamp}`,
+      role: 'supervisor',
+    });
+  });
+
+  it('Administrator resets password; User can log in with the new password', async () => {
+    const stamp = Date.now();
+    const email = `reset.pass.${stamp}@example.com`;
+    const oldPassword = `OldPass${stamp}!`;
+    const newPassword = `NewPass${stamp}!`;
+    const { accessToken } = await login(app, ADMIN_EMAIL);
+
+    const created = await request(app.getHttpServer())
+      .post('/users')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        email,
+        displayName: `Reset Me ${stamp}`,
+        role: 'agent',
+        password: oldPassword,
+      })
+      .expect(201);
+
+    const reset = await request(app.getHttpServer())
+      .patch(`/users/${created.body.id}/password`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ password: newPassword })
+      .expect(200);
+
+    expect(reset.body).toEqual({
+      id: created.body.id,
+      email,
+      displayName: `Reset Me ${stamp}`,
+      role: 'agent',
+    });
+    expect(reset.body).not.toHaveProperty('passwordHash');
+
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password: oldPassword })
+      .expect(401);
+
+    const loggedIn = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password: newPassword })
+      .expect(200);
+
+    expect(loggedIn.body.user).toEqual({
+      id: created.body.id,
+      email,
+      displayName: `Reset Me ${stamp}`,
+      role: 'agent',
+    });
+    expect(loggedIn.body.user).not.toHaveProperty('passwordHash');
+  });
+
+  it('Administrator demoting the last Administrator returns HTTP 409', async () => {
+    const { accessToken } = await login(app, ADMIN_EMAIL);
+    const catalog = await request(app.getHttpServer())
+      .get('/users')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    const admins = (catalog.body as UserCatalogRow[]).filter(
+      (user) => user.role === 'admin',
+    );
+    expect(admins.length).toBeGreaterThanOrEqual(1);
+
+    // Ensure only one admin exists for the demote rejection (create extras as agents).
+    // Seed Ada is admin; demote any other admins created by earlier tests first.
+    for (const admin of admins) {
+      if (admin.email === ADMIN_EMAIL) {
+        continue;
+      }
+      await request(app.getHttpServer())
+        .patch(`/users/${admin.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ role: 'agent' })
+        .expect(200);
+    }
+
+    const soleAdmin = admins.find((user) => user.email === ADMIN_EMAIL);
+    expect(soleAdmin).toBeDefined();
+    if (!soleAdmin) {
+      throw new Error('expected seed Administrator in catalog');
+    }
+
+    await request(app.getHttpServer())
+      .patch(`/users/${soleAdmin.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ role: 'supervisor' })
+      .expect(409);
+
+    const stamp = Date.now();
+    const second = await request(app.getHttpServer())
+      .post('/users')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        email: `second.admin.${stamp}@example.com`,
+        displayName: `Second Admin ${stamp}`,
+        role: 'admin',
+        password: 'SecondAdminPass123!',
+      })
+      .expect(201);
+
+    const demoted = await request(app.getHttpServer())
+      .patch(`/users/${second.body.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ role: 'agent' })
+      .expect(200);
+
+    expect(demoted.body.role).toBe('agent');
+    expect(demoted.body).not.toHaveProperty('passwordHash');
+  });
+
+  it.each([AGENT_EMAIL, SUPERVISOR_EMAIL])(
+    'authenticated %s PATCH /users/:id and password reset return HTTP 403',
+    async (actorEmail) => {
+      const { accessToken: adminToken } = await login(app, ADMIN_EMAIL);
+      const stamp = Date.now();
+      const created = await request(app.getHttpServer())
+        .post('/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          email: `forbid.update.${stamp}.${actorEmail.split('@')[0]}@example.com`,
+          displayName: `Forbid Update ${stamp}`,
+          role: 'agent',
+          password: 'ForbidPass123!',
+        })
+        .expect(201);
+
+      const { accessToken } = await login(app, actorEmail);
+
+      const update = await request(app.getHttpServer())
+        .patch(`/users/${created.body.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ displayName: 'Should Not Apply' })
+        .expect(403);
+      expect(update.body).not.toHaveProperty('stack');
+
+      const reset = await request(app.getHttpServer())
+        .patch(`/users/${created.body.id}/password`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ password: 'HackedPass123!' })
+        .expect(403);
+      expect(reset.body).not.toHaveProperty('stack');
+    },
+  );
+});

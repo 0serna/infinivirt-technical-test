@@ -171,6 +171,20 @@ export type CreateUserBody = {
   password: string;
 };
 
+/**
+ * Administrator User update. Partial: displayName and/or role.
+ * Email is immutable — clients must not send it.
+ */
+export type UpdateUserBody = {
+  displayName?: string;
+  role?: Role;
+};
+
+/** Administrator password reset. Password non-empty after trim. */
+export type ResetPasswordBody = {
+  password: string;
+};
+
 /** Visibility omitted defaults to `public`. */
 export type CreateTicketCommentBody = {
   body: string;
