@@ -38,20 +38,10 @@ test('authenticated /tickets serves the Ticket List', async () => {
   renderApp(['/tickets']);
 
   expect(await screen.findByRole('heading', { name: 'Tickets' })).toBeDefined();
-  expect(screen.getByText('High: patient portal MFA reset')).toBeDefined();
-  expect(screen.queryByText(/You are signed in as/)).toBeNull();
-});
-
-test('authenticated / redirects to /tickets (interim until dashboard home)', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
-  mockAuthedSession(sampleTickets);
-
-  renderApp(['/']);
-
   expect(
     await screen.findByText('High: patient portal MFA reset'),
   ).toBeDefined();
-  expect(screen.getByRole('heading', { name: 'Tickets' })).toBeDefined();
+  expect(screen.queryByText(/You are signed in as/)).toBeNull();
 });
 
 test('Ticket List rows render Title, Status, Priority, Client, Assignee, creator, and updatedAt', async () => {

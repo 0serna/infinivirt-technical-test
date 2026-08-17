@@ -2,6 +2,7 @@ import { MantineProvider, Text } from '@mantine/core';
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
+import { DashboardPage } from './dashboard/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { StaffShell } from './shell/StaffShell';
 import { TicketCreate } from './tickets/TicketCreate';
@@ -20,7 +21,7 @@ function AuthGate({
     return <Text p="md">Loading…</Text>;
   }
   if (allow === 'guest') {
-    return user ? <Navigate to="/tickets" replace /> : children;
+    return user ? <Navigate to="/dashboard" replace /> : children;
   }
   return user ? children : <Navigate to="/login" replace />;
 }
@@ -46,8 +47,8 @@ export function App() {
               </AuthGate>
             }
           >
-            {/* Interim until F7.3 dashboard home: / → /tickets */}
-            <Route index element={<Navigate to="/tickets" replace />} />
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
             <Route path="tickets" element={<TicketList />} />
             <Route path="tickets/new" element={<TicketCreate />} />
             <Route path="tickets/:id" element={<TicketDetail />} />

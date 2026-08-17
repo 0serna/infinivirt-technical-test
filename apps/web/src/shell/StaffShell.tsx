@@ -18,11 +18,17 @@ export function StaffShell() {
     <AppShell header={{ height: 56 }} padding="md">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
-          <Title order={1} size="h3">
-            <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>
-              Support Ticketing
-            </Link>
-          </Title>
+          <Group>
+            <Title order={1} size="h3">
+              <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>
+                Support Ticketing
+              </Link>
+            </Title>
+            <Group gap="md">
+              <Link to="/dashboard">Dashboard</Link>
+              <Link to="/tickets">Tickets</Link>
+            </Group>
+          </Group>
           <Group>
             <Text>{user.displayName}</Text>
             <Text>{ROLE_LABEL[user.role]}</Text>

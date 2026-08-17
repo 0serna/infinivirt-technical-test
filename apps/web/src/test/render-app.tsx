@@ -115,6 +115,47 @@ export function isUsersUrl(url: string): boolean {
   return url === '/api/users';
 }
 
+export function isDashboardUrl(url: string): boolean {
+  return url === '/api/dashboard';
+}
+
+export const sampleAgentDashboard = {
+  kind: 'agent' as const,
+  assignedOpenCount: 2,
+  assignedOpen: [
+    {
+      id: 'ticket-ship',
+      title: 'In progress: shipment tracking API',
+      status: 'in_progress' as const,
+      priority: 'high' as const,
+      client: { id: 'client-1', name: 'Acme Logistics' },
+      assignee: { id: 'user-2', displayName: 'Alex Agent' },
+      createdBy: { id: 'user-2', displayName: 'Alex Agent' },
+      updatedAt: '2026-08-15T12:00:00.000Z',
+      createdAt: '2026-08-14T12:00:00.000Z',
+    },
+    {
+      id: 'ticket-webhook',
+      title: 'Open: webhook signature mismatch',
+      status: 'open' as const,
+      priority: 'medium' as const,
+      client: { id: 'client-2', name: 'Northwind Retail' },
+      assignee: { id: 'user-2', displayName: 'Alex Agent' },
+      createdBy: { id: 'user-3', displayName: 'Sam Supervisor' },
+      updatedAt: '2026-08-16T09:00:00.000Z',
+      createdAt: '2026-08-16T08:00:00.000Z',
+    },
+  ],
+};
+
+export const emptyTeamDashboard = {
+  kind: 'team' as const,
+  openCount: 0,
+  openByStatus: { open: 0, in_progress: 0 },
+  staleCount: 0,
+  stale: [],
+};
+
 /** Full Client catalog (ADR 0010). Includes Clients absent from list filterOptions. */
 export const sampleClientCatalog = [
   { id: 'client-1', name: 'Contoso Health' },
@@ -323,11 +364,17 @@ export function mockAuthedSession(
   tickets: unknown = emptyTickets,
   user: typeof ada | typeof alex | typeof sam = ada,
   detail?: unknown,
+  dashboard: unknown = user.role === 'agent'
+    ? sampleAgentDashboard
+    : emptyTeamDashboard,
 ) {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
     if (url === '/api/auth/me') {
       return jsonResponse(200, user);
+    }
+    if (isDashboardUrl(url)) {
+      return jsonResponse(200, dashboard);
     }
     if (isTicketsUrl(url)) {
       return jsonResponse(200, tickets);
