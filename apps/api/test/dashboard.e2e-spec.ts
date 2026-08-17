@@ -86,9 +86,9 @@ describe('Dashboard (e2e)', () => {
     ).toBe(true);
 
     const titles = body.openTickets.map((ticket) => ticket.title);
-    expect(titles).not.toContain('High: patient portal MFA reset');
-    expect(titles).not.toContain('High: warehouse scanner pairing');
-    expect(titles).not.toContain('Resolved: gift-card balance mismatch');
+    expect(titles).not.toContain('MFA reset emails not arriving');
+    expect(titles).not.toContain('New scanners fail Bluetooth pairing');
+    expect(titles).not.toContain('Gift card balance off after refund');
   });
 
   it('Supervisor and Admin GET /dashboard return the same team Open/Stale payload', async () => {
@@ -165,7 +165,7 @@ describe('Dashboard (e2e)', () => {
         true,
       );
       expect(body.stale.map((ticket) => ticket.title)).not.toContain(
-        'Closed (older): dealer SSO onboarding',
+        'Dealer SSO onboarding',
       );
       expect(
         staleBody.tickets.every((ticket) => ticket.status !== 'closed'),

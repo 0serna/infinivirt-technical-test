@@ -101,8 +101,9 @@ function buildTickets(): SeedTicket[] {
     {
       key: 'stale-open-acme',
       clientName: 'Acme Logistics',
-      title: 'Stale open: billing portal timeout',
-      description: 'Client cannot load invoices; last touch was days ago.',
+      title: 'Billing portal hangs on invoice list',
+      description:
+        'Dispatch says the invoices page spins ~40s then times out. They are on the office VPN; nobody has tried off-network. Started Thursday after the billing cutover.',
       status: TicketStatus.open,
       priority: Priority.medium,
       assigneeEmail: 'agent@example.com',
@@ -130,7 +131,7 @@ function buildTickets(): SeedTicket[] {
       comments: [
         {
           authorEmail: 'agent@example.com',
-          body: 'Waiting on Client network details.',
+          body: 'Asked them to retry from a phone hotspot and send a HAR. Nothing back since Friday.',
           visibility: CommentVisibility.public,
           createdAt: daysAgo(9),
         },
@@ -139,8 +140,9 @@ function buildTickets(): SeedTicket[] {
     {
       key: 'agent-in-progress-acme',
       clientName: 'Acme Logistics',
-      title: 'In progress: shipment tracking API',
-      description: 'Intermittent 502s on tracking lookups.',
+      title: 'Tracking lookups return 502',
+      description:
+        'GET /tracking/{id} 502s maybe 1 in 5 on prod. They first saw it yesterday around 14:00. Staging has been clean when I hit it.',
       status: TicketStatus.in_progress,
       priority: Priority.high,
       assigneeEmail: 'agent@example.com',
@@ -174,13 +176,13 @@ function buildTickets(): SeedTicket[] {
       comments: [
         {
           authorEmail: 'agent@example.com',
-          body: 'Reproduced against staging; checking gateway logs.',
+          body: 'Reproduced twice on prod with shipment 88421. Gateway log shows an upstream timeout to the carrier adapter.',
           visibility: CommentVisibility.public,
           createdAt: daysAgo(1),
         },
         {
           authorEmail: 'supervisor@example.com',
-          body: 'Escalate to platform if still failing after deploy.',
+          body: 'If the 14:30 deploy does not kill this, hand it to platform. Do not spend another afternoon on retries.',
           visibility: CommentVisibility.internal,
           createdAt: hoursAgo(6),
         },
@@ -189,8 +191,9 @@ function buildTickets(): SeedTicket[] {
     {
       key: 'critical-northwind',
       clientName: 'Northwind Retail',
-      title: 'Critical: checkout outage',
-      description: 'Checkout returns 500 for card payments.',
+      title: 'Card checkout returns 500',
+      description:
+        'Store 14: card payments get a generic 500 on place-order. Cash and gift cards still go through. Started ~18:40. Ugly for a Saturday.',
       status: TicketStatus.open,
       priority: Priority.critical,
       assigneeEmail: 'agent@example.com',
@@ -218,17 +221,24 @@ function buildTickets(): SeedTicket[] {
       comments: [
         {
           authorEmail: 'admin@example.com',
-          body: 'P1 — keep the Client updated hourly.',
+          body: 'Called Maya at Northwind. They paused the card lane on two registers. Ping me if this is still red at 21:00.',
           visibility: CommentVisibility.internal,
           createdAt: hoursAgo(18),
+        },
+        {
+          authorEmail: 'agent@example.com',
+          body: 'place-order 500s are all STRIPE_CONFIRM timeout. Checking the payments worker, not the storefront.',
+          visibility: CommentVisibility.public,
+          createdAt: hoursAgo(3),
         },
       ],
     },
     {
       key: 'high-contoso-a',
       clientName: 'Contoso Health',
-      title: 'High: appointment sync lag',
-      description: 'Clinic calendar lags by ~15 minutes.',
+      title: 'Clinic calendar ~15 min behind',
+      description:
+        'Riverside clinic: new appointments hit the EHR immediately, the patient calendar lags 10-20 minutes. Front desk is double-booking rooms.',
       status: TicketStatus.in_progress,
       priority: Priority.high,
       assigneeEmail: 'agent@example.com',
@@ -264,8 +274,9 @@ function buildTickets(): SeedTicket[] {
     {
       key: 'high-contoso-b',
       clientName: 'Contoso Health',
-      title: 'High: patient portal MFA reset',
-      description: 'MFA reset emails not arriving.',
+      title: 'MFA reset emails not arriving',
+      description:
+        'Patient 44219 requested an MFA reset at 09:10. Nothing in inbox or spam. Lab-result mail is landing. They use Outlook.',
       status: TicketStatus.open,
       priority: Priority.high,
       assigneeEmail: null,
@@ -286,7 +297,7 @@ function buildTickets(): SeedTicket[] {
       comments: [
         {
           authorEmail: 'agent@example.com',
-          body: 'Created; needs assignment.',
+          body: 'Logged from the portal call this morning. Still sitting unassigned.',
           visibility: CommentVisibility.public,
           createdAt: daysAgo(1),
         },
@@ -295,8 +306,9 @@ function buildTickets(): SeedTicket[] {
     {
       key: 'critical-fabrikam',
       clientName: 'Fabrikam Motors',
-      title: 'Critical: telematics feed down',
-      description: 'Vehicle telemetry stopped overnight.',
+      title: 'Vehicle telemetry stopped overnight',
+      description:
+        'Fleet ops: no pings since 01:14 from the Midwest trucks (~40 units). Ignition still writes locally on the device. They can drive; the map is blind.',
       status: TicketStatus.open,
       priority: Priority.critical,
       assigneeEmail: 'agent@example.com',
@@ -321,13 +333,27 @@ function buildTickets(): SeedTicket[] {
           changedAt: hoursAgo(28),
         },
       ],
-      comments: [],
+      comments: [
+        {
+          authorEmail: 'supervisor@example.com',
+          body: 'Do not tell them to reboot the whole fleet. Check ingest first.',
+          visibility: CommentVisibility.internal,
+          createdAt: hoursAgo(27),
+        },
+        {
+          authorEmail: 'agent@example.com',
+          body: 'Ingest topic telematics.raw is caught up. Devices in IL/IN last checked in at 01:14 and went quiet together.',
+          visibility: CommentVisibility.public,
+          createdAt: hoursAgo(4),
+        },
+      ],
     },
     {
       key: 'high-globex',
       clientName: 'Globex Energy',
-      title: 'High: meter reading upload failures',
-      description: 'Batch upload rejects CSV rows silently.',
+      title: 'Meter CSV upload drops rows',
+      description:
+        'Nightly ~12k-row meter file. UI says success. About 800 rows never show in the reading table. No error email. Same file twice, same holes.',
       status: TicketStatus.open,
       priority: Priority.high,
       assigneeEmail: 'agent@example.com',
@@ -352,13 +378,21 @@ function buildTickets(): SeedTicket[] {
           changedAt: daysAgo(4),
         },
       ],
-      comments: [],
+      comments: [
+        {
+          authorEmail: 'agent@example.com',
+          body: 'Missing rows all have a blank multiplier column. Parser treats that as skip, not zero.',
+          visibility: CommentVisibility.public,
+          createdAt: hoursAgo(10),
+        },
+      ],
     },
     {
       key: 'high-acme',
       clientName: 'Acme Logistics',
-      title: 'High: warehouse scanner pairing',
-      description: 'New scanners fail Bluetooth pairing.',
+      title: 'New scanners fail Bluetooth pairing',
+      description:
+        'Six Zebra DS3600s from last week. Pairing dies at "waiting for PIN". Old scanners on the same handhelds still work. They want these on the floor Monday.',
       status: TicketStatus.open,
       priority: Priority.high,
       assigneeEmail: null,
@@ -376,13 +410,21 @@ function buildTickets(): SeedTicket[] {
         },
       ],
       assignments: [],
-      comments: [],
+      comments: [
+        {
+          authorEmail: 'supervisor@example.com',
+          body: 'Parked here until we have a spare agent. Firmware notes are in the warehouse Slack thread.',
+          visibility: CommentVisibility.internal,
+          createdAt: hoursAgo(20),
+        },
+      ],
     },
     {
       key: 'low-initech',
       clientName: 'Initech Soft',
-      title: 'Low: documentation typo',
-      description: 'API docs show outdated endpoint path.',
+      title: 'Docs still list /v1/shipments',
+      description:
+        'Public API docs, "Create shipment". Example still posts to /v1/shipments. Prod has been /v2/shipments since March. New integrators keep opening 404 tickets.',
       status: TicketStatus.open,
       priority: Priority.low,
       assigneeEmail: 'agent@example.com',
@@ -407,13 +449,21 @@ function buildTickets(): SeedTicket[] {
           changedAt: daysAgo(5),
         },
       ],
-      comments: [],
+      comments: [
+        {
+          authorEmail: 'agent@example.com',
+          body: 'Docs PR is a one-liner. Putting it behind the tracking 502.',
+          visibility: CommentVisibility.internal,
+          createdAt: daysAgo(5),
+        },
+      ],
     },
     {
       key: 'resolved-medium-agent',
       clientName: 'Northwind Retail',
-      title: 'Resolved: gift-card balance mismatch',
-      description: 'Balances reconciled after ledger fix.',
+      title: 'Gift card balance off after refund',
+      description:
+        'Order NW-10482: $40 refund posted, gift card still showed $0. They sent a screenshot on the original email.',
       status: TicketStatus.resolved,
       priority: Priority.medium,
       assigneeEmail: 'agent@example.com',
@@ -453,7 +503,7 @@ function buildTickets(): SeedTicket[] {
       comments: [
         {
           authorEmail: 'agent@example.com',
-          body: 'Ledger patch deployed; balances match.',
+          body: 'Refund wrote to payments but skipped the gift-card ledger. Ran the repair for GC-8891. Balance is $40. Asked them to refresh the app.',
           visibility: CommentVisibility.public,
           createdAt: daysAgo(5),
         },
@@ -462,8 +512,9 @@ function buildTickets(): SeedTicket[] {
     {
       key: 'resolved-high-agent',
       clientName: 'Contoso Health',
-      title: 'Resolved: fax gateway retry storm',
-      description: 'Backoff tuned; queue drained.',
+      title: 'Fax gateway retry storm',
+      description:
+        'Outbound clinic faxes to two hospital numbers retried every 8s and wedged the queue (~14k jobs). Inbound was fine.',
       status: TicketStatus.resolved,
       priority: Priority.high,
       assigneeEmail: 'agent@example.com',
@@ -500,13 +551,21 @@ function buildTickets(): SeedTicket[] {
           changedAt: daysAgo(8),
         },
       ],
-      comments: [],
+      comments: [
+        {
+          authorEmail: 'agent@example.com',
+          body: 'Those two numbers return busy. Backoff was 8s with no cap. Set cap to 15 min and drained the queue overnight.',
+          visibility: CommentVisibility.public,
+          createdAt: daysAgo(3),
+        },
+      ],
     },
     {
       key: 'resolved-critical-agent',
       clientName: 'Fabrikam Motors',
-      title: 'Resolved: VIN lookup cache poison',
-      description: 'Cache keys namespaced; critical path restored.',
+      title: 'VIN lookup returning stale VINs',
+      description:
+        'Dealers searching a stock number got a VIN from a car sold last month. Started after the cache TTL change Tuesday.',
       status: TicketStatus.resolved,
       priority: Priority.critical,
       assigneeEmail: 'agent@example.com',
@@ -545,8 +604,14 @@ function buildTickets(): SeedTicket[] {
       ],
       comments: [
         {
+          authorEmail: 'agent@example.com',
+          body: 'Cache key was stock number only. Namespaced it with the sold flag and flushed Redis. Spot-checked 20 lookups.',
+          visibility: CommentVisibility.public,
+          createdAt: daysAgo(4),
+        },
+        {
           authorEmail: 'supervisor@example.com',
-          body: 'Postmortem scheduled for Friday.',
+          body: 'Write this up Friday. TTL change had no owner.',
           visibility: CommentVisibility.internal,
           createdAt: daysAgo(4),
         },
@@ -555,8 +620,9 @@ function buildTickets(): SeedTicket[] {
     {
       key: 'resolved-low-supervisor-credit',
       clientName: 'Initech Soft',
-      title: 'Resolved: SSO redirect loop',
-      description: 'Callback URL corrected in IdP.',
+      title: 'SSO login loops back to IdP',
+      description:
+        'Initech staff: after Okta password they bounce back to the IdP login. Incognito same thing. Started when they rotated the ACS URL.',
       status: TicketStatus.resolved,
       priority: Priority.low,
       assigneeEmail: 'supervisor@example.com',
@@ -599,13 +665,27 @@ function buildTickets(): SeedTicket[] {
           changedAt: daysAgo(10),
         },
       ],
-      comments: [],
+      comments: [
+        {
+          authorEmail: 'agent@example.com',
+          body: 'Okta ACS is still the old /sso/callback. I do not have their admin. Sam is taking it.',
+          visibility: CommentVisibility.internal,
+          createdAt: daysAgo(12),
+        },
+        {
+          authorEmail: 'supervisor@example.com',
+          body: 'ACS URL in Okta now matches prod. Had them try incognito; they got through.',
+          visibility: CommentVisibility.public,
+          createdAt: daysAgo(2),
+        },
+      ],
     },
     {
       key: 'closed-recent-globex',
       clientName: 'Globex Energy',
-      title: 'Closed: invoice PDF encoding',
-      description: 'UTF-8 fix shipped; Client confirmed.',
+      title: 'Invoice PDF garbled on accented names',
+      description:
+        'Customer Nunez: the PDF shows NuÃ±ez in the bill-to line. Screen view is fine. Accounting will not accept that copy.',
       status: TicketStatus.closed,
       priority: Priority.medium,
       assigneeEmail: 'agent@example.com',
@@ -650,8 +730,14 @@ function buildTickets(): SeedTicket[] {
       ],
       comments: [
         {
+          authorEmail: 'agent@example.com',
+          body: 'Renderer was Latin-1. Fix is in 1.18.2. They opened the new PDF and signed off.',
+          visibility: CommentVisibility.public,
+          createdAt: daysAgo(2),
+        },
+        {
           authorEmail: 'admin@example.com',
-          body: 'Closing after Client confirmation.',
+          body: 'They confirmed the new PDF. Closing.',
           visibility: CommentVisibility.public,
           createdAt: daysAgo(1),
         },
@@ -660,8 +746,9 @@ function buildTickets(): SeedTicket[] {
     {
       key: 'created-recent-open-initech',
       clientName: 'Initech Soft',
-      title: 'Open: webhook signature mismatch',
-      description: 'Partner callbacks failing HMAC check.',
+      title: 'Partner webhooks failing HMAC',
+      description:
+        'Partner Shiply callbacks 401 on our HMAC. They say they did not rotate the secret. Last good delivery 02:11.',
       status: TicketStatus.open,
       priority: Priority.medium,
       assigneeEmail: 'agent@example.com',
@@ -686,13 +773,21 @@ function buildTickets(): SeedTicket[] {
           changedAt: daysAgo(3),
         },
       ],
-      comments: [],
+      comments: [
+        {
+          authorEmail: 'agent@example.com',
+          body: 'Their payload now includes a timestamp header we do not sign. Checking if we started requiring it on Tuesday.',
+          visibility: CommentVisibility.public,
+          createdAt: hoursAgo(2),
+        },
+      ],
     },
     {
       key: 'heavy-reassignment',
       clientName: 'Acme Logistics',
-      title: 'Reassigned often: customs form mapping',
-      description: 'Field mapping bounced between agents.',
+      title: 'Customs form field mapping',
+      description:
+        'AES form: "port of lading" is writing into destination country. Broker rejected two filings Friday. Three mapping spreadsheets in the shared drive.',
       status: TicketStatus.in_progress,
       priority: Priority.medium,
       assigneeEmail: 'agent@example.com',
@@ -744,13 +839,13 @@ function buildTickets(): SeedTicket[] {
       comments: [
         {
           authorEmail: 'supervisor@example.com',
-          body: 'Unassigned briefly while clarifying the Assignee.',
+          body: 'Pulled this off me while we figure out who owns AES mapping. Do not leave it in the void.',
           visibility: CommentVisibility.internal,
           createdAt: daysAgo(5),
         },
         {
           authorEmail: 'agent@example.com',
-          body: 'Back on this; mapping draft attached in next update.',
+          body: 'Using spreadsheet v3 (the one dated 3 Aug). Port of lading now maps to portCode. Will send a test filing tomorrow.',
           visibility: CommentVisibility.public,
           createdAt: daysAgo(4),
         },
@@ -759,9 +854,9 @@ function buildTickets(): SeedTicket[] {
     {
       key: 'reopened-cleared-timestamps',
       clientName: 'Northwind Retail',
-      title: 'Reopened: returns portal blank page',
+      title: 'Returns portal blank after submit',
       description:
-        'Was closed after hotfix; Client reports regression. Projection timestamps cleared on reopen.',
+        'We shipped a hotfix last month and closed this. Northwind called this morning: submit on /returns still dumps a white page in Chrome 128. Firefox is fine. Same SKUs as before.',
       status: TicketStatus.open,
       priority: Priority.high,
       assigneeEmail: 'agent@example.com',
@@ -813,13 +908,13 @@ function buildTickets(): SeedTicket[] {
       comments: [
         {
           authorEmail: 'admin@example.com',
-          body: 'Reopened after regression report; prior closed cycle kept in history.',
+          body: 'They say it is back. Do not tell them we closed it for good.',
           visibility: CommentVisibility.internal,
           createdAt: hoursAgo(6),
         },
         {
           authorEmail: 'agent@example.com',
-          body: 'Investigating blank page on returns portal again.',
+          body: 'On the returns submit path again. Need a HAR from Chrome when it blanks.',
           visibility: CommentVisibility.public,
           createdAt: hoursAgo(5),
         },
@@ -828,8 +923,9 @@ function buildTickets(): SeedTicket[] {
     {
       key: 'closed-old-outside-window',
       clientName: 'Fabrikam Motors',
-      title: 'Closed (older): dealer SSO onboarding',
-      description: 'Completed last quarter; outside 30-day closed window.',
+      title: 'Dealer SSO onboarding',
+      description:
+        'Fabrikam dealer portal SSO. Went live in June. No open work left on this one.',
       status: TicketStatus.closed,
       priority: Priority.low,
       assigneeEmail: 'supervisor@example.com',
@@ -847,6 +943,12 @@ function buildTickets(): SeedTicket[] {
         },
         {
           fromStatus: TicketStatus.open,
+          toStatus: TicketStatus.in_progress,
+          changedByEmail: 'supervisor@example.com',
+          changedAt: daysAgo(55),
+        },
+        {
+          fromStatus: TicketStatus.in_progress,
           toStatus: TicketStatus.resolved,
           changedByEmail: 'supervisor@example.com',
           changedAt: daysAgo(50),
@@ -866,7 +968,20 @@ function buildTickets(): SeedTicket[] {
           changedAt: daysAgo(60),
         },
       ],
-      comments: [],
+      comments: [
+        {
+          authorEmail: 'supervisor@example.com',
+          body: 'First dealer group (12 rooftops) signed in through Okta this morning. Closing once Ada signs off.',
+          visibility: CommentVisibility.public,
+          createdAt: daysAgo(50),
+        },
+        {
+          authorEmail: 'admin@example.com',
+          body: 'Signed off. Close it.',
+          visibility: CommentVisibility.internal,
+          createdAt: daysAgo(45),
+        },
+      ],
     },
   ];
 }

@@ -132,9 +132,9 @@ describe('Tickets list (e2e)', () => {
 
     expect(titles(response.body)).toEqual(
       expect.arrayContaining([
-        'High: patient portal MFA reset',
-        'Resolved: SSO redirect loop',
-        'Stale open: billing portal timeout',
+        'MFA reset emails not arriving',
+        'SSO login loops back to IdP',
+        'Billing portal hangs on invoice list',
       ]),
     );
   });
@@ -147,8 +147,8 @@ describe('Tickets list (e2e)', () => {
       .expect(200);
 
     const listed = titles(response.body);
-    expect(listed).not.toContain('High: warehouse scanner pairing');
-    expect(listed).not.toContain('Closed (older): dealer SSO onboarding');
+    expect(listed).not.toContain('New scanners fail Bluetooth pairing');
+    expect(listed).not.toContain('Dealer SSO onboarding');
   });
 
   it('Supervisor and Administrator see a strictly wider List Scope than the Agent', async () => {
@@ -178,15 +178,15 @@ describe('Tickets list (e2e)', () => {
     expect(supervisorTitles).toEqual(
       expect.arrayContaining([
         ...agentTitles,
-        'High: warehouse scanner pairing',
-        'Closed (older): dealer SSO onboarding',
+        'New scanners fail Bluetooth pairing',
+        'Dealer SSO onboarding',
       ]),
     );
     expect(adminTitles).toEqual(
       expect.arrayContaining([
         ...agentTitles,
-        'High: warehouse scanner pairing',
-        'Closed (older): dealer SSO onboarding',
+        'New scanners fail Bluetooth pairing',
+        'Dealer SSO onboarding',
       ]),
     );
   });
@@ -202,8 +202,8 @@ describe('Tickets list (e2e)', () => {
       .expect(200);
 
     const listed = titles(response.body);
-    expect(listed).not.toContain('High: warehouse scanner pairing');
-    expect(listed).toContain('High: patient portal MFA reset');
+    expect(listed).not.toContain('New scanners fail Bluetooth pairing');
+    expect(listed).toContain('MFA reset emails not arriving');
   });
 
   it('each Ticket row has list fields only and omits description, Comments, and history', async () => {
@@ -215,11 +215,11 @@ describe('Tickets list (e2e)', () => {
 
     const row = response.body.tickets.find(
       (ticket: { title: string }) =>
-        ticket.title === 'High: patient portal MFA reset',
+        ticket.title === 'MFA reset emails not arriving',
     );
     expect(row).toEqual({
       id: expect.any(String),
-      title: 'High: patient portal MFA reset',
+      title: 'MFA reset emails not arriving',
       status: 'open',
       priority: 'high',
       client: { id: expect.any(String), name: 'Contoso Health' },
@@ -273,10 +273,10 @@ describe('Tickets list (e2e)', () => {
       .expect(200);
 
     expect(titles(response.body)).toEqual(
-      expect.arrayContaining(['Resolved: SSO redirect loop']),
+      expect.arrayContaining(['SSO login loops back to IdP']),
     );
     expect(titles(response.body)).not.toContain(
-      'High: patient portal MFA reset',
+      'MFA reset emails not arriving',
     );
     expect(
       (response.body.tickets as Array<{ status: string }>).every(
@@ -326,12 +326,12 @@ describe('Tickets list (e2e)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
 
-    expect(titles(response.body)).toContain('High: patient portal MFA reset');
-    expect(titles(response.body)).not.toContain('High: appointment sync lag');
+    expect(titles(response.body)).toContain('MFA reset emails not arriving');
     expect(titles(response.body)).not.toContain(
-      'Resolved: fax gateway retry storm',
+      'Clinic calendar ~15 min behind',
     );
-    expect(titles(response.body)).not.toContain('Resolved: SSO redirect loop');
+    expect(titles(response.body)).not.toContain('Fax gateway retry storm');
+    expect(titles(response.body)).not.toContain('SSO login loops back to IdP');
   });
 
   it('Supervisor can restrict by Assignee UUID or unassigned', async () => {
@@ -342,12 +342,12 @@ describe('Tickets list (e2e)', () => {
       .set('Authorization', `Bearer ${supervisor.accessToken}`)
       .expect(200);
 
-    expect(titles(byAssignee.body)).toContain('Resolved: SSO redirect loop');
+    expect(titles(byAssignee.body)).toContain('SSO login loops back to IdP');
     expect(titles(byAssignee.body)).not.toContain(
-      'High: patient portal MFA reset',
+      'MFA reset emails not arriving',
     );
     expect(titles(byAssignee.body)).not.toContain(
-      'High: warehouse scanner pairing',
+      'New scanners fail Bluetooth pairing',
     );
 
     const unassigned = await request(app.getHttpServer())
@@ -358,12 +358,12 @@ describe('Tickets list (e2e)', () => {
 
     expect(titles(unassigned.body)).toEqual(
       expect.arrayContaining([
-        'High: patient portal MFA reset',
-        'High: warehouse scanner pairing',
+        'MFA reset emails not arriving',
+        'New scanners fail Bluetooth pairing',
       ]),
     );
     expect(titles(unassigned.body)).not.toContain(
-      'Resolved: SSO redirect loop',
+      'SSO login loops back to IdP',
     );
   });
 
@@ -377,10 +377,10 @@ describe('Tickets list (e2e)', () => {
       .set('Authorization', `Bearer ${agent.accessToken}`)
       .expect(200);
 
-    expect(titles(response.body)).toContain('High: patient portal MFA reset');
-    expect(titles(response.body)).toContain('Resolved: SSO redirect loop');
+    expect(titles(response.body)).toContain('MFA reset emails not arriving');
+    expect(titles(response.body)).toContain('SSO login loops back to IdP');
     expect(titles(response.body)).not.toContain(
-      'High: warehouse scanner pairing',
+      'New scanners fail Bluetooth pairing',
     );
   });
 
@@ -422,7 +422,7 @@ describe('Tickets list (e2e)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
 
-    expect(titles(response.body)).toContain('High: patient portal MFA reset');
+    expect(titles(response.body)).toContain('MFA reset emails not arriving');
   });
 
   it('unknown query params do not 500', async () => {
@@ -433,8 +433,10 @@ describe('Tickets list (e2e)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
 
-    expect(titles(response.body)).toContain('High: warehouse scanner pairing');
-    expect(titles(response.body)).not.toContain('Resolved: SSO redirect loop');
+    expect(titles(response.body)).toContain(
+      'New scanners fail Bluetooth pairing',
+    );
+    expect(titles(response.body)).not.toContain('SSO login loops back to IdP');
   });
 
   it('status=open,in_progress returns Open Ticket load and excludes resolved/closed', async () => {
@@ -454,12 +456,12 @@ describe('Tickets list (e2e)', () => {
     expect(statuses.has('in_progress')).toBe(true);
     expect(statuses.has('resolved')).toBe(false);
     expect(statuses.has('closed')).toBe(false);
-    expect(titles(response.body)).toContain('High: patient portal MFA reset');
-    expect(titles(response.body)).toContain(
-      'In progress: shipment tracking API',
+    expect(titles(response.body)).toContain('MFA reset emails not arriving');
+    expect(titles(response.body)).toContain('Tracking lookups return 502');
+    expect(titles(response.body)).not.toContain('SSO login loops back to IdP');
+    expect(titles(response.body)).not.toContain(
+      'Invoice PDF garbled on accented names',
     );
-    expect(titles(response.body)).not.toContain('Resolved: SSO redirect loop');
-    expect(titles(response.body)).not.toContain('Closed: invoice PDF encoding');
   });
 
   it('repeated status query values also express Open Ticket load', async () => {
@@ -486,13 +488,13 @@ describe('Tickets list (e2e)', () => {
       .expect(200);
 
     const listed = titles(response.body);
-    expect(listed).toContain('Stale open: billing portal timeout');
-    expect(listed).toContain('Resolved: gift-card balance mismatch');
-    expect(listed).toContain('Low: documentation typo');
-    expect(listed).not.toContain('Closed (older): dealer SSO onboarding');
-    expect(listed).not.toContain('Closed: invoice PDF encoding');
-    expect(listed).not.toContain('High: patient portal MFA reset');
-    expect(listed).not.toContain('Open: webhook signature mismatch');
+    expect(listed).toContain('Billing portal hangs on invoice list');
+    expect(listed).toContain('Gift card balance off after refund');
+    expect(listed).toContain('Docs still list /v1/shipments');
+    expect(listed).not.toContain('Dealer SSO onboarding');
+    expect(listed).not.toContain('Invoice PDF garbled on accented names');
+    expect(listed).not.toContain('MFA reset emails not arriving');
+    expect(listed).not.toContain('Partner webhooks failing HMAC');
 
     for (const ticket of response.body.tickets as Array<{
       status: string;
@@ -527,17 +529,15 @@ describe('Tickets list (e2e)', () => {
         ['open', 'in_progress'].includes(ticket.status),
       ),
     ).toBe(true);
-    expect(titles(response.body)).toContain(
-      'In progress: shipment tracking API',
+    expect(titles(response.body)).toContain('Tracking lookups return 502');
+    expect(titles(response.body)).not.toContain(
+      'MFA reset emails not arriving',
     );
     expect(titles(response.body)).not.toContain(
-      'High: patient portal MFA reset',
+      'New scanners fail Bluetooth pairing',
     );
     expect(titles(response.body)).not.toContain(
-      'High: warehouse scanner pairing',
-    );
-    expect(titles(response.body)).not.toContain(
-      'Resolved: gift-card balance mismatch',
+      'Gift card balance off after refund',
     );
   });
 
@@ -550,7 +550,7 @@ describe('Tickets list (e2e)', () => {
       .expect(200);
 
     expect(titles(response.body)).not.toContain(
-      'High: warehouse scanner pairing',
+      'New scanners fail Bluetooth pairing',
     );
   });
 
@@ -576,7 +576,7 @@ describe('Tickets list (e2e)', () => {
       ),
     ).toBe(true);
     expect(titles(response.body)).not.toContain(
-      'Resolved: gift-card balance mismatch',
+      'Gift card balance off after refund',
     );
   });
 
@@ -621,13 +621,14 @@ describe('Tickets get by id (e2e)', () => {
     const body = await ticketByTitle(
       app,
       accessToken,
-      'High: patient portal MFA reset',
+      'MFA reset emails not arriving',
     );
 
     expect(body).toEqual({
       id: body.id,
-      title: 'High: patient portal MFA reset',
-      description: 'MFA reset emails not arriving.',
+      title: 'MFA reset emails not arriving',
+      description:
+        'Patient 44219 requested an MFA reset at 09:10. Nothing in inbox or spam. Lab-result mail is landing. They use Outlook.',
       status: 'open',
       priority: 'high',
       client: { id: expect.any(String), name: 'Contoso Health' },
@@ -648,7 +649,7 @@ describe('Tickets get by id (e2e)', () => {
       comments: [
         {
           id: expect.any(String),
-          body: 'Created; needs assignment.',
+          body: 'Logged from the portal call this morning. Still sitting unassigned.',
           visibility: 'public',
           createdAt: expect.any(String),
           author: { id: expect.any(String), displayName: 'Alex Agent' },
@@ -663,10 +664,10 @@ describe('Tickets get by id (e2e)', () => {
     const body = await ticketByTitle(
       app,
       accessToken,
-      'Reopened: returns portal blank page',
+      'Returns portal blank after submit',
     );
 
-    expect(body.title).toBe('Reopened: returns portal blank page');
+    expect(body.title).toBe('Returns portal blank after submit');
     expect(body.status).toBe('open');
     expect(body.assignee).toEqual({
       id: expect.any(String),
@@ -690,14 +691,14 @@ describe('Tickets get by id (e2e)', () => {
     expect(body.comments).toEqual([
       {
         id: expect.any(String),
-        body: 'Reopened after regression report; prior closed cycle kept in history.',
+        body: 'They say it is back. Do not tell them we closed it for good.',
         visibility: 'internal',
         createdAt: expect.any(String),
         author: { id: expect.any(String), displayName: 'Ada Admin' },
       },
       {
         id: expect.any(String),
-        body: 'Investigating blank page on returns portal again.',
+        body: 'On the returns submit path again. Need a HAR from Chrome when it blanks.',
         visibility: 'public',
         createdAt: expect.any(String),
         author: { id: expect.any(String), displayName: 'Alex Agent' },
@@ -721,7 +722,7 @@ describe('Tickets get by id (e2e)', () => {
     const body = await ticketByTitle(
       app,
       accessToken,
-      'Reassigned often: customs form mapping',
+      'Customs form field mapping',
     );
 
     expect(body.assignee).toEqual({
@@ -751,12 +752,18 @@ describe('Tickets get by id (e2e)', () => {
     const body = await ticketByTitle(
       app,
       accessToken,
-      'In progress: shipment tracking API',
+      'Tracking lookups return 502',
     );
 
     expect(body.comments.map((row) => [row.visibility, row.body])).toEqual([
-      ['public', 'Reproduced against staging; checking gateway logs.'],
-      ['internal', 'Escalate to platform if still failing after deploy.'],
+      [
+        'public',
+        'Reproduced twice on prod with shipment 88421. Gateway log shows an upstream timeout to the carrier adapter.',
+      ],
+      [
+        'internal',
+        'If the 14:30 deploy does not kill this, hand it to platform. Do not spend another afternoon on retries.',
+      ],
     ]);
     expect(body.comments.map((row) => row.author.displayName)).toEqual([
       'Alex Agent',
@@ -782,7 +789,7 @@ describe('Tickets get by id (e2e)', () => {
     const body = await ticketByTitle(
       app,
       accessToken,
-      'High: appointment sync lag',
+      'Clinic calendar ~15 min behind',
     );
 
     expect(body.comments).toEqual([]);
@@ -793,10 +800,10 @@ describe('Tickets get by id (e2e)', () => {
     const body = await ticketByTitle(
       app,
       accessToken,
-      'Resolved: SSO redirect loop',
+      'SSO login loops back to IdP',
     );
 
-    expect(body.title).toBe('Resolved: SSO redirect loop');
+    expect(body.title).toBe('SSO login loops back to IdP');
     expect(body.status).toBe('resolved');
     expect(body.resolvedAt).toEqual(expect.any(String));
     expect(body.closedAt).toBeNull();
@@ -812,7 +819,7 @@ describe('Tickets get by id (e2e)', () => {
     const outOfScope = await ticketByTitle(
       app,
       supervisor.accessToken,
-      'High: warehouse scanner pairing',
+      'New scanners fail Bluetooth pairing',
     );
 
     const unknownId = '00000000-0000-4000-8000-000000000099';
@@ -837,7 +844,7 @@ describe('Tickets get by id (e2e)', () => {
     const warehouse = await ticketByTitle(
       app,
       supervisor.accessToken,
-      'High: warehouse scanner pairing',
+      'New scanners fail Bluetooth pairing',
     );
 
     await request(app.getHttpServer())
@@ -854,16 +861,16 @@ describe('Tickets get by id (e2e)', () => {
       .set('Authorization', `Bearer ${admin.accessToken}`)
       .expect(200);
 
-    expect(asSupervisor.body.title).toBe('High: warehouse scanner pairing');
-    expect(asAdmin.body.title).toBe('High: warehouse scanner pairing');
+    expect(asSupervisor.body.title).toBe('New scanners fail Bluetooth pairing');
+    expect(asAdmin.body.title).toBe('New scanners fail Bluetooth pairing');
     expect(asSupervisor.body.description).toBe(
-      'New scanners fail Bluetooth pairing.',
+      'Six Zebra DS3600s from last week. Pairing dies at "waiting for PIN". Old scanners on the same handhelds still work. They want these on the floor Monday.',
     );
 
     const closed = await ticketByTitle(
       app,
       supervisor.accessToken,
-      'Closed (older): dealer SSO onboarding',
+      'Dealer SSO onboarding',
     );
     await request(app.getHttpServer())
       .get(`/tickets/${closed.id}`)
@@ -918,7 +925,7 @@ describe('Tickets status transition (e2e)', () => {
     const warehouse = await ticketByTitle(
       app,
       supervisor.accessToken,
-      'High: warehouse scanner pairing',
+      'New scanners fail Bluetooth pairing',
     );
 
     const unknownId = '00000000-0000-4000-8000-000000000099';
@@ -947,7 +954,7 @@ describe('Tickets status transition (e2e)', () => {
     await expectPatchForbiddenUnchanged(
       app,
       accessToken,
-      'High: patient portal MFA reset',
+      'MFA reset emails not arriving',
       'in_progress',
       (before) => expect(before.status).toBe('open'),
     );
@@ -958,7 +965,7 @@ describe('Tickets status transition (e2e)', () => {
     await expectPatchForbiddenUnchanged(
       app,
       supervisor.accessToken,
-      'High: warehouse scanner pairing',
+      'New scanners fail Bluetooth pairing',
       'in_progress',
       (before) => expect(before.status).toBe('open'),
     );
@@ -969,7 +976,7 @@ describe('Tickets status transition (e2e)', () => {
     await expectPatchForbiddenUnchanged(
       app,
       accessToken,
-      'Resolved: SSO redirect loop',
+      'SSO login loops back to IdP',
       'closed',
       (before) => expect(before.status).toBe('resolved'),
     );
@@ -980,7 +987,7 @@ describe('Tickets status transition (e2e)', () => {
     const ticket = await ticketByTitle(
       app,
       admin.accessToken,
-      'High: patient portal MFA reset',
+      'MFA reset emails not arriving',
     );
     expect(ticket.status).toBe('open');
 
@@ -1007,7 +1014,7 @@ describe('Tickets status transition (e2e)', () => {
     const after = await ticketByTitle(
       app,
       admin.accessToken,
-      'High: patient portal MFA reset',
+      'MFA reset emails not arriving',
     );
     expect(after.status).toBe('open');
     expect(after.updatedAt).toBe(ticket.updatedAt);
@@ -1019,7 +1026,7 @@ describe('Tickets status transition (e2e)', () => {
     const ticket = await ticketByTitle(
       app,
       accessToken,
-      'Stale open: billing portal timeout',
+      'Billing portal hangs on invoice list',
     );
     expect(ticket.status).toBe('open');
     const historyLength = ticket.statusHistory.length;
@@ -1048,7 +1055,7 @@ describe('Tickets status transition (e2e)', () => {
     const ticket = await ticketByTitle(
       app,
       accessToken,
-      'In progress: shipment tracking API',
+      'Tracking lookups return 502',
     );
     expect(ticket.status).toBe('in_progress');
     expect(ticket.resolvedAt).toBeNull();
@@ -1078,7 +1085,7 @@ describe('Tickets status transition (e2e)', () => {
     const ticket = await ticketByTitle(
       app,
       admin.accessToken,
-      'High: warehouse scanner pairing',
+      'New scanners fail Bluetooth pairing',
     );
     expect(ticket.status).toBe('open');
     const historyLength = ticket.statusHistory.length;
@@ -1106,7 +1113,7 @@ describe('Tickets status transition (e2e)', () => {
     await expectPatchForbiddenUnchanged(
       app,
       agent.accessToken,
-      'Resolved: gift-card balance mismatch',
+      'Gift card balance off after refund',
       'closed',
       (before, after) => {
         expect(before.status).toBe('resolved');
@@ -1117,7 +1124,7 @@ describe('Tickets status transition (e2e)', () => {
     await expectPatchForbiddenUnchanged(
       app,
       agent.accessToken,
-      'Closed: invoice PDF encoding',
+      'Invoice PDF garbled on accented names',
       'open',
       (before, after) => {
         expect(before.status).toBe('closed');
@@ -1129,7 +1136,7 @@ describe('Tickets status transition (e2e)', () => {
     await expectPatchForbiddenUnchanged(
       app,
       supervisor.accessToken,
-      'Resolved: SSO redirect loop',
+      'SSO login loops back to IdP',
       'closed',
       (before) => expect(before.status).toBe('resolved'),
     );
@@ -1137,7 +1144,7 @@ describe('Tickets status transition (e2e)', () => {
     await expectPatchForbiddenUnchanged(
       app,
       supervisor.accessToken,
-      'Closed (older): dealer SSO onboarding',
+      'Dealer SSO onboarding',
       'open',
       (before) => expect(before.status).toBe('closed'),
     );
@@ -1149,7 +1156,7 @@ describe('Tickets status transition (e2e)', () => {
     const dealer = await ticketByTitle(
       app,
       supervisor.accessToken,
-      'Closed (older): dealer SSO onboarding',
+      'Dealer SSO onboarding',
     );
 
     const patchClose = await request(app.getHttpServer())
@@ -1169,7 +1176,7 @@ describe('Tickets status transition (e2e)', () => {
     const after = await ticketByTitle(
       app,
       supervisor.accessToken,
-      'Closed (older): dealer SSO onboarding',
+      'Dealer SSO onboarding',
     );
     expect(after.status).toBe('closed');
     expect(after.updatedAt).toBe(dealer.updatedAt);
@@ -1180,7 +1187,7 @@ describe('Tickets status transition (e2e)', () => {
     const ticket = await ticketByTitle(
       app,
       admin.accessToken,
-      'Resolved: gift-card balance mismatch',
+      'Gift card balance off after refund',
     );
     expect(ticket.status).toBe('resolved');
     expect(ticket.closedAt).toBeNull();
@@ -1213,7 +1220,7 @@ describe('Tickets status transition (e2e)', () => {
     const ticket = await ticketByTitle(
       app,
       admin.accessToken,
-      'Closed: invoice PDF encoding',
+      'Invoice PDF garbled on accented names',
     );
     expect(ticket.status).toBe('closed');
     expect(ticket.closedAt).toEqual(expect.any(String));
@@ -1252,7 +1259,7 @@ describe('Tickets create Comment (e2e)', () => {
     const ticket = await ticketByTitle(
       app,
       accessToken,
-      'High: patient portal MFA reset',
+      'MFA reset emails not arriving',
     );
     expect(ticket.assignee).toBeNull();
     const priorComments = ticket.comments;
@@ -1285,7 +1292,7 @@ describe('Tickets create Comment (e2e)', () => {
     const ticket = await ticketByTitle(
       app,
       accessToken,
-      'High: appointment sync lag',
+      'Clinic calendar ~15 min behind',
     );
     expect(ticket.comments).toEqual([]);
     const priorUpdatedAt = ticket.updatedAt;
@@ -1319,7 +1326,7 @@ describe('Tickets create Comment (e2e)', () => {
     const warehouse = await ticketByTitle(
       app,
       supervisor.accessToken,
-      'High: warehouse scanner pairing',
+      'New scanners fail Bluetooth pairing',
     );
 
     const unknownId = '00000000-0000-4000-8000-000000000099';
@@ -1363,7 +1370,7 @@ describe('Tickets create Comment (e2e)', () => {
     const after = await ticketByTitle(
       app,
       supervisor.accessToken,
-      'High: warehouse scanner pairing',
+      'New scanners fail Bluetooth pairing',
     );
     expect(after.comments).toEqual(warehouse.comments);
     expect(after.updatedAt).toBe(warehouse.updatedAt);
@@ -1374,7 +1381,7 @@ describe('Tickets create Comment (e2e)', () => {
     const ticket = await ticketByTitle(
       app,
       accessToken,
-      'Resolved: fax gateway retry storm',
+      'Fax gateway retry storm',
     );
     const prior = ticket;
 
@@ -1397,7 +1404,7 @@ describe('Tickets create Comment (e2e)', () => {
     const after = await ticketByTitle(
       app,
       accessToken,
-      'Resolved: fax gateway retry storm',
+      'Fax gateway retry storm',
     );
     expect(after.comments).toEqual(prior.comments);
     expect(after.updatedAt).toBe(prior.updatedAt);
@@ -1408,7 +1415,7 @@ describe('Tickets create Comment (e2e)', () => {
     const before = await ticketByTitle(
       app,
       accessToken,
-      'High: patient portal MFA reset',
+      'MFA reset emails not arriving',
     );
 
     const denied = await request(app.getHttpServer())
@@ -1426,7 +1433,7 @@ describe('Tickets create Comment (e2e)', () => {
     const after = await ticketByTitle(
       app,
       accessToken,
-      'High: patient portal MFA reset',
+      'MFA reset emails not arriving',
     );
     expect(after.id).toBe(before.id);
     expect(after.comments).toEqual(before.comments);
@@ -1437,7 +1444,7 @@ describe('Tickets create Comment (e2e)', () => {
     {
       roleLabel: 'Supervisor',
       email: SUPERVISOR_EMAIL,
-      title: 'Low: documentation typo',
+      title: 'Docs still list /v1/shipments',
       body: 'Internal: check docs PR before closing.',
       visibility: 'internal' as const,
       displayName: 'Sam Supervisor',
@@ -1445,7 +1452,7 @@ describe('Tickets create Comment (e2e)', () => {
     {
       roleLabel: 'Administrator',
       email: ADMIN_EMAIL,
-      title: 'High: warehouse scanner pairing',
+      title: 'New scanners fail Bluetooth pairing',
       body: 'Internal: warehouse firmware rollback plan.',
       visibility: 'internal' as const,
       displayName: 'Ada Admin',
@@ -1453,7 +1460,7 @@ describe('Tickets create Comment (e2e)', () => {
     {
       roleLabel: 'Supervisor',
       email: SUPERVISOR_EMAIL,
-      title: 'Critical: telematics feed down',
+      title: 'Vehicle telemetry stopped overnight',
       body: 'Supervisor public update for telematics Client.',
       visibility: 'public' as const,
       displayName: 'Sam Supervisor',
@@ -1461,7 +1468,7 @@ describe('Tickets create Comment (e2e)', () => {
     {
       roleLabel: 'Administrator',
       email: ADMIN_EMAIL,
-      title: 'Critical: checkout outage',
+      title: 'Card checkout returns 500',
       body: 'Administrator public update for checkout outage.',
       visibility: undefined,
       displayName: 'Ada Admin',
@@ -2035,7 +2042,7 @@ describe('Tickets Reassignment (e2e)', () => {
     const before = await ticketByTitle(
       app,
       agent.accessToken,
-      'High: patient portal MFA reset',
+      'MFA reset emails not arriving',
     );
     expect(before.assignee).toBeNull();
 
@@ -2048,7 +2055,7 @@ describe('Tickets Reassignment (e2e)', () => {
     const after = await ticketByTitle(
       app,
       agent.accessToken,
-      'High: patient portal MFA reset',
+      'MFA reset emails not arriving',
     );
     expect(after.assignee).toBeNull();
     expect(after.updatedAt).toBe(before.updatedAt);
@@ -2061,7 +2068,7 @@ describe('Tickets Reassignment (e2e)', () => {
     const warehouse = await ticketByTitle(
       app,
       (await login(app, SUPERVISOR_EMAIL)).accessToken,
-      'High: warehouse scanner pairing',
+      'New scanners fail Bluetooth pairing',
     );
 
     const getUnknown = await request(app.getHttpServer())
@@ -2216,7 +2223,7 @@ describe('Tickets Field Edit (e2e)', () => {
     const before = await ticketByTitle(
       app,
       agent.accessToken,
-      'High: patient portal MFA reset',
+      'MFA reset emails not arriving',
     );
 
     await request(app.getHttpServer())
@@ -2228,7 +2235,7 @@ describe('Tickets Field Edit (e2e)', () => {
     const after = await ticketByTitle(
       app,
       agent.accessToken,
-      'High: patient portal MFA reset',
+      'MFA reset emails not arriving',
     );
     expect(after.title).toBe(before.title);
     expect(after.updatedAt).toBe(before.updatedAt);
@@ -2240,7 +2247,7 @@ describe('Tickets Field Edit (e2e)', () => {
     const warehouse = await ticketByTitle(
       app,
       (await login(app, SUPERVISOR_EMAIL)).accessToken,
-      'High: warehouse scanner pairing',
+      'New scanners fail Bluetooth pairing',
     );
 
     const getUnknown = await request(app.getHttpServer())
