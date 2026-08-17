@@ -35,6 +35,7 @@ import {
 } from '@support-ticketing/shared';
 import type { PublicUser } from '../auth/public-user';
 import { requireTrimmed } from '../http/require-trimmed';
+import { requireUuid } from '../http/require-uuid';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ticketListRowSelect,
@@ -48,9 +49,6 @@ type ScopedTicket = Omit<TicketListRow, 'updatedAt' | 'createdAt'> & {
   updatedAt: Date;
   createdAt: Date;
 };
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const historyAsc = [{ changedAt: 'asc' as const }, { id: 'asc' as const }];
 
@@ -124,13 +122,6 @@ function parseRequiredEnum<T extends string>(
     throw new BadRequestException(`Invalid ${field}`);
   }
   return parseOptionalEnum(value, allowed, field) as T;
-}
-
-function requireUuid(value: string, field: string): string {
-  if (!UUID_PATTERN.test(value)) {
-    throw new BadRequestException(`Invalid ${field}`);
-  }
-  return value;
 }
 
 function parseAssigneeFilter(value?: string): AssigneeFilter | undefined {

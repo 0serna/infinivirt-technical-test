@@ -24,6 +24,8 @@
     "@prisma/client": "^6.19.3",
     "@support-ticketing/shared": "*",
     "bcrypt": "^6.0.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
     "prisma": "^6.19.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"

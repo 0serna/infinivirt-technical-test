@@ -9,17 +9,17 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import type {
-  AdminUserRow,
-  CreateUserBody,
-  ResetPasswordBody,
-  UpdateUserBody,
-  UserCatalogRow,
-} from '@support-ticketing/shared';
+import type { AdminUserRow, UserCatalogRow } from '@support-ticketing/shared';
 import type { AuthenticatedRequest } from '../auth/auth.guard';
 import { RequireRole } from '../auth/require-role.decorator';
 import { requireUser } from '../auth/require-user';
 import { adminIncludeDeleted } from '../http/admin-include-deleted';
+import { IdParamDto } from '../http/dto/id-param.dto';
+import {
+  CreateUserDto,
+  ResetPasswordDto,
+  UpdateUserDto,
+} from '../http/dto/user.dto';
 import { UsersService } from './users.service';
 
 @Controller('users')
@@ -40,41 +40,41 @@ export class UsersController {
 
   @Post()
   @RequireRole('admin')
-  create(@Body() body: CreateUserBody): Promise<AdminUserRow> {
+  create(@Body() body: CreateUserDto): Promise<AdminUserRow> {
     return this.usersService.create(body);
   }
 
   @Patch(':id/password')
   @RequireRole('admin')
   resetPassword(
-    @Param('id') id: string,
-    @Body() body: ResetPasswordBody,
+    @Param() params: IdParamDto,
+    @Body() body: ResetPasswordDto,
   ): Promise<AdminUserRow> {
-    return this.usersService.resetPassword(id, body);
+    return this.usersService.resetPassword(params.id, body);
   }
 
   @Patch(':id')
   @RequireRole('admin')
   update(
-    @Param('id') id: string,
-    @Body() body: UpdateUserBody,
+    @Param() params: IdParamDto,
+    @Body() body: UpdateUserDto,
   ): Promise<AdminUserRow> {
-    return this.usersService.update(id, body);
+    return this.usersService.update(params.id, body);
   }
 
   @Delete(':id')
   @RequireRole('admin')
   softDelete(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param() params: IdParamDto,
   ): Promise<AdminUserRow> {
     const actor = requireUser(request);
-    return this.usersService.softDelete(id, actor.id);
+    return this.usersService.softDelete(params.id, actor.id);
   }
 
   @Post(':id/restore')
   @RequireRole('admin')
-  restore(@Param('id') id: string): Promise<AdminUserRow> {
-    return this.usersService.restore(id);
+  restore(@Param() params: IdParamDto): Promise<AdminUserRow> {
+    return this.usersService.restore(params.id);
   }
 }
