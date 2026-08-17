@@ -57,6 +57,11 @@ export type ClientCatalogRow = {
   name: string;
 };
 
+/** Administrator Client create. Name must be non-empty after trim; uniqueness is global. */
+export type CreateClientBody = {
+  name: string;
+};
+
 export type TicketListRow = {
   id: string;
   title: string;

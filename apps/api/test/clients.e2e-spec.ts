@@ -62,3 +62,92 @@ describe('Clients catalog (e2e)', () => {
     },
   );
 });
+
+describe('Clients admin create (e2e)', () => {
+  it('Administrator POST /clients creates a Client that appears in GET /clients', async () => {
+    const name = `Admin Co ${Date.now()}`;
+    const { accessToken } = await login(app, ADMIN_EMAIL);
+
+    const created = await request(app.getHttpServer())
+      .post('/clients')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name })
+      .expect(201);
+
+    expect(created.body).toEqual({
+      id: expect.any(String),
+      name,
+    });
+    expect(Object.keys(created.body).sort()).toEqual(['id', 'name']);
+
+    const catalog = await request(app.getHttpServer())
+      .get('/clients')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(
+      (catalog.body as ClientCatalogRow[]).some((row) => row.name === name),
+    ).toBe(true);
+  });
+
+  it.each([AGENT_EMAIL, SUPERVISOR_EMAIL])(
+    'authenticated %s POST /clients returns HTTP 403',
+    async (email) => {
+      const { accessToken } = await login(app, email);
+      const response = await request(app.getHttpServer())
+        .post('/clients')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ name: `Forbidden Co ${Date.now()}` })
+        .expect(403);
+
+      expect(response.body).not.toHaveProperty('stack');
+      expect(response.status).toBe(403);
+    },
+  );
+
+  it('Administrator POST /clients with a blank name returns HTTP 400', async () => {
+    const { accessToken } = await login(app, ADMIN_EMAIL);
+    await request(app.getHttpServer())
+      .post('/clients')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name: '   ' })
+      .expect(400);
+  });
+
+  it('Administrator POST /clients with a duplicate name returns HTTP 409', async () => {
+    const name = `Unique Co ${Date.now()}`;
+    const { accessToken } = await login(app, ADMIN_EMAIL);
+
+    await request(app.getHttpServer())
+      .post('/clients')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/clients')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name })
+      .expect(409);
+  });
+
+  it('Agent GET /clients includes a Client created by Administrator', async () => {
+    const name = `Ops Catalog ${Date.now()}`;
+    const { accessToken: adminToken } = await login(app, ADMIN_EMAIL);
+    await request(app.getHttpServer())
+      .post('/clients')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name })
+      .expect(201);
+
+    const { accessToken: agentToken } = await login(app, AGENT_EMAIL);
+    const catalog = await request(app.getHttpServer())
+      .get('/clients')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .expect(200);
+
+    expect(
+      (catalog.body as ClientCatalogRow[]).some((row) => row.name === name),
+    ).toBe(true);
+  });
+});
