@@ -62,6 +62,10 @@ _Avoid_: State-machine labels outside this set; a second graph for Administrator
 Ticket in operational load: Status `open` or `in_progress`. Does not include `resolved` or `closed`.
 _Avoid_: Active, pending (as the metric definition)
 
+**Stale Ticket**:
+Ticket with `updated_at` older than 48 hours and Status ≠ `closed`. Includes `resolved`. Distinct from Open Ticket: a Stale Ticket may be `resolved`; an Open Ticket may be fresh. There is no separate due-date or SLA “overdue” concept in the first release.
+_Avoid_: Overdue, vencido (as a second metric); equating Stale with Open; excluding `resolved` from Stale to match Open Ticket
+
 **Priority**:
 Urgency of a Ticket: `low`, `medium`, `high`, or `critical`. Default on create: `medium`. May change over the Ticket's life; only the current value is kept (no append-only Priority history, unlike Status and Assignee).
 _Avoid_: Severity (unless split later), custom priorities; treating Priority as immutable
@@ -72,7 +76,7 @@ _Avoid_: Severity (unless split later), custom priorities; treating Priority as 
 May consult Tickets in their List Scope, create tickets, add `public` Comments. To create, may consult the full Client catalog read-only (`id`, name) — not Client administration and not List Scope filter options. May record forward Status Transitions through `resolved` only when Assignee. Creating the Ticket, or consulting it, is not enough. Cannot close or reopen. Unassigned Tickets are frozen for this Role.
 
 **Supervisor**:
-Everything an Agent can do, plus: list all tickets, reassign, see team metrics, review stale/overdue tickets, and `internal` Comments (in addition to `public`). Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment).
+Everything an Agent can do, plus: list all tickets, reassign, see team metrics, review Stale Tickets, and `internal` Comments (in addition to `public`). Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment).
 
 **Administrator**:
 Everything a Supervisor can do, plus: update any ticket, assign to anyone, administer Users and Clients (full catalog management), close and reopen. May record any legal Status Transition on any Ticket (including unassigned) without being Assignee.
@@ -80,5 +84,5 @@ Everything a Supervisor can do, plus: update any ticket, assign to anyone, admin
 ### Metrics views
 
 **Operational Dashboard**:
-View at `/dashboard`. Administrator and Supervisor see team/account metrics; Agent sees only their own load (Open Tickets assigned to them). Same route, different data by Role.
-_Avoid_: Separate agent home vs admin dashboard as different products
+Default authenticated home for every Role (`/` redirects to `/dashboard`; same page component). Payload differs by Role. Agent: personal load only — count and short list (cap 10, oldest `updated_at` first) of Open Tickets where they are Assignee (not merely `created_by`); no team totals; no Stale section. Supervisor and Administrator: the same team payload — total Open Tickets (unassigned included), Open breakdown by Status (`open` / `in_progress`), Stale Ticket count and short linkable list (cap 10, oldest `updated_at` first). Open-by-Priority and Open-by-Assignee are out of the required set for this view.
+_Avoid_: Separate agent home vs admin dashboard as different products; Agent team-wide metrics; treating List Scope as the Agent dashboard filter; a richer Admin-only dashboard in this view; Ticket List as the post-login landing
