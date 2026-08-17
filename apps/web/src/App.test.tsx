@@ -99,7 +99,7 @@ test('successful login shows the shell', async () => {
   expect(screen.getByText('Ada Lovelace')).toBeDefined();
   expect(screen.getByText('Administrator')).toBeDefined();
   expect(
-    await screen.findByRole('heading', { name: 'Dashboard' }),
+    await screen.findByRole('heading', { name: 'Operational Dashboard' }),
   ).toBeDefined();
   expect(screen.queryByText(/API health/)).toBeNull();
   expect(localStorage.getItem('accessToken')).toBe('token-abc');
@@ -197,7 +197,7 @@ test('authenticated visit to /login is sent to the Dashboard at /dashboard', asy
     screen.getByRole('heading', { name: 'Support Ticketing' }),
   ).toBeDefined();
   expect(
-    await screen.findByRole('heading', { name: 'Dashboard' }),
+    await screen.findByRole('heading', { name: 'Operational Dashboard' }),
   ).toBeDefined();
 });
 

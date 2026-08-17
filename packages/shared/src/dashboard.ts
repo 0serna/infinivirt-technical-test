@@ -10,7 +10,7 @@ import {
 export const DASHBOARD_SHORT_LIST_CAP = 10;
 
 /**
- * Ticket List deep-link for Agent Open-assigned load
+ * Ticket List deep-link for Agent Open Tickets as Assignee
  * (`scope=assignedOpen`).
  */
 export const DASHBOARD_ASSIGNED_OPEN_LIST_PATH = `/tickets?scope=${TICKET_LIST_ASSIGNED_OPEN_SCOPE}`;
@@ -28,18 +28,15 @@ export const DASHBOARD_IN_PROGRESS_STATUS_LIST_PATH =
 /** Ticket List deep-link for Stale Tickets (`stale=1`). */
 export const DASHBOARD_STALE_LIST_PATH = `/tickets?stale=${TICKET_LIST_STALE_QUERY}`;
 
-/** Statuses counted as Open Ticket load on the dashboard. */
-export const DASHBOARD_OPEN_STATUSES = OPEN_TICKET_STATUSES;
-
 /**
  * Agent Operational Dashboard: personal Open Ticket load where the User is
  * Assignee (not merely `created_by`). No team totals; no Stale section.
  */
 export type AgentDashboard = {
   kind: 'agent';
-  assignedOpenCount: number;
+  openCount: number;
   /** Cap {@link DASHBOARD_SHORT_LIST_CAP}, oldest `updatedAt` first. */
-  assignedOpen: TicketListRow[];
+  openTickets: TicketListRow[];
 };
 
 /**
@@ -49,7 +46,7 @@ export type AgentDashboard = {
  */
 export type TeamDashboard = {
   kind: 'team';
-  openCount: number;
+  openTotal: number;
   openByStatus: {
     open: number;
     in_progress: number;
@@ -61,11 +58,4 @@ export type TeamDashboard = {
 
 export type DashboardEnvelope = AgentDashboard | TeamDashboard;
 
-/** Empty team envelope (tests / zero-state fixtures). */
-export const EMPTY_TEAM_DASHBOARD: TeamDashboard = {
-  kind: 'team',
-  openCount: 0,
-  openByStatus: { open: 0, in_progress: 0 },
-  staleCount: 0,
-  stale: [],
-};
+export { OPEN_TICKET_STATUSES as DASHBOARD_OPEN_STATUSES };

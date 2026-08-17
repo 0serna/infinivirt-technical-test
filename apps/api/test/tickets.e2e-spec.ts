@@ -550,6 +550,32 @@ describe('Tickets list (e2e)', () => {
     );
   });
 
+  it('scope=assignedOpen forces Open Ticket statuses even when status=resolved is also set', async () => {
+    const agent = await login(app, AGENT_EMAIL);
+    const response = await request(app.getHttpServer())
+      .get('/tickets')
+      .query({ scope: 'assignedOpen', status: 'resolved' })
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .expect(200);
+
+    const tickets = response.body.tickets as Array<{
+      status: string;
+      assignee: { id: string } | null;
+    }>;
+    expect(tickets.length).toBeGreaterThan(0);
+    expect(
+      tickets.every((ticket) => ticket.assignee?.id === agent.userId),
+    ).toBe(true);
+    expect(
+      tickets.every((ticket) =>
+        ['open', 'in_progress'].includes(ticket.status),
+      ),
+    ).toBe(true);
+    expect(titles(response.body)).not.toContain(
+      'Resolved: gift-card balance mismatch',
+    );
+  });
+
   it('invalid multi-status, stale, or scope return HTTP 400', async () => {
     const { accessToken } = await login(app, SUPERVISOR_EMAIL);
 

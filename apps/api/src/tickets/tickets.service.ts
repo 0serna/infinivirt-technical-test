@@ -330,10 +330,10 @@ export class TicketsService {
 
     let effectiveStatuses = statuses;
     if (assignedOpen) {
+      // Assigned-open is always Open Ticket load for the current Assignee —
+      // ignore any client `status` that would widen or narrow away from Open.
       assignee = { kind: 'user', id: user.id };
-      if (effectiveStatuses === undefined) {
-        effectiveStatuses = [...OPEN_TICKET_STATUSES];
-      }
+      effectiveStatuses = [...OPEN_TICKET_STATUSES];
     }
 
     const staleBefore = stale

@@ -55,6 +55,11 @@ export function LoginPage() {
             label="Password"
             value={password}
             onChange={(event) => setPassword(event.currentTarget.value)}
+            visibilityToggleButtonProps={{
+              // Avoid "password" in the label — getByLabel('Password') would
+              // also match "Toggle password visibility".
+              'aria-label': 'Show or hide characters',
+            }}
           />
           {error ? <Text c="red">{error}</Text> : null}
           <Button type="submit">Sign in</Button>

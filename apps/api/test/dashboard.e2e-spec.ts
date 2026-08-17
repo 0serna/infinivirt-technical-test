@@ -61,25 +61,25 @@ describe('Dashboard (e2e)', () => {
       return;
     }
 
-    expect(body).not.toHaveProperty('openCount');
+    expect(body).not.toHaveProperty('openTotal');
     expect(body).not.toHaveProperty('staleCount');
     expect(body).not.toHaveProperty('stale');
     expect(body).not.toHaveProperty('openByStatus');
 
-    expect(body.assignedOpenCount).toBe(list.tickets.length);
-    expect(body.assignedOpen.length).toBeLessThanOrEqual(10);
-    expect(body.assignedOpen).toEqual(expectedShort);
+    expect(body.openCount).toBe(list.tickets.length);
+    expect(body.openTickets.length).toBeLessThanOrEqual(10);
+    expect(body.openTickets).toEqual(expectedShort);
 
     expect(
-      body.assignedOpen.every((ticket) => ticket.assignee?.id === agent.userId),
+      body.openTickets.every((ticket) => ticket.assignee?.id === agent.userId),
     ).toBe(true);
     expect(
-      body.assignedOpen.every((ticket) =>
+      body.openTickets.every((ticket) =>
         ['open', 'in_progress'].includes(ticket.status),
       ),
     ).toBe(true);
 
-    const titles = body.assignedOpen.map((ticket) => ticket.title);
+    const titles = body.openTickets.map((ticket) => ticket.title);
     expect(titles).not.toContain('High: patient portal MFA reset');
     expect(titles).not.toContain('High: warehouse scanner pairing');
     expect(titles).not.toContain('Resolved: gift-card balance mismatch');
@@ -133,15 +133,14 @@ describe('Dashboard (e2e)', () => {
         return;
       }
 
-      expect(body).not.toHaveProperty('assignedOpenCount');
-      expect(body).not.toHaveProperty('assignedOpen');
+      expect(body).not.toHaveProperty('openTickets');
 
-      expect(body.openCount).toBe(openLoadBody.tickets.length);
+      expect(body.openTotal).toBe(openLoadBody.tickets.length);
       expect(body.openByStatus).toEqual({
         open: openOnlyBody.tickets.length,
         in_progress: inProgressBody.tickets.length,
       });
-      expect(body.openCount).toBe(
+      expect(body.openTotal).toBe(
         body.openByStatus.open + body.openByStatus.in_progress,
       );
       expect(

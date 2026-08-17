@@ -13,8 +13,6 @@ import {
   hasMinimumRole,
   OPEN_TICKET_LOAD_STATUS_QUERY,
   PRIORITIES,
-  TICKET_LIST_ASSIGNED_OPEN_SCOPE,
-  TICKET_LIST_STALE_QUERY,
   TICKET_STATUSES,
   type TicketListEnvelope,
   type TicketListFilterOptions,
@@ -37,7 +35,7 @@ const STATUS_FILTER_DATA = [
     value,
     label: STATUS_LABEL[value],
   })),
-  { value: OPEN_TICKET_LOAD_STATUS_QUERY, label: 'Open load' },
+  { value: OPEN_TICKET_LOAD_STATUS_QUERY, label: 'Open Ticket load' },
 ];
 
 function ticketsUrl(
@@ -219,25 +217,6 @@ export function TicketList() {
               data={assigneeSelectData(filterOptions)}
             />
           ) : null}
-          <Select
-            label="Stale"
-            clearable
-            value={filters.stale ?? null}
-            onChange={(stale) => setFilter('stale', stale)}
-            data={[{ value: TICKET_LIST_STALE_QUERY, label: 'Stale only' }]}
-          />
-          <Select
-            label="Scope"
-            clearable
-            value={filters.scope ?? null}
-            onChange={(scope) => setFilter('scope', scope)}
-            data={[
-              {
-                value: TICKET_LIST_ASSIGNED_OPEN_SCOPE,
-                label: 'My assigned open',
-              },
-            ]}
-          />
         </Group>
       ) : null}
       {failed ? (

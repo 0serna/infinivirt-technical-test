@@ -121,8 +121,8 @@ export function isDashboardUrl(url: string): boolean {
 
 export const sampleAgentDashboard = {
   kind: 'agent' as const,
-  assignedOpenCount: 2,
-  assignedOpen: [
+  openCount: 2,
+  openTickets: [
     {
       id: 'ticket-ship',
       title: 'In progress: shipment tracking API',
@@ -150,7 +150,7 @@ export const sampleAgentDashboard = {
 
 export const emptyTeamDashboard = {
   kind: 'team' as const,
-  openCount: 0,
+  openTotal: 0,
   openByStatus: { open: 0, in_progress: 0 },
   staleCount: 0,
   stale: [],
@@ -158,7 +158,7 @@ export const emptyTeamDashboard = {
 
 export const sampleTeamDashboard = {
   kind: 'team' as const,
-  openCount: 5,
+  openTotal: 5,
   openByStatus: { open: 3, in_progress: 2 },
   staleCount: 4,
   stale: [

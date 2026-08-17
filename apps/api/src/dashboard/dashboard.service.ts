@@ -69,7 +69,7 @@ export class DashboardService {
 
     return {
       kind: 'team',
-      openCount: openCount + inProgressCount,
+      openTotal: openCount + inProgressCount,
       openByStatus: {
         open: openCount,
         in_progress: inProgressCount,
@@ -85,7 +85,7 @@ export class DashboardService {
       status: { in: [...DASHBOARD_OPEN_STATUSES] },
     };
 
-    const [assignedOpenCount, rows] = await Promise.all([
+    const [openCount, rows] = await Promise.all([
       this.prisma.ticket.count({ where }),
       this.prisma.ticket.findMany({
         where,
@@ -97,8 +97,8 @@ export class DashboardService {
 
     return {
       kind: 'agent',
-      assignedOpenCount,
-      assignedOpen: rows.map(toListRow),
+      openCount,
+      openTickets: rows.map(toListRow),
     };
   }
 }

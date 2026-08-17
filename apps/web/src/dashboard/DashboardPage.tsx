@@ -81,7 +81,7 @@ function AgentDashboardView({ dashboard }: { dashboard: AgentDashboard }) {
       <Group gap="xl">
         <Stack gap={4}>
           <Text size="sm" c="dimmed">
-            Open assigned
+            Open Tickets (Assignee)
           </Text>
           <Anchor
             component={Link}
@@ -89,14 +89,14 @@ function AgentDashboardView({ dashboard }: { dashboard: AgentDashboard }) {
             size="xl"
             fw={700}
           >
-            {dashboard.assignedOpenCount}
+            {dashboard.openCount}
           </Anchor>
         </Stack>
       </Group>
-      <Title order={3}>Assigned open tickets</Title>
+      <Title order={3}>Open Tickets assigned to you</Title>
       <ShortTicketTable
-        tickets={dashboard.assignedOpen}
-        emptyLabel="No assigned open tickets."
+        tickets={dashboard.openTickets}
+        emptyLabel="No Open Tickets assigned to you."
       />
     </Stack>
   );
@@ -128,8 +128,8 @@ function TeamDashboardView({ dashboard }: { dashboard: TeamDashboard }) {
     <Stack>
       <Group gap="xl">
         <KpiLink
-          label="Open tickets"
-          count={dashboard.openCount}
+          label="Open Tickets"
+          count={dashboard.openTotal}
           to={DASHBOARD_OPEN_LOAD_LIST_PATH}
         />
         <KpiLink
@@ -143,15 +143,15 @@ function TeamDashboardView({ dashboard }: { dashboard: TeamDashboard }) {
           to={DASHBOARD_IN_PROGRESS_STATUS_LIST_PATH}
         />
         <KpiLink
-          label="Stale"
+          label="Stale Tickets"
           count={dashboard.staleCount}
           to={DASHBOARD_STALE_LIST_PATH}
         />
       </Group>
-      <Title order={3}>Stale tickets</Title>
+      <Title order={3}>Stale Tickets</Title>
       <ShortTicketTable
         tickets={dashboard.stale}
-        emptyLabel="No stale tickets to show."
+        emptyLabel="No Stale Tickets to show."
       />
     </Stack>
   );
@@ -196,11 +196,11 @@ export function DashboardPage() {
 
   return (
     <Stack>
-      <Title order={2}>Dashboard</Title>
+      <Title order={2}>Operational Dashboard</Title>
       {failed ? (
         <Alert>
           <Stack gap="sm">
-            <Text>Couldn't load dashboard.</Text>
+            <Text>Couldn't load the Operational Dashboard.</Text>
             <Button
               type="button"
               variant="default"
@@ -215,14 +215,14 @@ export function DashboardPage() {
           </Stack>
         </Alert>
       ) : dashboard === null ? (
-        <Text>Loading dashboard…</Text>
+        <Text>Loading Operational Dashboard…</Text>
       ) : isAgentDashboard(dashboard) ? (
         <AgentDashboardView dashboard={dashboard} />
       ) : isTeamDashboard(dashboard) ? (
         <TeamDashboardView dashboard={dashboard} />
       ) : (
         <Alert>
-          <Text>Couldn't load dashboard.</Text>
+          <Text>Couldn't load the Operational Dashboard.</Text>
         </Alert>
       )}
     </Stack>

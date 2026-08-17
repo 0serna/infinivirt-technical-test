@@ -387,7 +387,7 @@ test('changing Ticket List filters updates the URL search params', async () => {
   );
 });
 
-test('opening /tickets with Open load, Stale, and assigned-open params applies them in the UI and list request', async () => {
+test('opening /tickets with Open Ticket load, Stale, and assigned-open params drives the list request', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
@@ -404,9 +404,9 @@ test('opening /tickets with Open load, Stale, and assigned-open params applies t
 
   expect(
     await screen.findByRole('combobox', { name: 'Status' }),
-  ).toHaveProperty('value', 'Open load');
-  expect(filterControl('Stale')).toHaveProperty('value', 'Stale only');
-  expect(filterControl('Scope')).toHaveProperty('value', 'My assigned open');
+  ).toHaveProperty('value', 'Open Ticket load');
+  expect(screen.queryByRole('combobox', { name: 'Stale' })).toBeNull();
+  expect(screen.queryByRole('combobox', { name: 'Scope' })).toBeNull();
 
   const ticketUrls = vi
     .mocked(fetch)
@@ -417,7 +417,7 @@ test('opening /tickets with Open load, Stale, and assigned-open params applies t
   );
 });
 
-test('choosing Open load, Stale, and My assigned open updates the URL and list request', async () => {
+test('choosing Open Ticket load updates the URL and list request', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
   vi.mocked(fetch).mockImplementation(async (input) => {
@@ -434,22 +434,16 @@ test('choosing Open load, Stale, and My assigned open updates the URL and list r
   renderApp(['/tickets'], { probeLocation: true });
 
   await user.click(await screen.findByRole('combobox', { name: 'Status' }));
-  await user.click(filterOption('Open load'));
-  await user.click(filterControl('Stale'));
-  await user.click(filterOption('Stale only'));
-  await user.click(filterControl('Scope'));
-  await user.click(filterOption('My assigned open'));
+  await user.click(filterOption('Open Ticket load'));
 
   expect(await screen.findByTestId('location-path')).toHaveProperty(
     'textContent',
-    '/tickets?status=open%2Cin_progress&stale=1&scope=assignedOpen',
+    '/tickets?status=open%2Cin_progress',
   );
 
   const ticketUrls = vi
     .mocked(fetch)
     .mock.calls.map(([url]) => String(url))
     .filter((url) => isTicketsUrl(url));
-  expect(ticketUrls).toContain(
-    '/api/tickets?status=open%2Cin_progress&stale=1&scope=assignedOpen',
-  );
+  expect(ticketUrls).toContain('/api/tickets?status=open%2Cin_progress');
 });

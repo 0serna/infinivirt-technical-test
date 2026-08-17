@@ -29,22 +29,22 @@ test('authenticated / redirects to /dashboard', async () => {
   renderApp(['/'], { probeLocation: true });
 
   expect(
-    await screen.findByRole('heading', { name: 'Dashboard' }),
+    await screen.findByRole('heading', { name: 'Operational Dashboard' }),
   ).toBeDefined();
   expect(screen.getByTestId('location-path').textContent).toBe('/dashboard');
   expect(screen.queryByRole('heading', { name: 'Tickets' })).toBeNull();
 });
 
-test('Agent dashboard shows Open-assigned KPI deep-link and short table rows to consult', async () => {
+test('Agent dashboard shows Open Ticket Assignee KPI deep-link and short table rows to consult', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(emptyTickets, alex);
 
   renderApp(['/dashboard']);
 
   expect(
-    await screen.findByRole('heading', { name: 'Dashboard' }),
+    await screen.findByRole('heading', { name: 'Operational Dashboard' }),
   ).toBeDefined();
-  expect(screen.getByText('Open assigned')).toBeDefined();
+  expect(screen.getByText('Open Tickets (Assignee)')).toBeDefined();
 
   const countLink = screen.getByRole('link', { name: '2' });
   expect(countLink.getAttribute('href')).toBe('/tickets?scope=assignedOpen');
@@ -91,10 +91,14 @@ test('dashboard loading and error states use English copy', async () => {
 
   renderApp(['/dashboard']);
 
-  expect(await screen.findByText('Loading dashboard…')).toBeDefined();
+  expect(
+    await screen.findByText('Loading Operational Dashboard…'),
+  ).toBeDefined();
 
   resolveDashboard?.(jsonResponse(500, { message: 'error' }));
-  expect(await screen.findByText("Couldn't load dashboard.")).toBeDefined();
+  expect(
+    await screen.findByText("Couldn't load the Operational Dashboard."),
+  ).toBeDefined();
   expect(screen.getByRole('button', { name: 'Try again' })).toBeDefined();
 });
 
@@ -120,10 +124,12 @@ test('dashboard Try again refetches after a failure', async () => {
 
   renderApp(['/dashboard']);
 
-  expect(await screen.findByText("Couldn't load dashboard.")).toBeDefined();
+  expect(
+    await screen.findByText("Couldn't load the Operational Dashboard."),
+  ).toBeDefined();
   await user.click(screen.getByRole('button', { name: 'Try again' }));
 
-  expect(await screen.findByText('Open assigned')).toBeDefined();
+  expect(await screen.findByText('Open Tickets (Assignee)')).toBeDefined();
   expect(screen.getByRole('link', { name: '2' })).toBeDefined();
 });
 
@@ -134,12 +140,12 @@ test('team dashboard shows KPI strip deep-links and Stale short table', async ()
   renderApp(['/dashboard']);
 
   expect(
-    await screen.findByRole('heading', { name: 'Dashboard' }),
+    await screen.findByRole('heading', { name: 'Operational Dashboard' }),
   ).toBeDefined();
   expect(screen.queryByText(/Team metrics are not available/i)).toBeNull();
-  expect(screen.queryByText('Open assigned')).toBeNull();
+  expect(screen.queryByText('Open Tickets (Assignee)')).toBeNull();
 
-  expect(screen.getByText('Open tickets')).toBeDefined();
+  expect(screen.getByText('Open Tickets')).toBeDefined();
   expect(screen.getByRole('link', { name: '5' }).getAttribute('href')).toBe(
     '/tickets?status=open,in_progress',
   );
@@ -149,12 +155,11 @@ test('team dashboard shows KPI strip deep-links and Stale short table', async ()
   expect(screen.getByRole('link', { name: '2' }).getAttribute('href')).toBe(
     '/tickets?status=in_progress',
   );
-  expect(screen.getByText('Stale')).toBeDefined();
   expect(screen.getByRole('link', { name: '4' }).getAttribute('href')).toBe(
     '/tickets?stale=1',
   );
 
-  expect(screen.getByRole('heading', { name: 'Stale tickets' })).toBeDefined();
+  expect(screen.getByRole('heading', { name: 'Stale Tickets' })).toBeDefined();
 
   const table = screen.getByRole('table');
   expect(
