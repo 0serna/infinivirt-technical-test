@@ -1,0 +1,3 @@
+# Soft-delete for User and Client catalogs
+
+Administrator catalog management uses soft-delete (`deletedAt`) with restore, not hard-delete and not an `active` boolean. Hard-delete fights `onDelete: Restrict` on Ticket and history FKs; omitting delete leaves no way to deactivate staff or retire a Client from pickers. Uniqueness of User email and Client name remains global (including soft-deleted rows): create conflicts with a tombstone; restore cannot collide because the soft-deleted row still holds the key. Because User email is immutable, a soft-deleted email stays reserved for that User (reactivate via restore) and cannot be handed to a different User without hard-delete, which is out of scope.

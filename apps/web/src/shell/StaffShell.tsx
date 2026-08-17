@@ -27,6 +27,12 @@ export function StaffShell() {
             <Group gap="md">
               <Link to="/dashboard">Dashboard</Link>
               <Link to="/tickets">Tickets</Link>
+              {user.role === 'admin' ? (
+                <>
+                  <Link to="/admin/clients">Clients</Link>
+                  <Link to="/admin/users">Users</Link>
+                </>
+              ) : null}
             </Group>
           </Group>
           <Group>

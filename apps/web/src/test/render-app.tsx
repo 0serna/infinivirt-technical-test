@@ -108,11 +108,11 @@ export function isTicketDetailUrl(url: string): boolean {
 }
 
 export function isClientsUrl(url: string): boolean {
-  return url === '/api/clients';
+  return url === '/api/clients' || url.startsWith('/api/clients?');
 }
 
 export function isUsersUrl(url: string): boolean {
-  return url === '/api/users';
+  return url === '/api/users' || url.startsWith('/api/users?');
 }
 
 export function isDashboardUrl(url: string): boolean {
@@ -189,17 +189,41 @@ export const sampleTeamDashboard = {
 
 /** Full Client catalog (ADR 0010). Includes Clients absent from list filterOptions. */
 export const sampleClientCatalog = [
-  { id: 'client-1', name: 'Contoso Health' },
-  { id: 'client-2', name: 'Initech Soft' },
-  { id: 'client-acme', name: 'Acme Logistics' },
+  { id: 'client-1', name: 'Contoso Health', deletedAt: null },
+  { id: 'client-2', name: 'Initech Soft', deletedAt: null },
+  { id: 'client-acme', name: 'Acme Logistics', deletedAt: null },
 ];
 
 /** Read-only staff catalog for Assignee picker. Wider than list filterOptions.assignees. */
 export const sampleUserCatalog = [
-  { id: 'user-1', displayName: 'Ada Lovelace', role: 'admin' as const },
-  { id: 'user-2', displayName: 'Alex Agent', role: 'agent' as const },
-  { id: 'user-3', displayName: 'Sam Supervisor', role: 'supervisor' as const },
-  { id: 'user-4', displayName: 'Jamie Agent', role: 'agent' as const },
+  {
+    id: 'user-1',
+    email: 'ada@example.com',
+    displayName: 'Ada Lovelace',
+    role: 'admin' as const,
+    deletedAt: null,
+  },
+  {
+    id: 'user-2',
+    email: 'agent@example.com',
+    displayName: 'Alex Agent',
+    role: 'agent' as const,
+    deletedAt: null,
+  },
+  {
+    id: 'user-3',
+    email: 'supervisor@example.com',
+    displayName: 'Sam Supervisor',
+    role: 'supervisor' as const,
+    deletedAt: null,
+  },
+  {
+    id: 'user-4',
+    email: 'jamie@example.com',
+    displayName: 'Jamie Agent',
+    role: 'agent' as const,
+    deletedAt: null,
+  },
 ];
 
 export const sampleTicketDetail = {

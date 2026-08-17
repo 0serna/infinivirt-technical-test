@@ -1,6 +1,8 @@
 import { MantineProvider, Text } from '@mantine/core';
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { AdminClientsPage } from './admin/AdminClientsPage';
+import { AdminUsersPage } from './admin/AdminUsersPage';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
@@ -52,6 +54,8 @@ export function App() {
             <Route path="tickets" element={<TicketList />} />
             <Route path="tickets/new" element={<TicketCreate />} />
             <Route path="tickets/:id" element={<TicketDetail />} />
+            <Route path="admin/clients" element={<AdminClientsPage />} />
+            <Route path="admin/users" element={<AdminUsersPage />} />
           </Route>
         </Routes>
       </AuthProvider>

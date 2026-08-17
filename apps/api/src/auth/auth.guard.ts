@@ -10,6 +10,7 @@ import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { type PublicUser, toPublicUser } from './public-user';
+import { requireLiveUser } from './require-live-user';
 
 export type AuthenticatedRequest = Request & {
   user?: PublicUser;
@@ -53,12 +54,11 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException();
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-    });
-    if (!user) {
-      throw new UnauthorizedException();
-    }
+    const user = requireLiveUser(
+      await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+      }),
+    );
 
     request.user = toPublicUser(user);
     return true;
