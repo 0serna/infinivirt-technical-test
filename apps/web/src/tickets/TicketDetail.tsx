@@ -192,8 +192,6 @@ export function TicketDetail() {
         assigneeId: ticket.assignee?.id ?? null,
       })
     : null;
-  const transitionLabel =
-    nextStatus != null ? transitionMenuLabel(ticket.status, nextStatus) : null;
 
   async function recordTransition(to: TicketStatus) {
     if (!id) {
@@ -254,7 +252,7 @@ export function TicketDetail() {
           <Title order={2}>{ticket.title}</Title>
           <Text c="dimmed">{ticket.description}</Text>
         </Stack>
-        {nextStatus && transitionLabel ? (
+        {nextStatus ? (
           <Menu shadow="md" width={280} withinPortal={false}>
             <Menu.Target>
               <Button
@@ -277,7 +275,7 @@ export function TicketDetail() {
               >
                 <Stack gap={0}>
                   <Text size="sm" fw={600}>
-                    {transitionLabel}
+                    {transitionMenuLabel(ticket.status, nextStatus)}
                   </Text>
                   <Text size="xs" c="dimmed">
                     {STATUS_LABEL[ticket.status]} → {STATUS_LABEL[nextStatus]}

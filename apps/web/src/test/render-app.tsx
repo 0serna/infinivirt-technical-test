@@ -29,17 +29,15 @@ export const emptyTickets = {
   filterOptions: EMPTY_TICKET_LIST_FILTER_OPTIONS,
 };
 
-export const sampleFilterOptions = {
-  clients: [
-    { id: 'client-1', name: 'Contoso Health' },
-    { id: 'client-2', name: 'Initech Soft' },
-  ],
-  assignees: [{ id: 'user-3', displayName: 'Sam Supervisor' }],
-  includeUnassigned: true,
-};
-
 export const sampleTickets = {
-  filterOptions: sampleFilterOptions,
+  filterOptions: {
+    clients: [
+      { id: 'client-1', name: 'Contoso Health' },
+      { id: 'client-2', name: 'Initech Soft' },
+    ],
+    assignees: [{ id: 'user-3', displayName: 'Sam Supervisor' }],
+    includeUnassigned: true,
+  },
   tickets: [
     {
       id: 'ticket-1',

@@ -99,10 +99,13 @@ export function mayRecordStatusTransition(args: {
   if (!isLegalStatusEdge(args.from, args.to)) {
     return false;
   }
-  if (args.to === 'closed' || args.from === 'closed') {
-    return hasMinimumRole(args.role, 'admin');
+  if (hasMinimumRole(args.role, 'admin')) {
+    return true;
   }
-  return hasMinimumRole(args.role, 'admin') || args.assigneeId === args.actorId;
+  if (args.to === 'closed' || args.from === 'closed') {
+    return false;
+  }
+  return args.assigneeId === args.actorId;
 }
 
 export function nextRecordableStatus(args: {

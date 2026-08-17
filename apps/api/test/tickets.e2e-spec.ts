@@ -98,17 +98,17 @@ async function expectPatchForbiddenUnchanged(
   extras?.(before, after);
 }
 
+let app: INestApplication;
+
+beforeAll(async () => {
+  app = await createTestApp();
+});
+
+afterAll(async () => {
+  await app?.close();
+});
+
 describe('Tickets list (e2e)', () => {
-  let app: INestApplication;
-
-  beforeAll(async () => {
-    app = await createTestApp();
-  });
-
-  afterAll(async () => {
-    await app.close();
-  });
-
   it('GET /tickets without a token returns the same opaque 401 as GET /auth/me', async () => {
     const me = await request(app.getHttpServer()).get('/auth/me').expect(401);
     const tickets = await request(app.getHttpServer())
@@ -434,16 +434,6 @@ describe('Tickets list (e2e)', () => {
 });
 
 describe('Tickets get by id (e2e)', () => {
-  let app: INestApplication;
-
-  beforeAll(async () => {
-    app = await createTestApp();
-  });
-
-  afterAll(async () => {
-    await app.close();
-  });
-
   it('GET /tickets/:id without a token returns the same opaque 401 as GET /auth/me', async () => {
     const me = await request(app.getHttpServer()).get('/auth/me').expect(401);
     const ticket = await request(app.getHttpServer())
@@ -622,16 +612,6 @@ describe('Tickets get by id (e2e)', () => {
 });
 
 describe('Tickets status transition (e2e)', () => {
-  let app: INestApplication;
-
-  beforeAll(async () => {
-    app = await createTestApp();
-  });
-
-  afterAll(async () => {
-    await app.close();
-  });
-
   it('PATCH /tickets/:id without a token returns the same opaque 401 as GET /auth/me', async () => {
     const me = await request(app.getHttpServer()).get('/auth/me').expect(401);
     const patched = await request(app.getHttpServer())
@@ -686,29 +666,13 @@ describe('Tickets status transition (e2e)', () => {
 
   it('Agent creator of an unassigned Ticket cannot record a Status Transition', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
-    const ticket = await ticketByTitle(
+    await expectPatchForbiddenUnchanged(
       app,
       accessToken,
       'High: patient portal MFA reset',
+      'in_progress',
+      (before) => expect(before.status).toBe('open'),
     );
-    expect(ticket.status).toBe('open');
-    const historyLength = ticket.statusHistory.length;
-
-    const response = await request(app.getHttpServer())
-      .patch(`/tickets/${ticket.id}`)
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({ status: 'in_progress' })
-      .expect(403);
-
-    expect(response.body).not.toHaveProperty('stack');
-    const after = await ticketByTitle(
-      app,
-      accessToken,
-      'High: patient portal MFA reset',
-    );
-    expect(after.status).toBe('open');
-    expect(after.updatedAt).toBe(ticket.updatedAt);
-    expect(after.statusHistory).toHaveLength(historyLength);
   });
 
   it('Supervisor who is not Assignee cannot record a forward Status Transition', async () => {

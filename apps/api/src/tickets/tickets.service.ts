@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
-  EMPTY_TICKET_LIST_FILTER_OPTIONS,
   hasMinimumRole,
   isLegalStatusEdge,
   mayRecordStatusTransition,
@@ -234,9 +233,7 @@ export class TicketsService {
         updatedAt: ticket.updatedAt.toISOString(),
         createdAt: ticket.createdAt.toISOString(),
       })),
-      filterOptions: scoped.length
-        ? filterOptionsFromScope(scoped)
-        : EMPTY_TICKET_LIST_FILTER_OPTIONS,
+      filterOptions: filterOptionsFromScope(scoped),
     };
   }
 
