@@ -11,6 +11,7 @@ import {
   type CreateTicketBody,
   type CreateTicketCommentBody,
   type PatchTicketAssigneeBody,
+  type PatchTicketFieldsBody,
   type PatchTicketStatusBody,
   PRIORITIES,
   type Priority,
@@ -59,4 +60,22 @@ export class PatchTicketAssigneeDto implements PatchTicketAssigneeBody {
   @ValidateIf((_, value) => value !== null)
   @IsRfcUuid()
   assigneeId!: string | null;
+}
+
+export class PatchTicketFieldsDto implements PatchTicketFieldsBody {
+  @ValidateIf((_, value) => value !== undefined)
+  @Trim()
+  @IsString()
+  @IsNotEmpty()
+  title?: string;
+
+  @ValidateIf((_, value) => value !== undefined)
+  @Trim()
+  @IsString()
+  @IsNotEmpty()
+  description?: string;
+
+  @ValidateIf((_, value) => value !== undefined)
+  @IsIn([...PRIORITIES])
+  priority?: Priority;
 }

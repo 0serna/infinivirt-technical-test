@@ -1203,3 +1203,114 @@ test('failed Reassignment shows English error without the raw server body', asyn
   ).toBeDefined();
   expect(screen.queryByText(/boom stack/)).toBeNull();
 });
+
+test('Agent does not see Field Edit', async () => {
+  mockTicketSession(sampleTicketDetail, alex);
+  renderApp(['/tickets/ticket-1']);
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  expect(
+    screen.queryByRole('button', { name: 'Edit ticket fields' }),
+  ).toBeNull();
+});
+
+test('Supervisor can Field Edit Title, description, and Priority from Ticket consult', async () => {
+  const user = userEvent.setup();
+  const updated = {
+    ...sampleTicketDetail,
+    title: 'Corrected MFA title',
+    description: 'Corrected MFA description.',
+    priority: 'critical' as const,
+  };
+  mockStaffTicketFetches({
+    user: sam,
+    detail: sampleTicketDetail,
+    handleRoute: (url, method, init) => {
+      if (url === '/api/tickets/ticket-1/fields' && method === 'PATCH') {
+        expect(init?.body).toBe(
+          JSON.stringify({
+            title: 'Corrected MFA title',
+            description: 'Corrected MFA description.',
+            priority: 'critical',
+          }),
+        );
+        return jsonResponse(200, updated);
+      }
+      return undefined;
+    },
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  await user.click(screen.getByRole('button', { name: 'Edit ticket fields' }));
+
+  const titleInput = screen.getByRole('textbox', { name: 'Title' });
+  const descriptionInput = screen.getByRole('textbox', { name: 'Description' });
+  await user.clear(titleInput);
+  await user.type(titleInput, 'Corrected MFA title');
+  await user.clear(descriptionInput);
+  await user.type(descriptionInput, 'Corrected MFA description.');
+  await user.click(screen.getByRole('combobox', { name: 'Priority' }));
+  await user.click(
+    screen.getByRole('option', { name: 'Critical', hidden: true }),
+  );
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+
+  expect(
+    await screen.findByRole('heading', { name: 'Corrected MFA title' }),
+  ).toBeDefined();
+  expect(screen.getByText('Corrected MFA description.')).toBeDefined();
+  expect(screen.getByLabelText('Priority: Critical')).toBeDefined();
+  expect(screen.queryByRole('textbox', { name: 'Title' })).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Edit ticket fields' }),
+  ).toBeDefined();
+});
+
+test('Field Edit client-side validation blocks submit; Cancel restores the Ticket', async () => {
+  const user = userEvent.setup();
+  mockStaffTicketFetches({
+    user: sam,
+    detail: sampleTicketDetail,
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  await user.click(screen.getByRole('button', { name: 'Edit ticket fields' }));
+
+  await user.clear(screen.getByRole('textbox', { name: 'Title' }));
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+
+  expect(
+    await screen.findByText('Title and description are required.'),
+  ).toBeDefined();
+  expect(
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([url, init]) =>
+          String(url) === '/api/tickets/ticket-1/fields' &&
+          (init?.method ?? 'GET').toUpperCase() === 'PATCH',
+      ),
+  ).toEqual([]);
+
+  await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  expect(
+    screen.getByRole('heading', { name: 'High: patient portal MFA reset' }),
+  ).toBeDefined();
+  expect(screen.getByText('MFA reset emails not arriving.')).toBeDefined();
+});

@@ -25,8 +25,8 @@ Unit of support work tied to a single Client for its lifetime (Client does not c
 _Avoid_: Request, case, issue, incident (as a synonym for the aggregate); assigning on create; inventing a Client at create; blank Title or description; forging `created_by`
 
 **Title**:
-Short label of a Ticket for queues and lists. Distinct from description, which is the body. Required on create (non-empty after trim); not a unique key — duplicates are allowed across and within a Client.
-_Avoid_: Subject, summary (as synonyms that replace Title); treating Title as a natural key
+Short label of a Ticket for queues and lists. Distinct from description, which is the body. Required on create (non-empty after trim); not a unique key — duplicates are allowed across and within a Client. May change via Field Edit.
+_Avoid_: Subject, summary (as synonyms that replace Title); treating Title as a natural key; treating Title as immutable after create
 
 **Assignee**:
 The single User responsible for the Ticket at a given time. May be null if the ticket is unassigned. Any non-soft-deleted User may be chosen as Assignee (Agent, Supervisor, or Administrator); the Role of the target is not filtered. A User who is soft-deleted while still Assignee stays on the Ticket until someone records a Reassignment.
@@ -43,6 +43,10 @@ _Avoid_: Note, message, reply (as a domain type); treating Superv/Admin composer
 **Status Transition**:
 Change of Ticket Status recorded in an append-only history (from, to, at, by). Status on the Ticket is the current projection. The actor names `to`; `from` is always the current Status. Creating a Ticket records a birth row (`from` absent → `open`, by `created_by`). Consult of a Ticket includes the full history, every cycle, oldest first — same visibility as the Ticket. On reopen (`closed` → `open`), `resolved_at` and `closed_at` are cleared; Assignee is unchanged; history keeps prior cycles. Entering `resolved` sets `resolved_at`; entering `closed` sets `closed_at`. Same `to` as current is not a legal transition. Rejected attempts do not append a row or change timestamps. Who may consult is List Scope; who may record a Status Transition is Authorization — a consultable Ticket can still reject a Transition (illegal edge vs Role/Assignee) without pretending the Ticket does not exist.
 _Avoid_: Overwriting columns with no history; status derived only from history with no projection; hiding history from Agents; treating reopen as Reassignment; skipping birth; showing only the current cycle; no-op “transitions” to the current Status; collapsing out-of-scope, illegal edge, and unauthorized into one outcome
+
+**Field Edit**:
+Change of a Ticket's Title, description, and/or Priority after create. Client, Status, Assignee, and `created_by` are not this operation. Only current values are kept — no append-only Field Edit history (unlike Status and Assignee). Supervisor and Administrator share this power on every Ticket in List Scope; Agent has none (even when Assignee or `created_by`). Allowed in any Ticket Status; does not reopen, skip, or record a Status Transition. Being Assignee is not required. A successful change refreshes the Ticket's `updated_at`; the same Title, description, and Priority as current is not a Field Edit. Title and description that are sent must be non-empty after trim; omitted fields stay unchanged. A rejected attempt does not change values or timestamps. Who may consult is List Scope; who may Field Edit is Authorization — a consultable Ticket can still reject Field Edit without pretending the Ticket does not exist.
+_Avoid_: Update, patch, “actualizar ticket” (as a synonym that collapses Status Transition, Reassignment, and Field Edit); Assignee-gating Field Edit; a Priority or Title history; editing Client; mixing Field Edit into Status Transition
 
 **List Scope**:
 The set of Tickets a User may consult — the Ticket List and any later single-Ticket consult. Agent: Tickets where they are Assignee or `created_by` (unassigned Tickets they did not create are out). Supervisor and Administrator: all Tickets. A Ticket outside this set is not consultable; consult does not announce that it exists. Distinct from the Operational Dashboard, which counts Open Tickets assigned to the Agent.
@@ -67,19 +71,19 @@ Ticket with `updated_at` older than 48 hours and Status ≠ `closed`. Includes `
 _Avoid_: Overdue, vencido (as a second metric); equating Stale with Open; excluding `resolved` from Stale to match Open Ticket
 
 **Priority**:
-Urgency of a Ticket: `low`, `medium`, `high`, or `critical`. Default on create: `medium`. May change over the Ticket's life; only the current value is kept (no append-only Priority history, unlike Status and Assignee).
+Urgency of a Ticket: `low`, `medium`, `high`, or `critical`. Default on create: `medium`. May change via Field Edit; only the current value is kept (no append-only Priority history, unlike Status and Assignee).
 _Avoid_: Severity (unless split later), custom priorities; treating Priority as immutable
 
 ### Authorization (cascade)
 
 **Agent**:
-May consult Tickets in their List Scope, create tickets, add `public` Comments. To create, may consult the active Client catalog read-only (`id`, name) — non-soft-deleted only; not Client administration and not List Scope filter options. May record forward Status Transitions through `resolved` only when Assignee. Creating the Ticket, or consulting it, is not enough. Cannot close or reopen. Cannot record a Reassignment (even on Tickets they created or are Assignee of). Unassigned Tickets are frozen for this Role.
+May consult Tickets in their List Scope, create tickets, add `public` Comments. To create, may consult the active Client catalog read-only (`id`, name) — non-soft-deleted only; not Client administration and not List Scope filter options. May record forward Status Transitions through `resolved` only when Assignee. Creating the Ticket, or consulting it, is not enough. Cannot close or reopen. Cannot record a Reassignment or Field Edit (even on Tickets they created or are Assignee of). Unassigned Tickets are frozen for this Role.
 
 **Supervisor**:
-Everything an Agent can do, plus: list all tickets, Reassignment (first assign, reassign, and unassign), consult a read-only list of active Users to choose an Assignee, see team metrics, review Stale Tickets, and `internal` Comments (in addition to `public`). Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment). Does not administer Users or Clients.
+Everything an Agent can do, plus: list all tickets, Reassignment (first assign, reassign, and unassign), Field Edit, consult a read-only list of active Users to choose an Assignee, see team metrics, review Stale Tickets, and `internal` Comments (in addition to `public`). Does not close or reopen. Does not record a Status Transition on a Ticket they are not Assignee of. Does not administer Users or Clients.
 
 **Administrator**:
-Everything a Supervisor can do, plus: update any ticket, administer Users and Clients, close and reopen. Catalog administration is create, update, soft-delete, and restore of Users and Clients, plus resetting a User's password. User update covers display name and Role (not email) and applies only to non-soft-deleted Users. Client update is rename and applies only to non-soft-deleted Clients. Administrator may list soft-deleted rows to restore. An Administrator cannot soft-delete themselves. There is always at least one non-soft-deleted Administrator — soft-delete or demotion of the last one is rejected. May record any legal Status Transition on any Ticket (including unassigned) without being Assignee. Reassignment power matches Supervisor (any active User as Assignee); “assign to anyone” is that shared power, not a separate Admin-only operation.
+Everything a Supervisor can do, plus: administer Users and Clients, close and reopen. Catalog administration is create, update, soft-delete, and restore of Users and Clients, plus resetting a User's password. User update covers display name and Role (not email) and applies only to non-soft-deleted Users. Client update is rename and applies only to non-soft-deleted Clients. Administrator may list soft-deleted rows to restore. An Administrator cannot soft-delete themselves. There is always at least one non-soft-deleted Administrator — soft-delete or demotion of the last one is rejected. May record any legal Status Transition on any Ticket (including unassigned) without being Assignee. Reassignment and Field Edit power match Supervisor; those are not Admin-only operations.
 
 ### Metrics views
 

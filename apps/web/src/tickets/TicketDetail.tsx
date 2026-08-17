@@ -12,6 +12,7 @@ import {
   Switch,
   Text,
   Textarea,
+  TextInput,
   Title,
 } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
@@ -19,10 +20,13 @@ import {
   type CommentVisibility,
   type CreateTicketCommentBody,
   hasMinimumRole,
+  mayRecordFieldEdit,
   mayRecordReassignment,
   nextRecordableStatus,
   type PatchTicketAssigneeBody,
+  type PatchTicketFieldsBody,
   type PatchTicketStatusBody,
+  PRIORITIES,
   type Priority,
   type TicketAssignmentHistoryRow,
   type TicketComment,
@@ -410,6 +414,13 @@ export function TicketDetail() {
   const [users, setUsers] = useState<UserCatalogRow[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const canReassign = user !== null && mayRecordReassignment(user.role);
+  const canEditFields = user !== null && mayRecordFieldEdit(user.role);
+  const [isEditingFields, setIsEditingFields] = useState(false);
+  const [fieldTitle, setFieldTitle] = useState('');
+  const [fieldDescription, setFieldDescription] = useState('');
+  const [fieldPriority, setFieldPriority] = useState<Priority>('medium');
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [isSavingFields, setIsSavingFields] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
   useEffect(() => {
@@ -422,6 +433,8 @@ export function TicketDetail() {
     setTransitionError(false);
     setCommentError(false);
     setAssigneeError(false);
+    setIsEditingFields(false);
+    setFieldError(null);
 
     void apiFetch(`/api/tickets/${id}`)
       .then(async (response) => {
@@ -589,6 +602,41 @@ export function TicketDetail() {
     );
   }
 
+  function startFieldEdit() {
+    setFieldTitle(ticket.title);
+    setFieldDescription(ticket.description);
+    setFieldPriority(ticket.priority);
+    setFieldError(null);
+    setIsEditingFields(true);
+  }
+
+  async function saveFieldEdit() {
+    const trimmedTitle = fieldTitle.trim();
+    const trimmedDescription = fieldDescription.trim();
+    if (trimmedTitle === '' || trimmedDescription === '') {
+      setFieldError('Title and description are required.');
+      return;
+    }
+
+    const body: PatchTicketFieldsBody = {
+      title: trimmedTitle,
+      description: trimmedDescription,
+      priority: fieldPriority,
+    };
+    const saved = await mutateTicket(
+      `/api/tickets/${id}/fields`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+      setIsSavingFields,
+      (failed) => {
+        setFieldError(failed ? "Couldn't update this ticket's fields." : null);
+      },
+    );
+    if (saved) {
+      setIsEditingFields(false);
+      setFieldError(null);
+    }
+  }
+
   return (
     <Stack gap="lg">
       <Breadcrumbs separator="›" separatorMargin="xs">
@@ -609,51 +657,129 @@ export function TicketDetail() {
             >
               {STATUS_LABEL[ticket.status]}
             </Badge>
-            <Badge
-              color={PRIORITY_COLOR[ticket.priority]}
-              variant="outline"
-              aria-label={`Priority: ${PRIORITY_LABEL[ticket.priority]}`}
-            >
-              {PRIORITY_LABEL[ticket.priority]}
-            </Badge>
+            {!isEditingFields && (
+              <Badge
+                color={PRIORITY_COLOR[ticket.priority]}
+                variant="outline"
+                aria-label={`Priority: ${PRIORITY_LABEL[ticket.priority]}`}
+              >
+                {PRIORITY_LABEL[ticket.priority]}
+              </Badge>
+            )}
           </Group>
-          <Title order={2}>{ticket.title}</Title>
-          <Text c="dimmed">{ticket.description}</Text>
+          {isEditingFields ? (
+            <Stack gap="sm">
+              <TextInput
+                label="Title"
+                value={fieldTitle}
+                onChange={(event) => setFieldTitle(event.currentTarget.value)}
+                disabled={isSavingFields}
+              />
+              <Textarea
+                label="Description"
+                value={fieldDescription}
+                onChange={(event) =>
+                  setFieldDescription(event.currentTarget.value)
+                }
+                minRows={4}
+                disabled={isSavingFields}
+              />
+              <Select
+                label="Priority"
+                value={fieldPriority}
+                onChange={(value) => {
+                  if (value != null) {
+                    setFieldPriority(value as Priority);
+                  }
+                }}
+                data={PRIORITIES.map((value) => ({
+                  value,
+                  label: PRIORITY_LABEL[value],
+                }))}
+                disabled={isSavingFields}
+              />
+            </Stack>
+          ) : (
+            <>
+              <Title order={2}>{ticket.title}</Title>
+              <Text c="dimmed">{ticket.description}</Text>
+            </>
+          )}
         </Stack>
-        {nextStatus ? (
-          <Menu shadow="md" width={280} withinPortal={false}>
-            <Menu.Target>
+        <Group gap="sm" style={{ flexShrink: 0 }}>
+          {canEditFields && !isEditingFields ? (
+            <Button
+              type="button"
+              variant="default"
+              onClick={startFieldEdit}
+              aria-label="Edit ticket fields"
+            >
+              Edit
+            </Button>
+          ) : null}
+          {isEditingFields ? (
+            <>
               <Button
                 type="button"
-                variant="light"
-                loading={isTransitioning}
-                rightSection="▾"
-                aria-label="Change status"
-                style={{ flexShrink: 0 }}
-              >
-                Change status
-              </Button>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Label>From {STATUS_LABEL[ticket.status]}</Menu.Label>
-              <Menu.Item
+                variant="default"
                 onClick={() => {
-                  void recordTransition(nextStatus);
+                  setIsEditingFields(false);
+                  setFieldError(null);
+                }}
+                disabled={isSavingFields}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                loading={isSavingFields}
+                onClick={() => {
+                  void saveFieldEdit();
                 }}
               >
-                <Stack gap={0}>
-                  <Text size="sm" fw={600}>
-                    {transitionMenuLabel(ticket.status, nextStatus)}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {STATUS_LABEL[ticket.status]} → {STATUS_LABEL[nextStatus]}
-                  </Text>
-                </Stack>
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        ) : null}
+                Save
+              </Button>
+            </>
+          ) : null}
+          {nextStatus && !isEditingFields ? (
+            <Menu shadow="md" width={280} withinPortal={false}>
+              <Menu.Target>
+                <Button
+                  type="button"
+                  variant="light"
+                  loading={isTransitioning}
+                  rightSection="▾"
+                  aria-label="Change status"
+                >
+                  Change status
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Label>From {STATUS_LABEL[ticket.status]}</Menu.Label>
+                <Menu.Item
+                  onClick={() => {
+                    void recordTransition(nextStatus);
+                  }}
+                >
+                  <Stack gap={0}>
+                    <Text size="sm" fw={600}>
+                      {transitionMenuLabel(ticket.status, nextStatus)}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {STATUS_LABEL[ticket.status]} → {STATUS_LABEL[nextStatus]}
+                    </Text>
+                  </Stack>
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          ) : null}
+        </Group>
       </Group>
+      {fieldError ? (
+        <Text c="red" size="sm">
+          {fieldError}
+        </Text>
+      ) : null}
       {transitionError ? (
         <Text c="red" size="sm">
           Couldn't update this ticket's status.

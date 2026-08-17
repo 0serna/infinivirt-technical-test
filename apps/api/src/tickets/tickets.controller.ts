@@ -21,6 +21,7 @@ import {
   CreateTicketCommentDto,
   CreateTicketDto,
   PatchTicketAssigneeDto,
+  PatchTicketFieldsDto,
   PatchTicketStatusDto,
 } from '../http/dto/ticket.dto';
 import { TicketsService } from './tickets.service';
@@ -78,6 +79,20 @@ export class TicketsController {
     @Body() body: PatchTicketAssigneeDto,
   ): Promise<TicketDetail> {
     return this.ticketsService.recordReassignment(
+      requireUser(request),
+      params.id,
+      body,
+    );
+  }
+
+  @Patch(':id/fields')
+  @RequireRole('agent')
+  recordFieldEdit(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: IdParamDto,
+    @Body() body: PatchTicketFieldsDto,
+  ): Promise<TicketDetail> {
+    return this.ticketsService.recordFieldEdit(
       requireUser(request),
       params.id,
       body,

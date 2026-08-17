@@ -149,6 +149,13 @@ export type PatchTicketAssigneeBody = {
   assigneeId: string | null;
 };
 
+/** Dedicated Field Edit. Omit a field to leave it unchanged. At least one required. */
+export type PatchTicketFieldsBody = {
+  title?: string;
+  description?: string;
+  priority?: Priority;
+};
+
 /** Read-only staff catalog row for Assignee picker. */
 export type UserCatalogRow = {
   id: string;
@@ -248,6 +255,10 @@ export function nextRecordableStatus(args: {
 }
 
 export function mayRecordReassignment(role: Role): boolean {
+  return hasMinimumRole(role, 'supervisor');
+}
+
+export function mayRecordFieldEdit(role: Role): boolean {
   return hasMinimumRole(role, 'supervisor');
 }
 

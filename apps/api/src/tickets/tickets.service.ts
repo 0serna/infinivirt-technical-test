@@ -12,10 +12,12 @@ import {
   type CreateTicketCommentBody,
   hasMinimumRole,
   isLegalStatusEdge,
+  mayRecordFieldEdit,
   mayRecordReassignment,
   mayRecordStatusTransition,
   OPEN_TICKET_STATUSES,
   type PatchTicketAssigneeBody,
+  type PatchTicketFieldsBody,
   type PatchTicketStatusBody,
   PRIORITIES,
   type Priority,
@@ -475,6 +477,63 @@ export class TicketsService {
             changedById: user.id,
           },
         },
+      },
+    });
+
+    return this.getById(user, ticket.id);
+  }
+
+  async recordFieldEdit(
+    user: PublicUser,
+    id: string,
+    body: PatchTicketFieldsBody,
+  ): Promise<TicketDetail> {
+    const title =
+      body.title === undefined
+        ? undefined
+        : requireTrimmed(body.title, 'title');
+    const description =
+      body.description === undefined
+        ? undefined
+        : requireTrimmed(body.description, 'description');
+    const priority =
+      body.priority === undefined
+        ? undefined
+        : parseRequiredEnum(body.priority, PRIORITIES, 'priority');
+    if (
+      title === undefined &&
+      description === undefined &&
+      priority === undefined
+    ) {
+      throw new BadRequestException('Invalid input');
+    }
+
+    const ticket = await this.requireScopedTicket(user, id, {
+      id: true,
+      title: true,
+      description: true,
+      priority: true,
+    });
+
+    if (!mayRecordFieldEdit(user.role)) {
+      throw new ForbiddenException();
+    }
+
+    if (
+      (title === undefined || title === ticket.title) &&
+      (description === undefined || description === ticket.description) &&
+      (priority === undefined || priority === ticket.priority)
+    ) {
+      return this.getById(user, ticket.id);
+    }
+
+    await this.prisma.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        ...(title !== undefined && { title }),
+        ...(description !== undefined && { description }),
+        ...(priority !== undefined && { priority }),
+        updatedAt: new Date(),
       },
     });
 

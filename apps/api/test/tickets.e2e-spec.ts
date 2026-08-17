@@ -21,6 +21,7 @@ type TicketDetailBody = {
   title: string;
   description?: string;
   status: string;
+  priority?: string;
   updatedAt: string;
   resolvedAt: string | null;
   closedAt: string | null;
@@ -2112,6 +2113,184 @@ describe('Tickets Reassignment (e2e)', () => {
       .expect(200);
     expect(after.body.assignee).toBeNull();
     expect(after.body.assignments).toEqual([]);
+    expect(after.body.updatedAt).toBe(created.updatedAt);
+  });
+});
+
+describe('Tickets Field Edit (e2e)', () => {
+  it('PATCH /tickets/:id/fields without a token returns the same opaque 401 as GET /auth/me', async () => {
+    const me = await request(app.getHttpServer()).get('/auth/me').expect(401);
+    const patched = await request(app.getHttpServer())
+      .patch('/tickets/00000000-0000-4000-8000-000000000001/fields')
+      .send({ title: 'Nope' })
+      .expect(401);
+
+    expect(patched.body).toEqual(me.body);
+  });
+
+  it.each([
+    { roleLabel: 'Supervisor', email: SUPERVISOR_EMAIL },
+    { roleLabel: 'Administrator', email: ADMIN_EMAIL },
+  ] as const)(
+    '$roleLabel can Field Edit Title, description, and Priority on any consultable Ticket',
+    async ({ email }) => {
+      const actor = await login(app, email);
+      const created = await createOpenTicket(
+        app,
+        actor.accessToken,
+        `Field Edit e2e: ${email} ${Date.now()}`,
+      );
+      expect(created.assignee).toBeNull();
+      expect(created.priority).toBe('medium');
+
+      const patched = await request(app.getHttpServer())
+        .patch(`/tickets/${created.id}/fields`)
+        .set('Authorization', `Bearer ${actor.accessToken}`)
+        .send({
+          title: '  Corrected title  ',
+          description: '  Corrected description  ',
+          priority: 'critical',
+          status: 'closed',
+        })
+        .expect(200);
+
+      expect(patched.body.title).toBe('Corrected title');
+      expect(patched.body.description).toBe('Corrected description');
+      expect(patched.body.priority).toBe('critical');
+      expect(patched.body.status).toBe('open');
+      expect(patched.body.assignee).toBeNull();
+      expect(patched.body.statusHistory).toEqual(created.statusHistory);
+      expect(patched.body.updatedAt).not.toBe(created.updatedAt);
+
+      const noOp = await request(app.getHttpServer())
+        .patch(`/tickets/${created.id}/fields`)
+        .set('Authorization', `Bearer ${actor.accessToken}`)
+        .send({
+          title: 'Corrected title',
+          description: 'Corrected description',
+          priority: 'critical',
+        })
+        .expect(200);
+
+      expect(noOp.body.updatedAt).toBe(patched.body.updatedAt);
+    },
+  );
+
+  it('Field Edit on a closed Ticket does not reopen or append Status history', async () => {
+    const admin = await login(app, ADMIN_EMAIL);
+    const created = await createOpenTicket(
+      app,
+      admin.accessToken,
+      `Field Edit e2e: close then edit ${Date.now()}`,
+    );
+
+    for (const status of ['in_progress', 'resolved', 'closed'] as const) {
+      await request(app.getHttpServer())
+        .patch(`/tickets/${created.id}`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .send({ status })
+        .expect(200);
+    }
+
+    const before = await request(app.getHttpServer())
+      .get(`/tickets/${created.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .expect(200);
+    expect(before.body.status).toBe('closed');
+
+    const patched = await request(app.getHttpServer())
+      .patch(`/tickets/${created.id}/fields`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .send({ description: 'Typo fix after close.' })
+      .expect(200);
+
+    expect(patched.body.description).toBe('Typo fix after close.');
+    expect(patched.body.status).toBe('closed');
+    expect(patched.body.closedAt).toBe(before.body.closedAt);
+    expect(patched.body.statusHistory).toEqual(before.body.statusHistory);
+    expect(patched.body.updatedAt).not.toBe(before.body.updatedAt);
+  });
+
+  it('Agent Field Edit on a consultable Ticket returns HTTP 403 without writing', async () => {
+    const agent = await login(app, AGENT_EMAIL);
+    const before = await ticketByTitle(
+      app,
+      agent.accessToken,
+      'High: patient portal MFA reset',
+    );
+
+    await request(app.getHttpServer())
+      .patch(`/tickets/${before.id}/fields`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .send({ title: 'Agent must not Field Edit' })
+      .expect(403);
+
+    const after = await ticketByTitle(
+      app,
+      agent.accessToken,
+      'High: patient portal MFA reset',
+    );
+    expect(after.title).toBe(before.title);
+    expect(after.updatedAt).toBe(before.updatedAt);
+  });
+
+  it('Agent Field Edit outside List Scope or unknown id matches opaque GET 404', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const unknownId = '00000000-0000-4000-8000-000000000099';
+    const warehouse = await ticketByTitle(
+      app,
+      (await login(app, SUPERVISOR_EMAIL)).accessToken,
+      'High: warehouse scanner pairing',
+    );
+
+    const getUnknown = await request(app.getHttpServer())
+      .get(`/tickets/${unknownId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(404);
+    const patchUnknown = await request(app.getHttpServer())
+      .patch(`/tickets/${unknownId}/fields`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ title: 'Leak?' })
+      .expect(404);
+    const patchHidden = await request(app.getHttpServer())
+      .patch(`/tickets/${warehouse.id}/fields`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ title: 'Leak?' })
+      .expect(404);
+
+    expect(patchUnknown.body).toEqual(getUnknown.body);
+    expect(patchHidden.body).toEqual(getUnknown.body);
+    expect(JSON.stringify(patchHidden.body)).not.toMatch(/warehouse scanner/);
+  });
+
+  it('empty Field Edit body or blank Title with a valid Priority returns HTTP 400 without writing', async () => {
+    const supervisor = await login(app, SUPERVISOR_EMAIL);
+    const created = await createOpenTicket(
+      app,
+      supervisor.accessToken,
+      `Field Edit e2e: invalid ${Date.now()}`,
+    );
+
+    const empty = await request(app.getHttpServer())
+      .patch(`/tickets/${created.id}/fields`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .send({})
+      .expect(400);
+    const blankTitle = await request(app.getHttpServer())
+      .patch(`/tickets/${created.id}/fields`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .send({ title: '   ', priority: 'high' })
+      .expect(400);
+
+    expect(empty.body).not.toHaveProperty('stack');
+    expect(blankTitle.body).not.toHaveProperty('stack');
+
+    const after = await request(app.getHttpServer())
+      .get(`/tickets/${created.id}`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .expect(200);
+    expect(after.body.title).toBe(created.title);
+    expect(after.body.priority).toBe(created.priority);
     expect(after.body.updatedAt).toBe(created.updatedAt);
   });
 });
