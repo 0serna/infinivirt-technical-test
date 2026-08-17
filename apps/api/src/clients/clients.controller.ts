@@ -10,6 +10,7 @@ import {
   Req,
 } from '@nestjs/common';
 import type {
+  AdminClientRow,
   ClientCatalogRow,
   CreateClientBody,
   UpdateClientBody,
@@ -17,6 +18,7 @@ import type {
 import type { AuthenticatedRequest } from '../auth/auth.guard';
 import { RequireRole } from '../auth/require-role.decorator';
 import { requireUser } from '../auth/require-user';
+import { adminIncludeDeleted } from '../http/admin-include-deleted';
 import { ClientsService } from './clients.service';
 
 @Controller('clients')
@@ -28,17 +30,16 @@ export class ClientsController {
   list(
     @Req() request: AuthenticatedRequest,
     @Query('includeDeleted') includeDeleted?: string,
-  ): Promise<ClientCatalogRow[]> {
+  ): Promise<ClientCatalogRow[] | AdminClientRow[]> {
     const user = requireUser(request);
-    const wantsDeleted = includeDeleted === 'true' || includeDeleted === '1';
     return this.clientsService.listCatalog({
-      includeDeleted: wantsDeleted && user.role === 'admin',
+      includeDeleted: adminIncludeDeleted(includeDeleted, user.role),
     });
   }
 
   @Post()
   @RequireRole('admin')
-  create(@Body() body: CreateClientBody): Promise<ClientCatalogRow> {
+  create(@Body() body: CreateClientBody): Promise<AdminClientRow> {
     return this.clientsService.create(body);
   }
 
@@ -47,19 +48,19 @@ export class ClientsController {
   update(
     @Param('id') id: string,
     @Body() body: UpdateClientBody,
-  ): Promise<ClientCatalogRow> {
+  ): Promise<AdminClientRow> {
     return this.clientsService.update(id, body);
   }
 
   @Delete(':id')
   @RequireRole('admin')
-  softDelete(@Param('id') id: string): Promise<ClientCatalogRow> {
+  softDelete(@Param('id') id: string): Promise<AdminClientRow> {
     return this.clientsService.softDelete(id);
   }
 
   @Post(':id/restore')
   @RequireRole('admin')
-  restore(@Param('id') id: string): Promise<ClientCatalogRow> {
+  restore(@Param('id') id: string): Promise<AdminClientRow> {
     return this.clientsService.restore(id);
   }
 }

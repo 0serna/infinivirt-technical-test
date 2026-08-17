@@ -9,7 +9,7 @@ import {
   Title,
 } from '@mantine/core';
 import type {
-  ClientCatalogRow,
+  AdminClientRow,
   CreateClientBody,
   UpdateClientBody,
 } from '@support-ticketing/shared';
@@ -21,7 +21,7 @@ import { useAuth } from '../auth/AuthProvider';
 type ListState =
   | { kind: 'loading' }
   | { kind: 'error' }
-  | { kind: 'ready'; clients: ClientCatalogRow[] };
+  | { kind: 'ready'; clients: AdminClientRow[] };
 
 type RowAction = 'rename' | 'soft-delete' | 'restore';
 
@@ -56,7 +56,7 @@ export function AdminClientsPage() {
         const body = (await response.json()) as unknown;
         setList({
           kind: 'ready',
-          clients: Array.isArray(body) ? (body as ClientCatalogRow[]) : [],
+          clients: Array.isArray(body) ? (body as AdminClientRow[]) : [],
         });
       })
       .catch(() => {
@@ -74,7 +74,7 @@ export function AdminClientsPage() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  function upsertClient(client: ClientCatalogRow) {
+  function upsertClient(client: AdminClientRow) {
     setList((current) => {
       if (current.kind !== 'ready') {
         return current;
@@ -116,7 +116,7 @@ export function AdminClientsPage() {
         setFormError("Couldn't create this Client.");
         return;
       }
-      const created = (await response.json()) as ClientCatalogRow;
+      const created = (await response.json()) as AdminClientRow;
       setName('');
       upsertClient(created);
     } catch {
@@ -127,7 +127,7 @@ export function AdminClientsPage() {
   }
 
   async function runRowAction(
-    client: ClientCatalogRow,
+    client: AdminClientRow,
     action: RowAction,
     nextName?: string,
   ) {
@@ -173,7 +173,7 @@ export function AdminClientsPage() {
         return;
       }
 
-      const updated = (await response.json()) as ClientCatalogRow;
+      const updated = (await response.json()) as AdminClientRow;
       upsertClient(updated);
       if (action === 'rename') {
         setRenamingId(null);
@@ -251,7 +251,7 @@ export function AdminClientsPage() {
                       client.name
                     )}
                   </Table.Td>
-                  <Table.Td>{isDeleted ? 'Soft-deleted' : 'Active'}</Table.Td>
+                  <Table.Td>{isDeleted ? 'Soft-deleted' : 'Current'}</Table.Td>
                   <Table.Td>
                     <Group gap="xs" wrap="nowrap">
                       {isDeleted ? (

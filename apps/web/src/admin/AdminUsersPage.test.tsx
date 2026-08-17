@@ -1,4 +1,4 @@
-import type { UserCatalogRow } from '@support-ticketing/shared';
+import type { AdminUserRow } from '@support-ticketing/shared';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -141,7 +141,7 @@ test('Administrator /admin/users lists Users and can create one via POST', async
 test('Administrator can edit displayName/role and reset a User password', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
-  const users: UserCatalogRow[] = [
+  const users: AdminUserRow[] = [
     {
       id: 'user-2',
       email: 'agent@example.com',
@@ -239,7 +239,7 @@ test('Administrator can edit displayName/role and reset a User password', async 
 test('Administrator can soft-delete and restore a User', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
-  const users: UserCatalogRow[] = [
+  const users: AdminUserRow[] = [
     {
       id: 'user-2',
       email: 'agent@example.com',
@@ -276,7 +276,7 @@ test('Administrator can soft-delete and restore a User', async () => {
 
   const table = await screen.findByRole('table');
   expect(within(table).getByText('Alex Agent')).toBeDefined();
-  expect(within(table).getByText('Active')).toBeDefined();
+  expect(within(table).getByText('Current')).toBeDefined();
 
   await user.click(screen.getByRole('button', { name: 'Soft-delete' }));
   expect(await within(table).findByText('Soft-deleted')).toBeDefined();
@@ -284,7 +284,80 @@ test('Administrator can soft-delete and restore a User', async () => {
   expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
 
   await user.click(screen.getByRole('button', { name: 'Restore' }));
-  expect(await within(table).findByText('Active')).toBeDefined();
+  expect(await within(table).findByText('Current')).toBeDefined();
   expect(screen.getByRole('button', { name: 'Edit' })).toBeDefined();
   expect(screen.getByRole('button', { name: 'Soft-delete' })).toBeDefined();
+});
+
+test('Agent and Supervisor visiting /admin/users are redirected to the dashboard', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockAuthedSession(emptyTickets, alex);
+  const agent = renderApp(['/admin/users'], { probeLocation: true });
+  expect(
+    await screen.findByRole('heading', { name: 'Operational Dashboard' }),
+  ).toBeDefined();
+  expect(screen.getByTestId('location-path').textContent).toBe('/dashboard');
+  agent.unmount();
+
+  mockAuthedSession(emptyTickets, sam);
+  renderApp(['/admin/users'], { probeLocation: true });
+  expect(
+    await screen.findByRole('heading', { name: 'Operational Dashboard' }),
+  ).toBeDefined();
+  expect(screen.getByTestId('location-path').textContent).toBe('/dashboard');
+});
+
+test('Administrator sees an error when Users fail to load', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isUsersUrl(url)) {
+      return jsonResponse(500, { message: 'fail' });
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/admin/users']);
+  expect(await screen.findByText("Couldn't load Users.")).toBeDefined();
+});
+
+test('edit conflict on a non-Administrator does not claim last-Administrator demote', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const users: AdminUserRow[] = [
+    {
+      id: 'user-2',
+      email: 'agent@example.com',
+      displayName: 'Alex Agent',
+      role: 'agent',
+      deletedAt: null,
+    },
+  ];
+
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isUsersUrl(url) && method === 'GET') {
+      return jsonResponse(200, users);
+    }
+    if (url === '/api/users/user-2' && method === 'PATCH') {
+      return jsonResponse(409, { statusCode: 409 });
+    }
+    throw new Error(`unexpected fetch ${method} ${url}`);
+  });
+
+  renderApp(['/admin/users']);
+  expect(await screen.findByText('Alex Agent')).toBeDefined();
+  await user.click(screen.getByRole('button', { name: 'Edit' }));
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  expect(await screen.findByText("Couldn't update this User.")).toBeDefined();
+  expect(
+    screen.queryByText('Cannot demote the last Administrator.'),
+  ).toBeNull();
 });

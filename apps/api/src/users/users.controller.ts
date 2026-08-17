@@ -10,6 +10,7 @@ import {
   Req,
 } from '@nestjs/common';
 import type {
+  AdminUserRow,
   CreateUserBody,
   ResetPasswordBody,
   UpdateUserBody,
@@ -18,6 +19,7 @@ import type {
 import type { AuthenticatedRequest } from '../auth/auth.guard';
 import { RequireRole } from '../auth/require-role.decorator';
 import { requireUser } from '../auth/require-user';
+import { adminIncludeDeleted } from '../http/admin-include-deleted';
 import { UsersService } from './users.service';
 
 @Controller('users')
@@ -29,17 +31,16 @@ export class UsersController {
   list(
     @Req() request: AuthenticatedRequest,
     @Query('includeDeleted') includeDeleted?: string,
-  ): Promise<UserCatalogRow[]> {
+  ): Promise<UserCatalogRow[] | AdminUserRow[]> {
     const user = requireUser(request);
-    const wantsDeleted = includeDeleted === 'true' || includeDeleted === '1';
     return this.usersService.listCatalog({
-      includeDeleted: wantsDeleted && user.role === 'admin',
+      includeDeleted: adminIncludeDeleted(includeDeleted, user.role),
     });
   }
 
   @Post()
   @RequireRole('admin')
-  create(@Body() body: CreateUserBody): Promise<UserCatalogRow> {
+  create(@Body() body: CreateUserBody): Promise<AdminUserRow> {
     return this.usersService.create(body);
   }
 
@@ -48,7 +49,7 @@ export class UsersController {
   resetPassword(
     @Param('id') id: string,
     @Body() body: ResetPasswordBody,
-  ): Promise<UserCatalogRow> {
+  ): Promise<AdminUserRow> {
     return this.usersService.resetPassword(id, body);
   }
 
@@ -57,7 +58,7 @@ export class UsersController {
   update(
     @Param('id') id: string,
     @Body() body: UpdateUserBody,
-  ): Promise<UserCatalogRow> {
+  ): Promise<AdminUserRow> {
     return this.usersService.update(id, body);
   }
 
@@ -66,14 +67,14 @@ export class UsersController {
   softDelete(
     @Req() request: AuthenticatedRequest,
     @Param('id') id: string,
-  ): Promise<UserCatalogRow> {
+  ): Promise<AdminUserRow> {
     const actor = requireUser(request);
     return this.usersService.softDelete(id, actor.id);
   }
 
   @Post(':id/restore')
   @RequireRole('admin')
-  restore(@Param('id') id: string): Promise<UserCatalogRow> {
+  restore(@Param('id') id: string): Promise<AdminUserRow> {
     return this.usersService.restore(id);
   }
 }

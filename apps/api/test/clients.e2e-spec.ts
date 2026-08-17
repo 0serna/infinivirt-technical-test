@@ -1,6 +1,9 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
-import type { ClientCatalogRow } from '@support-ticketing/shared';
+import type {
+  AdminClientRow,
+  ClientCatalogRow,
+} from '@support-ticketing/shared';
 import request from 'supertest';
 import { createTestApp } from './create-test-app';
 import { ADMIN_EMAIL, AGENT_EMAIL, SUPERVISOR_EMAIL } from './demo-credentials';
@@ -41,9 +44,8 @@ describe('Clients catalog (e2e)', () => {
         expect(row).toEqual({
           id: expect.any(String),
           name: expect.any(String),
-          deletedAt: null,
         });
-        expect(Object.keys(row).sort()).toEqual(['deletedAt', 'id', 'name']);
+        expect(Object.keys(row).sort()).toEqual(['id', 'name']);
       }
 
       const names = (response.body as ClientCatalogRow[]).map(
@@ -129,6 +131,28 @@ describe('Clients admin create (e2e)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ name })
       .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/clients')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name })
+      .expect(409);
+  });
+
+  it('Administrator POST /clients with a name held by a soft-deleted Client returns HTTP 409', async () => {
+    const name = `Tombstone Co ${Date.now()}`;
+    const { accessToken } = await login(app, ADMIN_EMAIL);
+
+    const created = await request(app.getHttpServer())
+      .post('/clients')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ name })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .delete(`/clients/${created.body.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
 
     await request(app.getHttpServer())
       .post('/clients')
@@ -331,7 +355,7 @@ describe('Clients admin rename, soft-delete & restore (e2e)', () => {
       .query({ includeDeleted: 'true' })
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
-    const adminRow = (adminWithDeleted.body as ClientCatalogRow[]).find(
+    const adminRow = (adminWithDeleted.body as AdminClientRow[]).find(
       (row) => row.id === created.body.id,
     );
     expect(adminRow).toEqual({

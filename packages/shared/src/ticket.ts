@@ -55,7 +55,11 @@ export type TicketListClient = {
 export type ClientCatalogRow = {
   id: string;
   name: string;
-  /** ISO timestamp when soft-deleted; null when active. */
+};
+
+/** Administrator Client catalog row, including soft-deleted. */
+export type AdminClientRow = ClientCatalogRow & {
+  /** ISO timestamp when soft-deleted; null when listed. */
   deletedAt: string | null;
 };
 
@@ -155,13 +159,17 @@ export type PatchTicketAssigneeBody = {
   assigneeId: string | null;
 };
 
-/** Read-only staff catalog row for Assignee picker / Admin Users. */
+/** Read-only staff catalog row for Assignee picker. */
 export type UserCatalogRow = {
   id: string;
   email: string;
   displayName: string;
   role: Role;
-  /** ISO timestamp when soft-deleted; null when active. */
+};
+
+/** Administrator User catalog row, including soft-deleted. */
+export type AdminUserRow = UserCatalogRow & {
+  /** ISO timestamp when soft-deleted; null when listed. */
   deletedAt: string | null;
 };
 

@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
-import type { UserCatalogRow } from '@support-ticketing/shared';
+import type { AdminUserRow, UserCatalogRow } from '@support-ticketing/shared';
 import request from 'supertest';
 import { createTestApp } from './create-test-app';
 import { ADMIN_EMAIL, AGENT_EMAIL, SUPERVISOR_EMAIL } from './demo-credentials';
@@ -35,7 +35,7 @@ describe('Users catalog (e2e)', () => {
   });
 
   it.each([SUPERVISOR_EMAIL, ADMIN_EMAIL])(
-    'authenticated %s receives the staff User catalog as { id, email, displayName, role, deletedAt }[] sorted by displayName',
+    'authenticated %s receives the staff User catalog as { id, email, displayName, role }[] sorted by displayName',
     async (email) => {
       const { accessToken } = await login(app, email);
       const response = await request(app.getHttpServer())
@@ -51,16 +51,15 @@ describe('Users catalog (e2e)', () => {
           email: expect.any(String),
           displayName: expect.any(String),
           role: expect.stringMatching(/^(agent|supervisor|admin)$/),
-          deletedAt: null,
         });
         expect(Object.keys(row).sort()).toEqual([
-          'deletedAt',
           'displayName',
           'email',
           'id',
           'role',
         ]);
         expect(row).not.toHaveProperty('passwordHash');
+        expect(row).not.toHaveProperty('deletedAt');
       }
 
       const names = (response.body as UserCatalogRow[]).map(
@@ -307,7 +306,6 @@ describe('Users admin update & password reset (e2e)', () => {
       email,
       displayName: `After Update ${stamp}`,
       role: 'supervisor',
-      deletedAt: null,
     });
   });
 
@@ -548,7 +546,7 @@ describe('Users admin soft-delete & restore (e2e)', () => {
       .query({ includeDeleted: 'true' })
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
-    const adminRow = (adminWithDeleted.body as UserCatalogRow[]).find(
+    const adminRow = (adminWithDeleted.body as AdminUserRow[]).find(
       (row) => row.id === created.body.id,
     );
     expect(adminRow).toEqual({
@@ -707,7 +705,7 @@ describe('Users admin soft-delete & restore (e2e)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
 
-    const self = (catalog.body as UserCatalogRow[]).find(
+    const self = (catalog.body as AdminUserRow[]).find(
       (user) => user.email === ADMIN_EMAIL,
     );
     expect(self).toBeDefined();
@@ -721,7 +719,7 @@ describe('Users admin soft-delete & restore (e2e)', () => {
       .expect(409);
 
     // Demote/soft-delete any other active admins so Ada is sole active admin
-    const activeAdmins = (catalog.body as UserCatalogRow[]).filter(
+    const activeAdmins = (catalog.body as AdminUserRow[]).filter(
       (user) =>
         user.role === 'admin' &&
         user.deletedAt === null &&

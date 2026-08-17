@@ -4,16 +4,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import type {
+  AdminClientRow,
   ClientCatalogRow,
   CreateClientBody,
   UpdateClientBody,
 } from '@support-ticketing/shared';
+import { throwUniqueConflict } from '../http/prisma-unique-conflict';
+import { requireUuid } from '../http/require-uuid';
 import { PrismaService } from '../prisma/prisma.service';
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const clientSelect = {
   id: true,
@@ -21,23 +20,21 @@ const clientSelect = {
   deletedAt: true,
 } as const;
 
-function toClientRow(client: {
+type ClientRecord = {
   id: string;
   name: string;
   deletedAt: Date | null;
-}): ClientCatalogRow {
-  return {
-    id: client.id,
-    name: client.name,
-    deletedAt: client.deletedAt?.toISOString() ?? null,
-  };
+};
+
+function toCatalogRow(client: ClientRecord): ClientCatalogRow {
+  return { id: client.id, name: client.name };
 }
 
-function requireUuid(value: string, field: string): string {
-  if (!UUID_PATTERN.test(value)) {
-    throw new BadRequestException(`Invalid ${field}`);
-  }
-  return value;
+function toAdminRow(client: ClientRecord): AdminClientRow {
+  return {
+    ...toCatalogRow(client),
+    deletedAt: client.deletedAt?.toISOString() ?? null,
+  };
 }
 
 function requireName(body: { name?: unknown }): string {
@@ -54,16 +51,18 @@ export class ClientsService {
 
   async listCatalog(options?: {
     includeDeleted?: boolean;
-  }): Promise<ClientCatalogRow[]> {
+  }): Promise<ClientCatalogRow[] | AdminClientRow[]> {
     const rows = await this.prisma.client.findMany({
       where: options?.includeDeleted ? undefined : { deletedAt: null },
       select: clientSelect,
       orderBy: { name: 'asc' },
     });
-    return rows.map(toClientRow);
+    return options?.includeDeleted
+      ? rows.map(toAdminRow)
+      : rows.map(toCatalogRow);
   }
 
-  async create(body: CreateClientBody): Promise<ClientCatalogRow> {
+  async create(body: CreateClientBody): Promise<AdminClientRow> {
     const name = requireName(body);
 
     try {
@@ -71,13 +70,13 @@ export class ClientsService {
         data: { name },
         select: clientSelect,
       });
-      return toClientRow(created);
+      return toAdminRow(created);
     } catch (error) {
-      throw mapUniqueConflict(error);
+      throwUniqueConflict(error);
     }
   }
 
-  async update(id: string, body: UpdateClientBody): Promise<ClientCatalogRow> {
+  async update(id: string, body: UpdateClientBody): Promise<AdminClientRow> {
     const clientId = requireUuid(id, 'id');
     const name = requireName(body);
     const existing = await this.requireClient(clientId);
@@ -91,13 +90,13 @@ export class ClientsService {
         data: { name },
         select: clientSelect,
       });
-      return toClientRow(updated);
+      return toAdminRow(updated);
     } catch (error) {
-      throw mapUniqueConflict(error);
+      throwUniqueConflict(error);
     }
   }
 
-  async softDelete(id: string): Promise<ClientCatalogRow> {
+  async softDelete(id: string): Promise<AdminClientRow> {
     const clientId = requireUuid(id, 'id');
     await this.requireClient(clientId);
 
@@ -106,14 +105,14 @@ export class ClientsService {
       data: { deletedAt: new Date() },
       select: clientSelect,
     });
-    return toClientRow(updated);
+    return toAdminRow(updated);
   }
 
-  async restore(id: string): Promise<ClientCatalogRow> {
+  async restore(id: string): Promise<AdminClientRow> {
     const clientId = requireUuid(id, 'id');
     const existing = await this.requireClient(clientId);
     if (existing.deletedAt === null) {
-      return toClientRow(existing);
+      return toAdminRow(existing);
     }
 
     const updated = await this.prisma.client.update({
@@ -121,7 +120,7 @@ export class ClientsService {
       data: { deletedAt: null },
       select: clientSelect,
     });
-    return toClientRow(updated);
+    return toAdminRow(updated);
   }
 
   private async requireClient(id: string) {
@@ -134,14 +133,4 @@ export class ClientsService {
     }
     return client;
   }
-}
-
-function mapUniqueConflict(error: unknown): never {
-  if (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === 'P2002'
-  ) {
-    throw new ConflictException();
-  }
-  throw error;
 }

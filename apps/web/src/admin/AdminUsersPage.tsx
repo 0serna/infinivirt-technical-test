@@ -12,11 +12,11 @@ import {
 } from '@mantine/core';
 import {
   ROLES,
+  type AdminUserRow,
   type CreateUserBody,
   type ResetPasswordBody,
   type Role,
   type UpdateUserBody,
-  type UserCatalogRow,
 } from '@support-ticketing/shared';
 import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
@@ -26,7 +26,7 @@ import { useAuth } from '../auth/AuthProvider';
 type ListState =
   | { kind: 'loading' }
   | { kind: 'error' }
-  | { kind: 'ready'; users: UserCatalogRow[] };
+  | { kind: 'ready'; users: AdminUserRow[] };
 
 type RowAction = 'soft-delete' | 'restore';
 
@@ -84,7 +84,7 @@ export function AdminUsersPage() {
         const body = (await response.json()) as unknown;
         setList({
           kind: 'ready',
-          users: Array.isArray(body) ? (body as UserCatalogRow[]) : [],
+          users: Array.isArray(body) ? (body as AdminUserRow[]) : [],
         });
       })
       .catch(() => {
@@ -102,7 +102,7 @@ export function AdminUsersPage() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  function upsertUser(updated: UserCatalogRow) {
+  function upsertUser(updated: AdminUserRow) {
     setList((current) => {
       if (current.kind !== 'ready') {
         return current;
@@ -164,7 +164,7 @@ export function AdminUsersPage() {
         setFormError("Couldn't create this User.");
         return;
       }
-      const created = (await response.json()) as UserCatalogRow;
+      const created = (await response.json()) as AdminUserRow;
       setEmail('');
       setDisplayName('');
       setRole('agent');
@@ -177,7 +177,7 @@ export function AdminUsersPage() {
     }
   }
 
-  async function saveEdit(target: UserCatalogRow) {
+  async function saveEdit(target: AdminUserRow) {
     const trimmedDisplayName = editDisplayName.trim();
     if (trimmedDisplayName === '') {
       setRowError('Display name is required.');
@@ -205,14 +205,18 @@ export function AdminUsersPage() {
         return;
       }
       if (response.status === 409) {
-        setRowError('Cannot demote the last Administrator.');
+        setRowError(
+          target.role === 'admin' && editRole !== 'admin'
+            ? 'Cannot demote the last Administrator.'
+            : "Couldn't update this User.",
+        );
         return;
       }
       if (!response.ok) {
         setRowError("Couldn't update this User.");
         return;
       }
-      const updated = (await response.json()) as UserCatalogRow;
+      const updated = (await response.json()) as AdminUserRow;
       upsertUser(updated);
       setEditingId(null);
       setEditDisplayName('');
@@ -224,7 +228,7 @@ export function AdminUsersPage() {
     }
   }
 
-  async function savePasswordReset(target: UserCatalogRow) {
+  async function savePasswordReset(target: AdminUserRow) {
     const trimmedPassword = resetPassword.trim();
     if (trimmedPassword === '') {
       setRowError('Password is required.');
@@ -257,7 +261,7 @@ export function AdminUsersPage() {
     }
   }
 
-  async function runRowAction(target: UserCatalogRow, action: RowAction) {
+  async function runRowAction(target: AdminUserRow, action: RowAction) {
     setRowError(null);
     setBusyId(target.id);
     setEditingId(null);
@@ -288,7 +292,7 @@ export function AdminUsersPage() {
         return;
       }
 
-      const updated = (await response.json()) as UserCatalogRow;
+      const updated = (await response.json()) as AdminUserRow;
       upsertUser(updated);
     } catch {
       setRowError("Couldn't update this User.");
@@ -398,7 +402,7 @@ export function AdminUsersPage() {
                       roleLabel(row.role)
                     )}
                   </Table.Td>
-                  <Table.Td>{isDeleted ? 'Soft-deleted' : 'Active'}</Table.Td>
+                  <Table.Td>{isDeleted ? 'Soft-deleted' : 'Current'}</Table.Td>
                   <Table.Td>
                     <Stack gap="xs">
                       {isDeleted ? (

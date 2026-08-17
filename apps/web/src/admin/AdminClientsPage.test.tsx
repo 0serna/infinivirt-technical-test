@@ -166,7 +166,7 @@ test('Administrator can rename, soft-delete, and restore a Client', async () => 
 
   const table = await screen.findByRole('table');
   expect(within(table).getByText('Contoso Health')).toBeDefined();
-  expect(within(table).getByText('Active')).toBeDefined();
+  expect(within(table).getByText('Current')).toBeDefined();
 
   await user.click(screen.getByRole('button', { name: 'Rename' }));
   const renameInput = screen.getByLabelText('Rename Contoso Health');
@@ -181,7 +181,67 @@ test('Administrator can rename, soft-delete, and restore a Client', async () => 
   expect(screen.getByRole('button', { name: 'Restore' })).toBeDefined();
 
   await user.click(screen.getByRole('button', { name: 'Restore' }));
-  expect(await within(table).findByText('Active')).toBeDefined();
+  expect(await within(table).findByText('Current')).toBeDefined();
   expect(screen.getByRole('button', { name: 'Rename' })).toBeDefined();
   expect(screen.getByRole('button', { name: 'Soft-delete' })).toBeDefined();
+});
+
+test('Agent and Supervisor visiting /admin/clients are redirected to the dashboard', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockAuthedSession(emptyTickets, alex);
+  const agent = renderApp(['/admin/clients'], { probeLocation: true });
+  expect(
+    await screen.findByRole('heading', { name: 'Operational Dashboard' }),
+  ).toBeDefined();
+  expect(screen.getByTestId('location-path').textContent).toBe('/dashboard');
+  agent.unmount();
+
+  mockAuthedSession(emptyTickets, sam);
+  renderApp(['/admin/clients'], { probeLocation: true });
+  expect(
+    await screen.findByRole('heading', { name: 'Operational Dashboard' }),
+  ).toBeDefined();
+  expect(screen.getByTestId('location-path').textContent).toBe('/dashboard');
+});
+
+test('Administrator sees an error when Clients fail to load', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isClientsUrl(url)) {
+      return jsonResponse(500, { message: 'fail' });
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/admin/clients']);
+  expect(await screen.findByText("Couldn't load Clients.")).toBeDefined();
+});
+
+test('Administrator sees an error when Client create fails', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isClientsUrl(url) && method === 'GET') {
+      return jsonResponse(200, sampleClientCatalog);
+    }
+    if (url === '/api/clients' && method === 'POST') {
+      return jsonResponse(500, { message: 'fail' });
+    }
+    throw new Error(`unexpected fetch ${method} ${url}`);
+  });
+
+  renderApp(['/admin/clients']);
+  expect(await screen.findByRole('heading', { name: 'Clients' })).toBeDefined();
+  await user.type(screen.getByLabelText('Name'), 'Broken Co');
+  await user.click(screen.getByRole('button', { name: 'Create Client' }));
+  expect(await screen.findByText("Couldn't create this Client.")).toBeDefined();
 });
