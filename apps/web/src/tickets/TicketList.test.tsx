@@ -281,16 +281,7 @@ test('Ticket List filter choices come from filterOptions and do not list Client 
 test('choosing Status and Client refetches tickets with those query params', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
+  mockAuthedSession(sampleTickets);
 
   renderApp(['/tickets']);
 
@@ -325,16 +316,7 @@ test('Ticket List Titles link to the Ticket consult route', async () => {
 
 test('opening /tickets with filter search params applies them in the UI and list request', async () => {
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
+  mockAuthedSession(sampleTickets);
 
   renderApp([
     '/tickets?status=open&priority=high&clientId=client-1&assigneeId=user-3',
@@ -359,16 +341,7 @@ test('opening /tickets with filter search params applies them in the UI and list
 test('changing Ticket List filters updates the URL search params', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
+  mockAuthedSession(sampleTickets);
 
   renderApp(['/tickets'], { probeLocation: true });
 
@@ -389,16 +362,7 @@ test('changing Ticket List filters updates the URL search params', async () => {
 
 test('opening /tickets with Active Tickets, Stale, and assigned-open params drives the list request', async () => {
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, alex);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
+  mockAuthedSession(sampleTickets, alex);
 
   renderApp(['/tickets?status=open%2Cin_progress&stale=1&scope=assignedOpen']);
 
@@ -420,16 +384,7 @@ test('opening /tickets with Active Tickets, Stale, and assigned-open params driv
 test('choosing Active Tickets updates the URL and list request', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, alex);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
+  mockAuthedSession(sampleTickets, alex);
 
   renderApp(['/tickets'], { probeLocation: true });
 

@@ -70,9 +70,7 @@ export function StaffShell() {
           <Group gap="lg" wrap="nowrap">
             <Menu
               opened={mobileNavOpened}
-              onChange={(opened) =>
-                opened ? mobileNav.open() : mobileNav.close()
-              }
+              onChange={mobileNav.set}
               shadow="md"
               width={220}
             >

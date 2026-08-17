@@ -5,23 +5,22 @@ import {
   Modal,
   Select,
   Stack,
-  Text,
   Textarea,
   TextInput,
 } from '@mantine/core';
-import {
-  type ClientCatalogRow,
-  type CreateTicketBody,
-  PRIORITIES,
-  type Priority,
-  type TicketDetail as TicketDetailBody,
+import type {
+  ClientCatalogRow,
+  CreateTicketBody,
+  Priority,
+  TicketDetail as TicketDetailBody,
 } from '@support-ticketing/shared';
-import { IconAlertCircle, IconRefresh } from '@tabler/icons-react';
+import { IconAlertCircle } from '@tabler/icons-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../auth/api';
+import { LoadErrorAlert } from '../components/LoadErrorAlert';
 import { LoadingState } from '../components/LoadingState';
-import { PRIORITY_LABEL } from './ticketLabels';
+import { PRIORITY_SELECT_DATA } from './ticketLabels';
 
 type CatalogState =
   | { kind: 'loading' }
@@ -124,8 +123,7 @@ export function TicketCreateModal({
         return;
       }
       const created = (await response.json()) as TicketDetailBody;
-      resetForm();
-      onClose();
+      handleClose();
       navigate(`/tickets/${created.id}`, { replace: true });
     } catch {
       setFormError("Couldn't create this ticket.");
@@ -145,24 +143,14 @@ export function TicketCreateModal({
       {catalog.kind === 'loading' ? (
         <LoadingState label="Loading clients…" mih={160} />
       ) : catalog.kind === 'error' ? (
-        <Alert color="red" icon={<IconAlertCircle size={16} />}>
-          <Stack gap="sm">
-            <Text>Couldn't load clients.</Text>
-            <Group>
-              <Button
-                type="button"
-                variant="default"
-                leftSection={<IconRefresh size={14} stroke={1.8} />}
-                onClick={() => {
-                  setCatalog({ kind: 'loading' });
-                  setReloadToken((token) => token + 1);
-                }}
-              >
-                Try again
-              </Button>
-            </Group>
-          </Stack>
-        </Alert>
+        <LoadErrorAlert
+          onRetry={() => {
+            setCatalog({ kind: 'loading' });
+            setReloadToken((token) => token + 1);
+          }}
+        >
+          Couldn't load clients.
+        </LoadErrorAlert>
       ) : (
         <form onSubmit={handleSubmit}>
           <Stack gap="sm">
@@ -198,10 +186,7 @@ export function TicketCreateModal({
                   setPriority(value as Priority);
                 }
               }}
-              data={PRIORITIES.map((value) => ({
-                value,
-                label: PRIORITY_LABEL[value],
-              }))}
+              data={PRIORITY_SELECT_DATA}
               disabled={submitting}
             />
             {formError !== null ? (
@@ -218,7 +203,7 @@ export function TicketCreateModal({
               >
                 Cancel
               </Button>
-              <Button type="submit" loading={submitting} disabled={submitting}>
+              <Button type="submit" loading={submitting}>
                 Create ticket
               </Button>
             </Group>

@@ -28,7 +28,6 @@ import {
   IconKey,
   IconPencil,
   IconPlus,
-  IconRefresh,
   IconRestore,
   IconTrash,
   IconUsers,
@@ -38,6 +37,7 @@ import { Navigate } from 'react-router-dom';
 import { apiFetch } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
 import { LoadingState } from '../components/LoadingState';
+import { LoadErrorAlert } from '../components/LoadErrorAlert';
 import { PersonCell } from '../components/PersonCell';
 import { ROLE_COLOR, ROLE_LABEL } from '../users/roleLabels';
 
@@ -367,24 +367,14 @@ export function AdminUsersPage() {
         </Alert>
       ) : null}
       {list.kind === 'error' ? (
-        <Alert color="red" icon={<IconAlertCircle size={16} />}>
-          <Stack gap="sm">
-            <Text>Couldn't load Users.</Text>
-            <Group>
-              <Button
-                type="button"
-                variant="default"
-                leftSection={<IconRefresh size={14} stroke={1.8} />}
-                onClick={() => {
-                  setList({ kind: 'loading' });
-                  setReloadToken((token) => token + 1);
-                }}
-              >
-                Try again
-              </Button>
-            </Group>
-          </Stack>
-        </Alert>
+        <LoadErrorAlert
+          onRetry={() => {
+            setList({ kind: 'loading' });
+            setReloadToken((token) => token + 1);
+          }}
+        >
+          Couldn't load Users.
+        </LoadErrorAlert>
       ) : list.kind === 'loading' ? (
         <LoadingState label="Loading Users…" />
       ) : list.users.length === 0 ? (

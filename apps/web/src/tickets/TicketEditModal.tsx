@@ -8,15 +8,14 @@ import {
   Textarea,
   TextInput,
 } from '@mantine/core';
-import {
-  type PatchTicketFieldsBody,
-  PRIORITIES,
-  type Priority,
-  type TicketDetail as TicketDetailBody,
+import type {
+  PatchTicketFieldsBody,
+  Priority,
+  TicketDetail as TicketDetailBody,
 } from '@support-ticketing/shared';
 import { IconAlertCircle } from '@tabler/icons-react';
 import { type FormEvent, useEffect, useState } from 'react';
-import { PRIORITY_LABEL } from './ticketLabels';
+import { PRIORITY_SELECT_DATA } from './ticketLabels';
 
 export function TicketEditModal({
   opened,
@@ -97,10 +96,7 @@ export function TicketEditModal({
                 setPriority(value as Priority);
               }
             }}
-            data={PRIORITIES.map((value) => ({
-              value,
-              label: PRIORITY_LABEL[value],
-            }))}
+            data={PRIORITY_SELECT_DATA}
             disabled={saving}
           />
           {error !== null ? (

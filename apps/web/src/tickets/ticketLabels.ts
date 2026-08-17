@@ -1,7 +1,8 @@
-import type {
-  CommentVisibility,
-  Priority,
-  TicketStatus,
+import {
+  type CommentVisibility,
+  PRIORITIES,
+  type Priority,
+  type TicketStatus,
 } from '@support-ticketing/shared';
 
 export const STATUS_LABEL: Record<TicketStatus, string> = {
@@ -17,6 +18,11 @@ export const PRIORITY_LABEL: Record<Priority, string> = {
   high: 'High',
   critical: 'Critical',
 };
+
+export const PRIORITY_SELECT_DATA = PRIORITIES.map((value) => ({
+  value,
+  label: PRIORITY_LABEL[value],
+}));
 
 export const COMMENT_VISIBILITY_LABEL: Record<CommentVisibility, string> = {
   public: 'Public',

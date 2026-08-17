@@ -1,5 +1,4 @@
 import {
-  Alert,
   Anchor,
   Badge,
   Button,
@@ -17,7 +16,6 @@ import {
   EMPTY_TICKET_LIST_FILTER_OPTIONS,
   hasMinimumRole,
   OPEN_TICKET_LOAD_STATUS_QUERY,
-  PRIORITIES,
   TICKET_STATUSES,
   type TicketListEnvelope,
   type TicketListFilterOptions,
@@ -26,13 +24,11 @@ import {
   UNASSIGNED_ASSIGNEE_QUERY,
 } from '@support-ticketing/shared';
 import {
-  IconAlertCircle,
   IconBuildings,
   IconFilterOff,
   IconFlag,
   IconPlus,
   IconProgress,
-  IconRefresh,
   IconTicket,
   IconUser,
 } from '@tabler/icons-react';
@@ -40,13 +36,15 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
+import { LoadErrorAlert } from '../components/LoadErrorAlert';
+import { LoadingState } from '../components/LoadingState';
 import { PersonCell } from '../components/PersonCell';
 import { TicketCreateModal } from './TicketCreateModal';
-import { LoadingState } from '../components/LoadingState';
 import {
   formatTicketInstant,
   PRIORITY_COLOR,
   PRIORITY_LABEL,
+  PRIORITY_SELECT_DATA,
   STATUS_COLOR,
   STATUS_LABEL,
   assigneeLabel,
@@ -60,30 +58,37 @@ const STATUS_FILTER_DATA = [
   { value: OPEN_TICKET_LOAD_STATUS_QUERY, label: 'Active Tickets' },
 ];
 
+const TICKET_LIST_QUERY_KEYS = [
+  'status',
+  'priority',
+  'clientId',
+  'assigneeId',
+  'stale',
+  'scope',
+] as const satisfies readonly (keyof TicketListFilters)[];
+
+function ticketListParams(
+  searchParams: URLSearchParams,
+  includeAssignee: boolean,
+): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const key of TICKET_LIST_QUERY_KEYS) {
+    if (key === 'assigneeId' && !includeAssignee) {
+      continue;
+    }
+    const value = searchParams.get(key);
+    if (value) {
+      params.set(key, value);
+    }
+  }
+  return params;
+}
+
 function ticketsUrl(
-  filters: TicketListFilters,
+  searchParams: URLSearchParams,
   includeAssignee: boolean,
 ): string {
-  const params = new URLSearchParams();
-  if (filters.status) {
-    params.set('status', filters.status);
-  }
-  if (filters.priority) {
-    params.set('priority', filters.priority);
-  }
-  if (filters.clientId) {
-    params.set('clientId', filters.clientId);
-  }
-  if (includeAssignee && filters.assigneeId) {
-    params.set('assigneeId', filters.assigneeId);
-  }
-  if (filters.stale) {
-    params.set('stale', filters.stale);
-  }
-  if (filters.scope) {
-    params.set('scope', filters.scope);
-  }
-  const query = params.toString();
+  const query = ticketListParams(searchParams, includeAssignee).toString();
   return query ? `/api/tickets?${query}` : '/api/tickets';
 }
 
@@ -91,32 +96,9 @@ function filtersFromSearchParams(
   searchParams: URLSearchParams,
   includeAssignee: boolean,
 ): TicketListFilters {
-  const filters: TicketListFilters = {};
-  const status = searchParams.get('status');
-  const priority = searchParams.get('priority');
-  const clientId = searchParams.get('clientId');
-  const assigneeId = searchParams.get('assigneeId');
-  const stale = searchParams.get('stale');
-  const scope = searchParams.get('scope');
-  if (status) {
-    filters.status = status;
-  }
-  if (priority) {
-    filters.priority = priority;
-  }
-  if (clientId) {
-    filters.clientId = clientId;
-  }
-  if (includeAssignee && assigneeId) {
-    filters.assigneeId = assigneeId;
-  }
-  if (stale) {
-    filters.stale = stale;
-  }
-  if (scope) {
-    filters.scope = scope;
-  }
-  return filters;
+  return Object.fromEntries(
+    ticketListParams(searchParams, includeAssignee),
+  ) as TicketListFilters;
 }
 
 function assigneeSelectData(options: TicketListFilterOptions) {
@@ -171,12 +153,7 @@ export function TicketList() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again; filterQuery tracks URL filters
   useEffect(() => {
     let cancelled = false;
-    const listFilters = filtersFromSearchParams(
-      new URLSearchParams(filterQuery),
-      includeAssignee,
-    );
-
-    void apiFetch(ticketsUrl(listFilters, includeAssignee))
+    void apiFetch(ticketsUrl(new URLSearchParams(filterQuery), includeAssignee))
       .then(async (response) => {
         if (cancelled || response.status === 401) {
           return;
@@ -232,10 +209,7 @@ export function TicketList() {
             leftSection={<IconFlag size={16} stroke={1.6} />}
             value={filters.priority ?? null}
             onChange={(priority) => setFilter('priority', priority)}
-            data={PRIORITIES.map((value) => ({
-              value,
-              label: PRIORITY_LABEL[value],
-            }))}
+            data={PRIORITY_SELECT_DATA}
           />
           <Select
             label="Client"
@@ -272,25 +246,15 @@ export function TicketList() {
         </Group>
       ) : null}
       {failed ? (
-        <Alert color="red" icon={<IconAlertCircle size={16} />}>
-          <Stack gap="sm">
-            <Text>Couldn't load tickets.</Text>
-            <Group>
-              <Button
-                type="button"
-                variant="default"
-                leftSection={<IconRefresh size={14} stroke={1.8} />}
-                onClick={() => {
-                  setFailed(false);
-                  setTickets(null);
-                  setReloadToken((token) => token + 1);
-                }}
-              >
-                Try again
-              </Button>
-            </Group>
-          </Stack>
-        </Alert>
+        <LoadErrorAlert
+          onRetry={() => {
+            setFailed(false);
+            setTickets(null);
+            setReloadToken((token) => token + 1);
+          }}
+        >
+          Couldn't load tickets.
+        </LoadErrorAlert>
       ) : tickets === null ? (
         <LoadingState label="Loading tickets…" />
       ) : tickets.length === 0 ? (

@@ -48,16 +48,16 @@ import {
   IconMessage,
   IconPencil,
   IconProgress,
-  IconRefresh,
   IconRotate,
   IconSend,
   IconUserCheck,
   IconUserMinus,
 } from '@tabler/icons-react';
-import { type ReactNode, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
+import { LoadErrorAlert } from '../components/LoadErrorAlert';
 import { LoadingState } from '../components/LoadingState';
 import { TicketEditModal } from './TicketEditModal';
 import {
@@ -119,68 +119,29 @@ function PersonInstant({
   );
 }
 
-function SidebarCard({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <Card withBorder radius="md">
-      <Stack gap="sm" aria-label={label}>
-        <Text fw={600} size="sm">
-          {label}
-        </Text>
-        {children}
-      </Stack>
-    </Card>
-  );
-}
-
-type HistoryRow = {
-  changedAt: string;
-  changedBy: { id: string; displayName: string };
-};
-
-function HistoryTimeline<Row extends HistoryRow>({
-  rows,
-  formatLabel,
-  rowKey,
-}: {
-  rows: Row[];
-  formatLabel: (row: Row) => string;
-  rowKey: (row: Row) => string;
-}) {
-  return (
-    <Timeline active={rows.length - 1} bulletSize={14} lineWidth={2}>
-      {rows.map((row) => (
-        <Timeline.Item
-          key={rowKey(row)}
-          title={
-            <Text size="sm" fw={600} lh={1}>
-              {formatLabel(row)}
-            </Text>
-          }
-        >
-          <PersonInstant person={row.changedBy} at={row.changedAt} />
-        </Timeline.Item>
-      ))}
-    </Timeline>
-  );
-}
-
 function StatusTimeline({ history }: { history: TicketStatusHistoryRow[] }) {
   return (
-    <SidebarCard label="Status history">
-      <HistoryTimeline
-        rows={history}
-        formatLabel={(row) =>
-          `${row.from ? STATUS_LABEL[row.from] : 'Created'} → ${STATUS_LABEL[row.to]}`
-        }
-        rowKey={(row) => `${row.changedAt}-${row.to}-${row.changedBy.id}`}
-      />
-    </SidebarCard>
+    <Card withBorder radius="md">
+      <Stack gap="sm" aria-label="Status history">
+        <Text fw={600} size="sm">
+          Status history
+        </Text>
+        <Timeline active={history.length - 1} bulletSize={14} lineWidth={2}>
+          {history.map((row) => (
+            <Timeline.Item
+              key={`${row.changedAt}-${row.to}-${row.changedBy.id}`}
+              title={
+                <Text size="sm" fw={600} lh={1}>
+                  {`${row.from ? STATUS_LABEL[row.from] : 'Created'} → ${STATUS_LABEL[row.to]}`}
+                </Text>
+              }
+            >
+              <PersonInstant person={row.changedBy} at={row.changedAt} />
+            </Timeline.Item>
+          ))}
+        </Timeline>
+      </Stack>
+    </Card>
   );
 }
 
@@ -190,23 +151,33 @@ function AssignmentTimeline({
   history: TicketAssignmentHistoryRow[];
 }) {
   return (
-    <SidebarCard label="Assignment history">
-      {history.length === 0 ? (
-        <Text size="sm" c="dimmed">
-          No assignments yet.
+    <Card withBorder radius="md">
+      <Stack gap="sm" aria-label="Assignment history">
+        <Text fw={600} size="sm">
+          Assignment history
         </Text>
-      ) : (
-        <HistoryTimeline
-          rows={history}
-          formatLabel={(row) =>
-            `${assigneeLabel(row.from)} → ${assigneeLabel(row.to)}`
-          }
-          rowKey={(row) =>
-            `${row.changedAt}-${row.from?.id ?? 'none'}-${row.to?.id ?? 'none'}-${row.changedBy.id}`
-          }
-        />
-      )}
-    </SidebarCard>
+        {history.length === 0 ? (
+          <Text size="sm" c="dimmed">
+            No assignments yet.
+          </Text>
+        ) : (
+          <Timeline active={history.length - 1} bulletSize={14} lineWidth={2}>
+            {history.map((row) => (
+              <Timeline.Item
+                key={`${row.changedAt}-${row.from?.id ?? 'none'}-${row.to?.id ?? 'none'}-${row.changedBy.id}`}
+                title={
+                  <Text size="sm" fw={600} lh={1}>
+                    {`${assigneeLabel(row.from)} → ${assigneeLabel(row.to)}`}
+                  </Text>
+                }
+              >
+                <PersonInstant person={row.changedBy} at={row.changedAt} />
+              </Timeline.Item>
+            ))}
+          </Timeline>
+        )}
+      </Stack>
+    </Card>
   );
 }
 
@@ -586,23 +557,13 @@ export function TicketDetail() {
   }
   if (state.kind === 'error') {
     return (
-      <Alert color="red" icon={<IconAlertCircle size={16} />}>
-        <Stack gap="sm">
-          <Text>Couldn't load this ticket.</Text>
-          <Group>
-            <Button
-              type="button"
-              variant="default"
-              leftSection={<IconRefresh size={14} stroke={1.8} />}
-              onClick={() => {
-                setReloadToken((token) => token + 1);
-              }}
-            >
-              Try again
-            </Button>
-          </Group>
-        </Stack>
-      </Alert>
+      <LoadErrorAlert
+        onRetry={() => {
+          setReloadToken((token) => token + 1);
+        }}
+      >
+        Couldn't load this ticket.
+      </LoadErrorAlert>
     );
   }
 

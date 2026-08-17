@@ -1,8 +1,6 @@
 import {
-  Alert,
   Anchor,
   Badge,
-  Button,
   Card,
   Center,
   Group,
@@ -26,18 +24,17 @@ import {
 } from '@support-ticketing/shared';
 import {
   type Icon,
-  IconAlertCircle,
   IconCircleDot,
   IconClockExclamation,
-  IconProgress,
-  IconRefresh,
   IconInbox,
+  IconProgress,
   IconTicket,
   IconUserCheck,
 } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../auth/api';
+import { LoadErrorAlert } from '../components/LoadErrorAlert';
 import { LoadingState } from '../components/LoadingState';
 import {
   formatTicketInstant,
@@ -295,25 +292,15 @@ export function DashboardPage() {
         Operational Dashboard
       </Title>
       {failed ? (
-        <Alert color="red" icon={<IconAlertCircle size={16} />}>
-          <Stack gap="sm">
-            <Text>Couldn't load the Operational Dashboard.</Text>
-            <Group>
-              <Button
-                type="button"
-                variant="default"
-                leftSection={<IconRefresh size={14} stroke={1.8} />}
-                onClick={() => {
-                  setFailed(false);
-                  setDashboard(null);
-                  setReloadToken((token) => token + 1);
-                }}
-              >
-                Try again
-              </Button>
-            </Group>
-          </Stack>
-        </Alert>
+        <LoadErrorAlert
+          onRetry={() => {
+            setFailed(false);
+            setDashboard(null);
+            setReloadToken((token) => token + 1);
+          }}
+        >
+          Couldn't load the Operational Dashboard.
+        </LoadErrorAlert>
       ) : dashboard === null ? (
         <LoadingState label="Loading Operational Dashboard…" />
       ) : dashboard.kind === 'agent' ? (
