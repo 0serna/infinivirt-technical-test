@@ -96,6 +96,41 @@ function PersonInstant({
   );
 }
 
+function TimelineRow({
+  label,
+  person,
+  at,
+  latest,
+}: {
+  label: string;
+  person: { id: string; displayName: string };
+  at: string;
+  latest: boolean;
+}) {
+  return (
+    <Group align="flex-start" gap="sm" wrap="nowrap">
+      <Box
+        style={{
+          width: 10,
+          height: 10,
+          borderRadius: 999,
+          marginTop: 6,
+          background: latest
+            ? 'var(--mantine-color-blue-6)'
+            : 'var(--mantine-color-gray-4)',
+          flexShrink: 0,
+        }}
+      />
+      <Stack gap={2}>
+        <Text size="sm" fw={600}>
+          {label}
+        </Text>
+        <PersonInstant person={person} at={at} />
+      </Stack>
+    </Group>
+  );
+}
+
 function StatusTimeline({ history }: { history: TicketStatusHistoryRow[] }) {
   return (
     <Stack gap="sm" aria-label="Status history">
@@ -103,33 +138,13 @@ function StatusTimeline({ history }: { history: TicketStatusHistoryRow[] }) {
         Status history
       </Text>
       {history.map((row, index) => (
-        <Group
+        <TimelineRow
           key={`${row.changedAt}-${row.to}-${row.changedBy.id}`}
-          align="flex-start"
-          gap="sm"
-          wrap="nowrap"
-        >
-          <Box
-            style={{
-              width: 10,
-              height: 10,
-              borderRadius: 999,
-              marginTop: 6,
-              background:
-                index === history.length - 1
-                  ? 'var(--mantine-color-blue-6)'
-                  : 'var(--mantine-color-gray-4)',
-              flexShrink: 0,
-            }}
-          />
-          <Stack gap={2}>
-            <Text size="sm" fw={600}>
-              {row.from ? STATUS_LABEL[row.from] : 'Created'} →{' '}
-              {STATUS_LABEL[row.to]}
-            </Text>
-            <PersonInstant person={row.changedBy} at={row.changedAt} />
-          </Stack>
-        </Group>
+          label={`${row.from ? STATUS_LABEL[row.from] : 'Created'} → ${STATUS_LABEL[row.to]}`}
+          person={row.changedBy}
+          at={row.changedAt}
+          latest={index === history.length - 1}
+        />
       ))}
     </Stack>
   );
@@ -155,37 +170,26 @@ function AssignmentTimeline({
         </Text>
       ) : (
         history.map((row, index) => (
-          <Group
+          <TimelineRow
             key={`${row.changedAt}-${row.from?.id ?? 'none'}-${row.to?.id ?? 'none'}-${row.changedBy.id}`}
-            align="flex-start"
-            gap="sm"
-            wrap="nowrap"
-          >
-            <Box
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 999,
-                marginTop: 6,
-                background:
-                  index === history.length - 1
-                    ? 'var(--mantine-color-blue-6)'
-                    : 'var(--mantine-color-gray-4)',
-                flexShrink: 0,
-              }}
-            />
-            <Stack gap={2}>
-              <Text size="sm" fw={600}>
-                {assigneeLabel(row.from)} → {assigneeLabel(row.to)}
-              </Text>
-              <PersonInstant person={row.changedBy} at={row.changedAt} />
-            </Stack>
-          </Group>
+            label={`${assigneeLabel(row.from)} → ${assigneeLabel(row.to)}`}
+            person={row.changedBy}
+            at={row.changedAt}
+            latest={index === history.length - 1}
+          />
         ))
       )}
     </Stack>
   );
 }
+
+type AssigneeControls = {
+  users: UserCatalogRow[];
+  usersLoading: boolean;
+  busy: boolean;
+  error: boolean;
+  onRecordReassignment: (assigneeId: string | null) => Promise<boolean>;
+};
 
 function CommentThread({ comments }: { comments: TicketComment[] }) {
   return (
@@ -288,22 +292,10 @@ function CommentComposer({
 
 function PropertiesColumn({
   ticket,
-  canReassign,
-  users,
-  usersLoading,
-  assigneeBusy,
-  assigneeError,
-  onAssign,
-  onClear,
+  assigneeControls,
 }: {
   ticket: TicketDetailBody;
-  canReassign: boolean;
-  users: UserCatalogRow[];
-  usersLoading: boolean;
-  assigneeBusy: boolean;
-  assigneeError: boolean;
-  onAssign: (assigneeId: string) => Promise<boolean>;
-  onClear: () => Promise<boolean>;
+  assigneeControls: AssigneeControls | null;
 }) {
   const [draftAssigneeId, setDraftAssigneeId] = useState<string | null>(
     ticket.assignee?.id ?? null,
@@ -314,9 +306,10 @@ function PropertiesColumn({
   }, [ticket.assignee?.id]);
 
   const currentId = ticket.assignee?.id ?? null;
+  const busy = assigneeControls?.busy ?? false;
   const canSave =
-    draftAssigneeId !== null && draftAssigneeId !== currentId && !assigneeBusy;
-  const canClear = currentId !== null && !assigneeBusy;
+    draftAssigneeId !== null && draftAssigneeId !== currentId && !busy;
+  const canClear = currentId !== null && !busy;
 
   return (
     <Stack gap="md" aria-label="Ticket properties">
@@ -324,18 +317,20 @@ function PropertiesColumn({
         Properties
       </Text>
       <MetaItem label="Client">{ticket.client.name}</MetaItem>
-      {canReassign ? (
+      {assigneeControls ? (
         <Stack gap="sm" aria-label="Assignee controls">
           <Select
             label="Assignee"
-            placeholder={usersLoading ? 'Loading users…' : 'Unassigned'}
-            data={users.map((row) => ({
+            placeholder={
+              assigneeControls.usersLoading ? 'Loading users…' : 'Unassigned'
+            }
+            data={assigneeControls.users.map((row) => ({
               value: row.id,
               label: `${row.displayName} (${row.role})`,
             }))}
             value={draftAssigneeId}
             onChange={setDraftAssigneeId}
-            disabled={assigneeBusy || usersLoading}
+            disabled={busy || assigneeControls.usersLoading}
             clearable={false}
             searchable
           />
@@ -343,11 +338,11 @@ function PropertiesColumn({
             <Button
               type="button"
               variant="light"
-              loading={assigneeBusy}
+              loading={busy}
               disabled={!canSave}
               onClick={() => {
                 if (draftAssigneeId) {
-                  void onAssign(draftAssigneeId);
+                  void assigneeControls.onRecordReassignment(draftAssigneeId);
                 }
               }}
             >
@@ -357,17 +352,17 @@ function PropertiesColumn({
               <Button
                 type="button"
                 variant="default"
-                loading={assigneeBusy}
+                loading={busy}
                 disabled={!canClear}
                 onClick={() => {
-                  void onClear();
+                  void assigneeControls.onRecordReassignment(null);
                 }}
               >
                 Clear assignee
               </Button>
             ) : null}
           </Group>
-          {assigneeError ? (
+          {assigneeControls.error ? (
             <Text c="red" size="sm">
               Couldn't update this ticket's assignee.
             </Text>
@@ -681,13 +676,17 @@ export function TicketDetail() {
       >
         <PropertiesColumn
           ticket={ticket}
-          canReassign={canReassign}
-          users={users}
-          usersLoading={usersLoading}
-          assigneeBusy={isReassigning}
-          assigneeError={assigneeError}
-          onAssign={(assigneeId) => recordReassignment(assigneeId)}
-          onClear={() => recordReassignment(null)}
+          assigneeControls={
+            canReassign
+              ? {
+                  users,
+                  usersLoading,
+                  busy: isReassigning,
+                  error: assigneeError,
+                  onRecordReassignment: recordReassignment,
+                }
+              : null
+          }
         />
         <Stack gap="md">
           <CommentThread comments={ticket.comments} />
