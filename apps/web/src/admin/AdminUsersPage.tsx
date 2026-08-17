@@ -28,6 +28,8 @@ type ListState =
   | { kind: 'error' }
   | { kind: 'ready'; users: UserCatalogRow[] };
 
+type RowAction = 'soft-delete' | 'restore';
+
 const ROLE_OPTIONS = [
   { value: 'agent', label: 'Agent' },
   { value: 'supervisor', label: 'Supervisor' },
@@ -70,7 +72,7 @@ export function AdminUsersPage() {
     }
     let cancelled = false;
 
-    void apiFetch('/api/users')
+    void apiFetch('/api/users?includeDeleted=true')
       .then(async (response) => {
         if (cancelled || response.status === 401) {
           return;
@@ -255,6 +257,46 @@ export function AdminUsersPage() {
     }
   }
 
+  async function runRowAction(target: UserCatalogRow, action: RowAction) {
+    setRowError(null);
+    setBusyId(target.id);
+    setEditingId(null);
+    setResettingId(null);
+    setResetPassword('');
+
+    try {
+      const response =
+        action === 'soft-delete'
+          ? await apiFetch(`/api/users/${target.id}`, { method: 'DELETE' })
+          : await apiFetch(`/api/users/${target.id}/restore`, {
+              method: 'POST',
+            });
+
+      if (response.status === 401) {
+        return;
+      }
+      if (response.status === 409) {
+        setRowError(
+          action === 'soft-delete'
+            ? 'Cannot soft-delete the last Administrator.'
+            : "Couldn't update this User.",
+        );
+        return;
+      }
+      if (!response.ok) {
+        setRowError("Couldn't update this User.");
+        return;
+      }
+
+      const updated = (await response.json()) as UserCatalogRow;
+      upsertUser(updated);
+    } catch {
+      setRowError("Couldn't update this User.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <Stack>
       <Title order={2}>Users</Title>
@@ -317,11 +359,14 @@ export function AdminUsersPage() {
               <Table.Th>Email</Table.Th>
               <Table.Th>Display name</Table.Th>
               <Table.Th>Role</Table.Th>
+              <Table.Th>Status</Table.Th>
               <Table.Th>Actions</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {list.users.map((row) => {
+              const isDeleted = row.deletedAt !== null;
+              const isSelf = user?.id === row.id;
               const isEditing = editingId === row.id;
               const isResetting = resettingId === row.id;
               const busy = busyId === row.id;
@@ -353,102 +398,131 @@ export function AdminUsersPage() {
                       roleLabel(row.role)
                     )}
                   </Table.Td>
+                  <Table.Td>{isDeleted ? 'Soft-deleted' : 'Active'}</Table.Td>
                   <Table.Td>
                     <Stack gap="xs">
-                      <Group gap="xs" wrap="nowrap">
-                        {isEditing ? (
-                          <>
-                            <Button
-                              type="button"
-                              size="xs"
-                              loading={busy}
-                              onClick={() => void saveEdit(row)}
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="default"
-                              size="xs"
-                              disabled={busy}
-                              onClick={() => {
-                                setEditingId(null);
-                                setEditDisplayName('');
-                                setEditRole(null);
-                              }}
-                            >
-                              Cancel
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="default"
-                            size="xs"
-                            disabled={busy || isResetting}
-                            onClick={() => {
-                              setRowError(null);
-                              setResettingId(null);
-                              setResetPassword('');
-                              setEditingId(row.id);
-                              setEditDisplayName(row.displayName);
-                              setEditRole(row.role);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                        )}
-                        {!isEditing && !isResetting ? (
-                          <Button
-                            type="button"
-                            variant="light"
-                            size="xs"
-                            disabled={busy}
-                            onClick={() => {
-                              setRowError(null);
-                              setEditingId(null);
-                              setEditDisplayName('');
-                              setEditRole(null);
-                              setResettingId(row.id);
-                              setResetPassword('');
-                            }}
-                          >
-                            Reset password
-                          </Button>
-                        ) : null}
-                      </Group>
-                      {isResetting ? (
-                        <Group gap="xs" wrap="nowrap" align="flex-end">
-                          <PasswordInput
-                            aria-label={`New password ${row.displayName}`}
-                            value={resetPassword}
-                            onChange={(event) =>
-                              setResetPassword(event.currentTarget.value)
-                            }
-                            style={{ flex: 1 }}
-                          />
-                          <Button
-                            type="button"
-                            size="xs"
-                            loading={busy}
-                            onClick={() => void savePasswordReset(row)}
-                          >
-                            Save password
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="default"
-                            size="xs"
-                            disabled={busy}
-                            onClick={() => {
-                              setResettingId(null);
-                              setResetPassword('');
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </Group>
-                      ) : null}
+                      {isDeleted ? (
+                        <Button
+                          type="button"
+                          variant="default"
+                          size="xs"
+                          loading={busy}
+                          onClick={() => void runRowAction(row, 'restore')}
+                        >
+                          Restore
+                        </Button>
+                      ) : (
+                        <>
+                          <Group gap="xs" wrap="nowrap">
+                            {isEditing ? (
+                              <>
+                                <Button
+                                  type="button"
+                                  size="xs"
+                                  loading={busy}
+                                  onClick={() => void saveEdit(row)}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="default"
+                                  size="xs"
+                                  disabled={busy}
+                                  onClick={() => {
+                                    setEditingId(null);
+                                    setEditDisplayName('');
+                                    setEditRole(null);
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="default"
+                                size="xs"
+                                disabled={busy || isResetting}
+                                onClick={() => {
+                                  setRowError(null);
+                                  setResettingId(null);
+                                  setResetPassword('');
+                                  setEditingId(row.id);
+                                  setEditDisplayName(row.displayName);
+                                  setEditRole(row.role);
+                                }}
+                              >
+                                Edit
+                              </Button>
+                            )}
+                            {!isEditing && !isResetting ? (
+                              <Button
+                                type="button"
+                                variant="light"
+                                size="xs"
+                                disabled={busy}
+                                onClick={() => {
+                                  setRowError(null);
+                                  setEditingId(null);
+                                  setEditDisplayName('');
+                                  setEditRole(null);
+                                  setResettingId(row.id);
+                                  setResetPassword('');
+                                }}
+                              >
+                                Reset password
+                              </Button>
+                            ) : null}
+                            {!isEditing && !isResetting && !isSelf ? (
+                              <Button
+                                type="button"
+                                color="red"
+                                variant="light"
+                                size="xs"
+                                loading={busy}
+                                onClick={() =>
+                                  void runRowAction(row, 'soft-delete')
+                                }
+                              >
+                                Soft-delete
+                              </Button>
+                            ) : null}
+                          </Group>
+                          {isResetting ? (
+                            <Group gap="xs" wrap="nowrap" align="flex-end">
+                              <PasswordInput
+                                aria-label={`New password ${row.displayName}`}
+                                value={resetPassword}
+                                onChange={(event) =>
+                                  setResetPassword(event.currentTarget.value)
+                                }
+                                style={{ flex: 1 }}
+                              />
+                              <Button
+                                type="button"
+                                size="xs"
+                                loading={busy}
+                                onClick={() => void savePasswordReset(row)}
+                              >
+                                Save password
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="default"
+                                size="xs"
+                                disabled={busy}
+                                onClick={() => {
+                                  setResettingId(null);
+                                  setResetPassword('');
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </Group>
+                          ) : null}
+                        </>
+                      )}
                     </Stack>
                   </Table.Td>
                 </Table.Tr>

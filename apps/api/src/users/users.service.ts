@@ -23,17 +23,38 @@ const USER_CATALOG_SELECT = {
   email: true,
   displayName: true,
   role: true,
+  deletedAt: true,
 } as const;
+
+function toUserRow(user: {
+  id: string;
+  email: string;
+  displayName: string;
+  role: (typeof ROLES)[number];
+  deletedAt: Date | null;
+}): UserCatalogRow {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    role: user.role,
+    deletedAt: user.deletedAt?.toISOString() ?? null,
+  };
+}
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listCatalog(): Promise<UserCatalogRow[]> {
-    return this.prisma.user.findMany({
+  async listCatalog(options?: {
+    includeDeleted?: boolean;
+  }): Promise<UserCatalogRow[]> {
+    const rows = await this.prisma.user.findMany({
+      where: options?.includeDeleted ? undefined : { deletedAt: null },
       select: USER_CATALOG_SELECT,
       orderBy: { displayName: 'asc' },
     });
+    return rows.map(toUserRow);
   }
 
   async create(body: CreateUserBody): Promise<UserCatalogRow> {
@@ -60,7 +81,7 @@ export class UsersService {
     const passwordHash = await hashPassword(password);
 
     try {
-      return await this.prisma.user.create({
+      const created = await this.prisma.user.create({
         data: {
           email,
           displayName,
@@ -69,6 +90,7 @@ export class UsersService {
         },
         select: USER_CATALOG_SELECT,
       });
+      return toUserRow(created);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -111,17 +133,20 @@ export class UsersService {
     }
 
     const existing = await this.requireUser(userId);
+    if (existing.deletedAt !== null) {
+      throw new ConflictException();
+    }
 
     if (role !== undefined && existing.role === 'admin' && role !== 'admin') {
       const adminCount = await this.prisma.user.count({
-        where: { role: 'admin' },
+        where: { role: 'admin', deletedAt: null },
       });
       if (adminCount <= 1) {
         throw new ConflictException();
       }
     }
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data: {
         ...(displayName !== undefined ? { displayName } : {}),
@@ -129,6 +154,7 @@ export class UsersService {
       },
       select: USER_CATALOG_SELECT,
     });
+    return toUserRow(updated);
   }
 
   async resetPassword(
@@ -142,14 +168,59 @@ export class UsersService {
       throw new BadRequestException('Invalid password');
     }
 
-    await this.requireUser(userId);
+    const existing = await this.requireUser(userId);
+    if (existing.deletedAt !== null) {
+      throw new ConflictException();
+    }
+
     const passwordHash = await hashPassword(password);
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data: { passwordHash },
       select: USER_CATALOG_SELECT,
     });
+    return toUserRow(updated);
+  }
+
+  async softDelete(id: string, actorId: string): Promise<UserCatalogRow> {
+    const userId = requireUuid(id, 'id');
+    const existing = await this.requireUser(userId);
+
+    if (userId === actorId) {
+      throw new ConflictException();
+    }
+
+    if (existing.role === 'admin' && existing.deletedAt === null) {
+      const adminCount = await this.prisma.user.count({
+        where: { role: 'admin', deletedAt: null },
+      });
+      if (adminCount <= 1) {
+        throw new ConflictException();
+      }
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { deletedAt: new Date() },
+      select: USER_CATALOG_SELECT,
+    });
+    return toUserRow(updated);
+  }
+
+  async restore(id: string): Promise<UserCatalogRow> {
+    const userId = requireUuid(id, 'id');
+    const existing = await this.requireUser(userId);
+    if (existing.deletedAt === null) {
+      return toUserRow(existing);
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { deletedAt: null },
+      select: USER_CATALOG_SELECT,
+    });
+    return toUserRow(updated);
   }
 
   private async requireUser(id: string) {

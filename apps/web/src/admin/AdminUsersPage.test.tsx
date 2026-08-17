@@ -89,6 +89,7 @@ test('Administrator /admin/users lists Users and can create one via POST', async
         email: body.email ?? '',
         displayName: body.displayName ?? '',
         role: (body.role ?? 'agent') as 'agent' | 'supervisor' | 'admin',
+        deletedAt: null,
       };
       users.push(created);
       return jsonResponse(201, created);
@@ -111,6 +112,15 @@ test('Administrator /admin/users lists Users and can create one via POST', async
 
   expect(await within(table).findByText('New Agent')).toBeDefined();
   expect(within(table).getByText('new.agent@example.com')).toBeDefined();
+
+  const listCall = vi
+    .mocked(fetch)
+    .mock.calls.find(
+      ([url, init]) =>
+        isUsersUrl(String(url)) &&
+        (init?.method ?? 'GET').toUpperCase() === 'GET',
+    );
+  expect(String(listCall?.[0])).toContain('includeDeleted=true');
 
   const postCall = vi
     .mocked(fetch)
@@ -137,6 +147,7 @@ test('Administrator can edit displayName/role and reset a User password', async 
       email: 'agent@example.com',
       displayName: 'Alex Agent',
       role: 'agent',
+      deletedAt: null,
     },
   ];
 
@@ -223,4 +234,57 @@ test('Administrator can edit displayName/role and reset a User password', async 
     password: 'FreshPass123!',
   });
   expect(screen.queryByLabelText('New password Alex Renamed')).toBeNull();
+});
+
+test('Administrator can soft-delete and restore a User', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const users: UserCatalogRow[] = [
+    {
+      id: 'user-2',
+      email: 'agent@example.com',
+      displayName: 'Alex Agent',
+      role: 'agent',
+      deletedAt: null,
+    },
+  ];
+
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isUsersUrl(url) && method === 'GET') {
+      return jsonResponse(200, users);
+    }
+    if (url === '/api/users/user-2' && method === 'DELETE') {
+      users[0] = {
+        ...users[0],
+        deletedAt: '2026-08-17T05:00:00.000Z',
+      };
+      return jsonResponse(200, users[0]);
+    }
+    if (url === '/api/users/user-2/restore' && method === 'POST') {
+      users[0] = { ...users[0], deletedAt: null };
+      return jsonResponse(201, users[0]);
+    }
+    throw new Error(`unexpected fetch ${method} ${url}`);
+  });
+
+  renderApp(['/admin/users']);
+
+  const table = await screen.findByRole('table');
+  expect(within(table).getByText('Alex Agent')).toBeDefined();
+  expect(within(table).getByText('Active')).toBeDefined();
+
+  await user.click(screen.getByRole('button', { name: 'Soft-delete' }));
+  expect(await within(table).findByText('Soft-deleted')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Restore' })).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+
+  await user.click(screen.getByRole('button', { name: 'Restore' }));
+  expect(await within(table).findByText('Active')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Edit' })).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Soft-delete' })).toBeDefined();
 });

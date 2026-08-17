@@ -155,12 +155,14 @@ export type PatchTicketAssigneeBody = {
   assigneeId: string | null;
 };
 
-/** Read-only staff catalog row for Assignee picker. Not User administration. */
+/** Read-only staff catalog row for Assignee picker / Admin Users. */
 export type UserCatalogRow = {
   id: string;
   email: string;
   displayName: string;
   role: Role;
+  /** ISO timestamp when soft-deleted; null when active. */
+  deletedAt: string | null;
 };
 
 /** Administrator User create. Email/displayName/password non-empty after trim; role is enum. */

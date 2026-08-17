@@ -22,7 +22,7 @@ export class AuthService {
     }
 
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) {
+    if (!user || user.deletedAt !== null) {
       throw new UnauthorizedException();
     }
 
@@ -41,7 +41,7 @@ export class AuthService {
 
   async me(userId: string): Promise<PublicUser> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
+    if (!user || user.deletedAt !== null) {
       throw new UnauthorizedException();
     }
     return toPublicUser(user);

@@ -33,11 +33,12 @@ enum CommentVisibility {
 }
 
 model User {
-  id           String @id @default(uuid()) @db.Uuid
-  email        String @unique
-  displayName  String @map("display_name")
-  passwordHash String @map("password_hash")
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  displayName  String    @map("display_name")
+  passwordHash String    @map("password_hash")
   role         Role
+  deletedAt    DateTime? @map("deleted_at")
 
   ticketsCreated       Ticket[]               @relation("TicketCreatedBy")
   ticketsAssigned      Ticket[]               @relation("TicketAssignee")

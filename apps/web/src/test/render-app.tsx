@@ -112,7 +112,7 @@ export function isClientsUrl(url: string): boolean {
 }
 
 export function isUsersUrl(url: string): boolean {
-  return url === '/api/users';
+  return url === '/api/users' || url.startsWith('/api/users?');
 }
 
 export function isDashboardUrl(url: string): boolean {
@@ -201,24 +201,28 @@ export const sampleUserCatalog = [
     email: 'ada@example.com',
     displayName: 'Ada Lovelace',
     role: 'admin' as const,
+    deletedAt: null,
   },
   {
     id: 'user-2',
     email: 'agent@example.com',
     displayName: 'Alex Agent',
     role: 'agent' as const,
+    deletedAt: null,
   },
   {
     id: 'user-3',
     email: 'supervisor@example.com',
     displayName: 'Sam Supervisor',
     role: 'supervisor' as const,
+    deletedAt: null,
   },
   {
     id: 'user-4',
     email: 'jamie@example.com',
     displayName: 'Jamie Agent',
     role: 'agent' as const,
+    deletedAt: null,
   },
 ];
 

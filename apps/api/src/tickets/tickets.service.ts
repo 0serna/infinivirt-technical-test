@@ -470,8 +470,8 @@ export class TicketsService {
     }
 
     if (toAssigneeId !== null) {
-      const target = await this.prisma.user.findUnique({
-        where: { id: toAssigneeId },
+      const target = await this.prisma.user.findFirst({
+        where: { id: toAssigneeId, deletedAt: null },
         select: { id: true },
       });
       if (!target) {
