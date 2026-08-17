@@ -1,4 +1,13 @@
-import { Alert, Group, Select, Stack, Table, Text, Title } from '@mantine/core';
+import {
+  Alert,
+  Button,
+  Group,
+  Select,
+  Stack,
+  Table,
+  Text,
+  Title,
+} from '@mantine/core';
 import {
   hasMinimumRole,
   PRIORITIES,
@@ -86,7 +95,9 @@ export function TicketList() {
     null,
   );
   const [failed, setFailed] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
   useEffect(() => {
     let cancelled = false;
 
@@ -124,7 +135,7 @@ export function TicketList() {
     return () => {
       cancelled = true;
     };
-  }, [status, priority, clientId, assigneeId, includeAssignee]);
+  }, [status, priority, clientId, assigneeId, includeAssignee, reloadToken]);
 
   return (
     <Stack>
@@ -176,7 +187,22 @@ export function TicketList() {
         </Group>
       ) : null}
       {failed ? (
-        <Alert>Couldn't load tickets. Try again.</Alert>
+        <Alert>
+          <Stack gap="sm">
+            <Text>Couldn't load tickets.</Text>
+            <Button
+              type="button"
+              variant="default"
+              onClick={() => {
+                setFailed(false);
+                setTickets(null);
+                setReloadToken((token) => token + 1);
+              }}
+            >
+              Try again
+            </Button>
+          </Stack>
+        </Alert>
       ) : tickets === null ? (
         <Text>Loading tickets…</Text>
       ) : tickets.length === 0 ? (

@@ -445,10 +445,39 @@ test('failed Ticket List fetch shows error copy without the raw server body', as
 
   renderApp(['/']);
 
-  expect(
-    await screen.findByText("Couldn't load tickets. Try again."),
-  ).toBeDefined();
+  expect(await screen.findByText("Couldn't load tickets.")).toBeDefined();
   expect(screen.queryByText('Internal boom stack')).toBeNull();
+});
+
+test('failed first Ticket List load can be retried without a page reload', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  let ticketCalls = 0;
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isTicketsUrl(url)) {
+      ticketCalls += 1;
+      if (ticketCalls === 1) {
+        return jsonResponse(500, { message: 'Internal boom stack' });
+      }
+      return jsonResponse(200, sampleTickets);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/']);
+
+  expect(await screen.findByText("Couldn't load tickets.")).toBeDefined();
+  await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+  expect(
+    await screen.findByText('High: patient portal MFA reset'),
+  ).toBeDefined();
+  expect(screen.queryByText("Couldn't load tickets.")).toBeNull();
+  expect(ticketCalls).toBe(2);
 });
 
 test('Ticket List uses /api/tickets with the session Bearer token', async () => {

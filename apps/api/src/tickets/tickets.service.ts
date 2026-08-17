@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
+  hasMinimumRole,
   PRIORITIES,
   TICKET_STATUSES,
   type Priority,
@@ -69,16 +70,17 @@ export class TicketsService {
       query.clientId === undefined
         ? undefined
         : requireUuid(query.clientId, 'clientId');
-    const assigneeFilter =
-      user.role === 'agent' ? undefined : parseAssigneeFilter(query.assigneeId);
+    const seesAllTickets = hasMinimumRole(user.role, 'supervisor');
+    const assigneeFilter = seesAllTickets
+      ? parseAssigneeFilter(query.assigneeId)
+      : undefined;
 
     const scoped = await this.prisma.ticket.findMany({
-      where:
-        user.role === 'agent'
-          ? {
-              OR: [{ assigneeId: user.id }, { createdById: user.id }],
-            }
-          : {},
+      where: seesAllTickets
+        ? {}
+        : {
+            OR: [{ assigneeId: user.id }, { createdById: user.id }],
+          },
       orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
       select: {
         id: true,
