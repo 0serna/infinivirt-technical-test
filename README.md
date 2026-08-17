@@ -1,6 +1,22 @@
 # Support Ticketing
 
-Internal platform for registering, assigning, and tracking customer support tickets.
+Staff use this to register, assign, and track customer support tickets.
+
+## Stack
+
+TypeScript: NestJS API, Prisma, PostgreSQL, React SPA (Vite, Mantine). Shared types in `packages/shared`.
+
+`apps/api` and `apps/web` share a repo, types, and CI. They deploy as two artifacts (API container, static SPA) so each can scale and release on its own. That split was the plan from the start. The API is stateless: JWT, no server session, so more API instances do not need sticky sessions.
+
+Prisma handles schema and migrations. Operational reporting is `queries.sql`.
+
+Auth is a Bearer JWT (~8h) with no refresh token. The token carries `sub`. Each request loads Role and soft-delete from the database. Roles cascade as an enum: `agent` < `supervisor` < `admin`.
+
+AWS is the destination; Compose is local development. API on ECS/Fargate, SPA on S3 + CloudFront, data on RDS Postgres. Env: `DATABASE_URL`, `JWT_SECRET`.
+
+Implemented in Cursor, in phases close to spec-driven development.
+
+Architecture notes are in `docs/adr/`.
 
 ## Run locally
 
@@ -9,50 +25,21 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Leave `DATABASE_URL` on hostname `postgres` and port `5432`. That name only exists inside Compose.
+Keep `.env` `DATABASE_URL` on `@postgres:5432` (Compose service name). Host ports: web [http://localhost:5173](http://localhost:5173), API [http://localhost:3000](http://localhost:3000), Postgres `POSTGRES_PORT` (default `5432`).
 
-Host ports: API `3000`, web `5173`, Postgres `POSTGRES_PORT` (default `5432`). Compose does not remap `3000` or `5173`; free them or edit `compose.yaml`. If host `5432` is taken, set `POSTGRES_PORT` in `.env` (for example `15432`). Do not point `.env` `DATABASE_URL` at `localhost` or the API container cannot reach Postgres.
+Migrations and the demo seed run when the API container starts (`SEED_ON_START=1`). Set `0` to skip seed.
 
-Migrations and the demo seed run when the API container starts (`SEED_ON_START=1` in `.env.example`). Seed is idempotent; set `SEED_ON_START=0` to skip it.
 
-Web: http://localhost:5173 · API: http://localhost:3000
-
-Stop with `docker compose down`.
-
-## Demo users
-
-| Email | Role | Password |
-| --- | --- | --- |
-| `agent@example.com` | agent | `DemoPassword123!` |
+| Email                    | Role       | Password           |
+| ------------------------ | ---------- | ------------------ |
+| `agent@example.com`      | agent      | `DemoPassword123!` |
 | `supervisor@example.com` | supervisor | `DemoPassword123!` |
-| `admin@example.com` | admin | `DemoPassword123!` |
+| `admin@example.com`      | admin      | `DemoPassword123!` |
 
-Passwords are stored as bcrypt hashes (cost ~10). The plaintext above is for local login only.
 
-Sign in at `/login` or `POST /auth/login` with `{ "email", "password" }`. The response is `{ accessToken, user }` for `Authorization: Bearer <accessToken>`.
-
-## Host CLI
-
-`npm run db:migrate`, `npm run db:migrate:dev`, and `npm run db:seed` run on the host. They need a localhost `DATABASE_URL`, not the Compose URL in `.env`:
+## `queries.sql`
 
 ```bash
-DATABASE_URL=postgresql://support:support@localhost:${POSTGRES_PORT:-5432}/support_ticketing npm run db:seed
-```
-
-## Operational SQL (`queries.sql`)
-
-After migrate + seed:
-
-```bash
-docker compose port postgres 5432
-
 docker compose exec -T postgres psql -U support -d support_ticketing < queries.sql
 ```
 
-From the host, replace `PORT` with the published port:
-
-```bash
-PGPASSWORD=support psql -h localhost -p PORT -U support -d support_ticketing -f queries.sql
-```
-
-Window, credit, ratio, and reopen semantics live in the comments in `queries.sql`.
