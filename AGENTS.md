@@ -30,7 +30,7 @@
 - `npm run lint:fix`: apply Biome safe lint fixes.
 - `npm run typecheck`: typecheck all workspaces.
 
-Host vs Compose `DATABASE_URL` hostname: see README (Host CLI) and `.env.example`.
+Host vs Compose `DATABASE_URL` hostname and optional `POSTGRES_PORT`: see README (Host CLI) and `.env.example`.
 
 ## Agent skills
 
