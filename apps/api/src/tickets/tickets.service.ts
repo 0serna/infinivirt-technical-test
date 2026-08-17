@@ -8,7 +8,6 @@ import {
 import type { Prisma } from '@prisma/client';
 import {
   COMMENT_VISIBILITIES,
-  type CommentVisibility,
   type CreateTicketCommentBody,
   hasMinimumRole,
   isLegalStatusEdge,
@@ -205,12 +204,9 @@ function toTicketDetail(ticket: TicketDetailRecord): TicketDetail {
       changedAt: row.changedAt.toISOString(),
       changedBy: row.changedBy,
     })),
-    comments: comments.map((row) => ({
-      id: row.id,
-      body: row.body,
-      visibility: row.visibility,
-      createdAt: row.createdAt.toISOString(),
-      author: row.author,
+    comments: comments.map(({ createdAt, ...row }) => ({
+      ...row,
+      createdAt: createdAt.toISOString(),
     })),
   };
 }
@@ -279,36 +275,29 @@ export class TicketsService {
     if (commentBody.length === 0) {
       throw new BadRequestException('Invalid body');
     }
-    const visibility: CommentVisibility =
-      body.visibility === undefined
-        ? 'public'
-        : parseRequiredEnum(
-            body.visibility,
-            COMMENT_VISIBILITIES,
-            'visibility',
-          );
+    const visibility =
+      parseOptionalEnum(body.visibility, COMMENT_VISIBILITIES, 'visibility') ??
+      'public';
 
     const ticket = await this.requireScopedTicket(user, id, { id: true });
 
-    // Agent may only create public; Superv/Admin may create internal.
     // List Scope (non-existence) is checked first — never leak via 403.
     if (visibility === 'internal' && !hasMinimumRole(user.role, 'supervisor')) {
       throw new ForbiddenException();
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.comment.create({
-        data: {
-          ticketId: ticket.id,
-          authorId: user.id,
-          body: commentBody,
-          visibility,
+    await this.prisma.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        updatedAt: new Date(),
+        comments: {
+          create: {
+            authorId: user.id,
+            body: commentBody,
+            visibility,
+          },
         },
-      });
-      await tx.ticket.update({
-        where: { id: ticket.id },
-        data: { updatedAt: new Date() },
-      });
+      },
     });
 
     return this.getById(user, ticket.id);

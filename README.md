@@ -7,7 +7,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Web: http://localhost:5173 · API: http://localhost:3000 · Postgres: localhost:`POSTGRES_PORT` (default `5432`)
+Web: http://localhost:5173 · API: http://localhost:3000 · Postgres: localhost on `POSTGRES_PORT` (default `5432`)
 
 Stop with `docker compose down`.
 
@@ -25,8 +25,6 @@ Prisma lives in `@support-ticketing/api`. Migrations run on API container startu
 DATABASE_URL=postgresql://support:support@localhost:5432/support_ticketing npm run db:migrate
 DATABASE_URL=postgresql://support:support@localhost:5432/support_ticketing npm run db:seed
 ```
-
-(If you set `POSTGRES_PORT=15432`, use `localhost:15432` in those `DATABASE_URL`s.)
 
 - `npm run db:migrate` — apply pending migrations (`prisma migrate deploy`)
 - `npm run db:migrate:dev` — create/apply migrations during schema development (`prisma migrate dev`)

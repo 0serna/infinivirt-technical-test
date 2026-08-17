@@ -80,6 +80,34 @@ function mockTicketPatchSession({
   });
 }
 
+function mockTicketCommentSession({
+  detail = sampleTicketDetail,
+  user,
+  onPost,
+}: {
+  detail?: unknown;
+  user: SessionUser;
+  onPost: (body: string) => Response;
+}) {
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, user);
+    }
+    if (isTicketsUrl(url)) {
+      return jsonResponse(200, sampleTickets);
+    }
+    if (url === '/api/tickets/ticket-1/comments' && method === 'POST') {
+      return onPost(String(init?.body ?? ''));
+    }
+    if (isTicketDetailUrl(url)) {
+      return jsonResponse(200, detail);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+}
+
 test('signed-in Ticket consult is inside the staff shell and loads GET /api/tickets/:id', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   mockTicketSession();
@@ -366,28 +394,17 @@ test('Agent can submit a public Comment and the thread updates without a visibil
       },
     ],
   };
-  vi.mocked(fetch).mockImplementation(async (input, init) => {
-    const url = String(input);
-    const method = (init?.method ?? 'GET').toUpperCase();
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, alex);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    if (url === '/api/tickets/ticket-1/comments' && method === 'POST') {
-      expect(init?.body).toBe(
+  mockTicketCommentSession({
+    user: alex,
+    onPost: (body) => {
+      expect(body).toBe(
         JSON.stringify({
           body: 'Client confirmed MFA emails still missing.',
           visibility: 'public',
         }),
       );
       return jsonResponse(201, updated);
-    }
-    if (isTicketDetailUrl(url)) {
-      return jsonResponse(200, sampleTicketDetail);
-    }
-    throw new Error(`unexpected fetch ${url}`);
+    },
   });
 
   renderApp(['/tickets/ticket-1']);
@@ -419,22 +436,9 @@ test('Agent can submit a public Comment and the thread updates without a visibil
 test('failed Comment create shows error copy without the raw server body', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input, init) => {
-    const url = String(input);
-    const method = (init?.method ?? 'GET').toUpperCase();
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, alex);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    if (url === '/api/tickets/ticket-1/comments' && method === 'POST') {
-      return jsonResponse(500, { message: 'Internal boom stack' });
-    }
-    if (isTicketDetailUrl(url)) {
-      return jsonResponse(200, sampleTicketDetail);
-    }
-    throw new Error(`unexpected fetch ${url}`);
+  mockTicketCommentSession({
+    user: alex,
+    onPost: () => jsonResponse(500, { message: 'Internal boom stack' }),
   });
 
   renderApp(['/tickets/ticket-1']);
@@ -489,19 +493,12 @@ test('Supervisor Comment composer defaults to internal and can post public', asy
     ],
   };
   let postCount = 0;
-  vi.mocked(fetch).mockImplementation(async (input, init) => {
-    const url = String(input);
-    const method = (init?.method ?? 'GET').toUpperCase();
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, sam);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    if (url === '/api/tickets/ticket-1/comments' && method === 'POST') {
+  mockTicketCommentSession({
+    user: sam,
+    onPost: (body) => {
       postCount += 1;
       if (postCount === 1) {
-        expect(init?.body).toBe(
+        expect(body).toBe(
           JSON.stringify({
             body: 'Internal: escalate if firmware lag persists.',
             visibility: 'internal',
@@ -509,18 +506,14 @@ test('Supervisor Comment composer defaults to internal and can post public', asy
         );
         return jsonResponse(201, updated);
       }
-      expect(init?.body).toBe(
+      expect(body).toBe(
         JSON.stringify({
           body: 'Public update for the Client.',
           visibility: 'public',
         }),
       );
       return jsonResponse(201, updatedPublic);
-    }
-    if (isTicketDetailUrl(url)) {
-      return jsonResponse(200, sampleTicketDetail);
-    }
-    throw new Error(`unexpected fetch ${url}`);
+    },
   });
 
   renderApp(['/tickets/ticket-1']);
@@ -586,28 +579,17 @@ test('Administrator Comment composer defaults to internal without changing visib
       },
     ],
   };
-  vi.mocked(fetch).mockImplementation(async (input, init) => {
-    const url = String(input);
-    const method = (init?.method ?? 'GET').toUpperCase();
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    if (url === '/api/tickets/ticket-1/comments' && method === 'POST') {
-      expect(init?.body).toBe(
+  mockTicketCommentSession({
+    user: ada,
+    onPost: (body) => {
+      expect(body).toBe(
         JSON.stringify({
           body: 'Administrator internal note for staff.',
           visibility: 'internal',
         }),
       );
       return jsonResponse(201, updated);
-    }
-    if (isTicketDetailUrl(url)) {
-      return jsonResponse(200, sampleTicketDetail);
-    }
-    throw new Error(`unexpected fetch ${url}`);
+    },
   });
 
   renderApp(['/tickets/ticket-1']);

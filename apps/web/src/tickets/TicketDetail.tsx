@@ -51,7 +51,7 @@ const PRIORITY_COLOR: Record<Priority, string> = {
   critical: 'red',
 };
 
-const COMMENT_VISIBILITY_COLOR: Record<TicketComment['visibility'], string> = {
+const COMMENT_VISIBILITY_COLOR: Record<CommentVisibility, string> = {
   public: 'blue',
   internal: 'orange',
 };
@@ -189,14 +189,12 @@ function CommentComposer({
         if (body.length === 0 || disabled) {
           return;
         }
-        void onSubmit(body, allowInternal ? visibility : 'public').then(
-          (ok) => {
-            if (ok) {
-              setDraft('');
-              setVisibility(defaultVisibility);
-            }
-          },
-        );
+        void onSubmit(body, visibility).then((ok) => {
+          if (ok) {
+            setDraft('');
+            setVisibility(defaultVisibility);
+          }
+        });
       }}
     >
       <Textarea
@@ -207,15 +205,10 @@ function CommentComposer({
         }}
         minRows={3}
         disabled={disabled}
-        aria-label="Comment"
       />
       {allowInternal ? (
         <Switch
-          label={
-            visibility === 'internal'
-              ? COMMENT_VISIBILITY_LABEL.internal
-              : COMMENT_VISIBILITY_LABEL.public
-          }
+          label={COMMENT_VISIBILITY_LABEL[visibility]}
           checked={visibility === 'internal'}
           onChange={(event) => {
             setVisibility(event.currentTarget.checked ? 'internal' : 'public');
@@ -224,11 +217,9 @@ function CommentComposer({
           aria-label="Visibility"
         />
       ) : null}
-      <Group>
-        <Button type="submit" loading={disabled} disabled={draft.trim() === ''}>
-          Add comment
-        </Button>
-      </Group>
+      <Button type="submit" loading={disabled} disabled={draft.trim() === ''}>
+        Add comment
+      </Button>
       {error ? (
         <Text c="red" size="sm">
           Couldn't add this comment.
