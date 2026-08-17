@@ -56,7 +56,7 @@ function ShortTicketTable({
 
   if (tickets.length === 0) {
     return (
-      <Card withBorder radius="md">
+      <Card withBorder>
         <Center py="xl">
           <Stack align="center" gap="sm">
             <ThemeIcon size={48} radius="xl" variant="light" color="gray">
@@ -70,7 +70,7 @@ function ShortTicketTable({
   }
 
   return (
-    <Card withBorder radius="md" p={0}>
+    <Card withBorder p={0}>
       <Table.ScrollContainer minWidth={640}>
         <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
           <Table.Thead>
@@ -155,7 +155,6 @@ function KpiCard({
   return (
     <Card
       withBorder
-      radius="md"
       p="md"
       component={Link}
       to={to}
@@ -170,7 +169,7 @@ function KpiCard({
             {count}
           </Text>
         </Stack>
-        <ThemeIcon size={38} radius="md" variant="light" color={color}>
+        <ThemeIcon size={38} variant="light" color={color}>
           <KpiIcon size={20} stroke={1.6} />
         </ThemeIcon>
       </Group>

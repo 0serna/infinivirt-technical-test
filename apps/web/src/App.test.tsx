@@ -13,16 +13,6 @@ import {
   unauthorized,
 } from './test/render-app';
 
-beforeEach(() => {
-  localStorage.clear();
-  vi.stubGlobal('fetch', vi.fn());
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  localStorage.clear();
-});
-
 test('empty login shows required-field copy without calling the API', async () => {
   const user = userEvent.setup();
   renderApp(['/login']);

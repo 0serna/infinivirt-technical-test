@@ -1,8 +1,10 @@
-import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import {
   type ClientCatalogRow,
   STALE_TICKET_MAX_AGE_HOURS,
+  type TicketDetail,
+  type TicketListEnvelope,
+  type UserCatalogRow,
 } from '@support-ticketing/shared';
 import request from 'supertest';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -10,48 +12,17 @@ import { createTestApp } from './create-test-app';
 import { ADMIN_EMAIL, AGENT_EMAIL, SUPERVISOR_EMAIL } from './demo-credentials';
 import { login } from './login';
 
-function titles(body: { tickets?: Array<{ title?: string }> }): string[] {
-  return (body.tickets ?? []).map((ticket) => ticket.title ?? '');
+const UNKNOWN_UUID = '00000000-0000-4000-8000-000000000099';
+
+function titles(body: TicketListEnvelope): string[] {
+  return body.tickets.map((ticket) => ticket.title);
 }
-
-type TicketPerson = { id: string; displayName: string };
-
-type TicketDetailBody = {
-  id: string;
-  title: string;
-  description?: string;
-  status: string;
-  priority?: string;
-  updatedAt: string;
-  resolvedAt: string | null;
-  closedAt: string | null;
-  assignee: TicketPerson | null;
-  statusHistory: Array<{
-    from: string | null;
-    to: string;
-    changedAt: string;
-    changedBy: TicketPerson;
-  }>;
-  assignments: Array<{
-    from: TicketPerson | null;
-    to: TicketPerson | null;
-    changedAt: string;
-    changedBy: TicketPerson;
-  }>;
-  comments: Array<{
-    id: string;
-    body: string;
-    visibility: string;
-    createdAt: string;
-    author: { id: string; displayName: string };
-  }>;
-};
 
 async function ticketByTitle(
   app: INestApplication,
   accessToken: string,
   title: string,
-): Promise<TicketDetailBody> {
+): Promise<TicketDetail> {
   const list = await request(app.getHttpServer())
     .get('/tickets')
     .set('Authorization', `Bearer ${accessToken}`)
@@ -68,7 +39,7 @@ async function ticketByTitle(
 }
 
 function expectLatestTransition(
-  body: TicketDetailBody,
+  body: TicketDetail,
   expected: {
     from: string | null;
     to: string;
@@ -86,7 +57,7 @@ async function expectPatchForbiddenUnchanged(
   accessToken: string,
   title: string,
   status: string,
-  extras?: (before: TicketDetailBody, after: TicketDetailBody) => void,
+  extras?: (before: TicketDetail, after: TicketDetail) => void,
 ): Promise<void> {
   const before = await ticketByTitle(app, accessToken, title);
   await request(app.getHttpServer())
@@ -822,9 +793,8 @@ describe('Tickets get by id (e2e)', () => {
       'New scanners fail Bluetooth pairing',
     );
 
-    const unknownId = '00000000-0000-4000-8000-000000000099';
     const unknown = await request(app.getHttpServer())
-      .get(`/tickets/${unknownId}`)
+      .get(`/tickets/${UNKNOWN_UUID}`)
       .set('Authorization', `Bearer ${agent.accessToken}`)
       .expect(404);
     const hidden = await request(app.getHttpServer())
@@ -928,13 +898,12 @@ describe('Tickets status transition (e2e)', () => {
       'New scanners fail Bluetooth pairing',
     );
 
-    const unknownId = '00000000-0000-4000-8000-000000000099';
     const getUnknown = await request(app.getHttpServer())
-      .get(`/tickets/${unknownId}`)
+      .get(`/tickets/${UNKNOWN_UUID}`)
       .set('Authorization', `Bearer ${agent.accessToken}`)
       .expect(404);
     const patchUnknown = await request(app.getHttpServer())
-      .patch(`/tickets/${unknownId}`)
+      .patch(`/tickets/${UNKNOWN_UUID}`)
       .set('Authorization', `Bearer ${agent.accessToken}`)
       .send({ status: 'in_progress' })
       .expect(404);
@@ -1329,13 +1298,12 @@ describe('Tickets create Comment (e2e)', () => {
       'New scanners fail Bluetooth pairing',
     );
 
-    const unknownId = '00000000-0000-4000-8000-000000000099';
     const getUnknown = await request(app.getHttpServer())
-      .get(`/tickets/${unknownId}`)
+      .get(`/tickets/${UNKNOWN_UUID}`)
       .set('Authorization', `Bearer ${agent.accessToken}`)
       .expect(404);
     const postUnknown = await request(app.getHttpServer())
-      .post(`/tickets/${unknownId}/comments`)
+      .post(`/tickets/${UNKNOWN_UUID}/comments`)
       .set('Authorization', `Bearer ${agent.accessToken}`)
       .send({ body: 'Should not land.' })
       .expect(404);
@@ -1353,7 +1321,7 @@ describe('Tickets create Comment (e2e)', () => {
       })
       .expect(404);
     const postUnknownInternal = await request(app.getHttpServer())
-      .post(`/tickets/${unknownId}/comments`)
+      .post(`/tickets/${UNKNOWN_UUID}/comments`)
       .set('Authorization', `Bearer ${agent.accessToken}`)
       .send({
         body: 'Should not land as internal either.',
@@ -1532,7 +1500,7 @@ async function listedTicketCount(
     .get('/tickets')
     .set('Authorization', `Bearer ${accessToken}`)
     .expect(200);
-  return (list.body.tickets as unknown[]).length;
+  return titles(list.body).length;
 }
 
 describe('Tickets create (e2e)', () => {
@@ -1739,18 +1707,17 @@ describe('Tickets create (e2e)', () => {
 
   it('POST /tickets with unknown Client id matches Ticket non-existence without writing', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
-    const unknownClientId = '00000000-0000-4000-8000-000000000099';
     const beforeCount = await listedTicketCount(app, accessToken);
 
     const getUnknownTicket = await request(app.getHttpServer())
-      .get(`/tickets/${unknownClientId}`)
+      .get(`/tickets/${UNKNOWN_UUID}`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(404);
     const create = await request(app.getHttpServer())
       .post('/tickets')
       .set('Authorization', `Bearer ${accessToken}`)
       .send({
-        clientId: unknownClientId,
+        clientId: UNKNOWN_UUID,
         title: `Create e2e: unknown client ${Date.now()}`,
         description: 'Must not persist.',
       })
@@ -1785,28 +1752,22 @@ describe('Tickets create (e2e)', () => {
   });
 });
 
-type UserCatalogPerson = {
-  id: string;
-  displayName: string;
-  role: string;
-};
-
 async function staffCatalog(
   app: INestApplication,
   accessToken: string,
-): Promise<UserCatalogPerson[]> {
+): Promise<UserCatalogRow[]> {
   const response = await request(app.getHttpServer())
     .get('/users')
     .set('Authorization', `Bearer ${accessToken}`)
     .expect(200);
-  return response.body as UserCatalogPerson[];
+  return response.body as UserCatalogRow[];
 }
 
 async function createOpenTicket(
   app: INestApplication,
   accessToken: string,
   title: string,
-): Promise<TicketDetailBody> {
+): Promise<TicketDetail> {
   const clientId = await seededClientId(app, accessToken);
   const response = await request(app.getHttpServer())
     .post('/tickets')
@@ -2064,7 +2025,6 @@ describe('Tickets Reassignment (e2e)', () => {
 
   it('Agent PATCH outside List Scope or unknown id matches opaque GET 404', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
-    const unknownId = '00000000-0000-4000-8000-000000000099';
     const warehouse = await ticketByTitle(
       app,
       (await login(app, SUPERVISOR_EMAIL)).accessToken,
@@ -2072,11 +2032,11 @@ describe('Tickets Reassignment (e2e)', () => {
     );
 
     const getUnknown = await request(app.getHttpServer())
-      .get(`/tickets/${unknownId}`)
+      .get(`/tickets/${UNKNOWN_UUID}`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(404);
     const patchUnknown = await request(app.getHttpServer())
-      .patch(`/tickets/${unknownId}/assignee`)
+      .patch(`/tickets/${UNKNOWN_UUID}/assignee`)
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ assigneeId: null })
       .expect(404);
@@ -2243,7 +2203,6 @@ describe('Tickets Field Edit (e2e)', () => {
 
   it('Agent Field Edit outside List Scope or unknown id matches opaque GET 404', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
-    const unknownId = '00000000-0000-4000-8000-000000000099';
     const warehouse = await ticketByTitle(
       app,
       (await login(app, SUPERVISOR_EMAIL)).accessToken,
@@ -2251,11 +2210,11 @@ describe('Tickets Field Edit (e2e)', () => {
     );
 
     const getUnknown = await request(app.getHttpServer())
-      .get(`/tickets/${unknownId}`)
+      .get(`/tickets/${UNKNOWN_UUID}`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(404);
     const patchUnknown = await request(app.getHttpServer())
-      .patch(`/tickets/${unknownId}/fields`)
+      .patch(`/tickets/${UNKNOWN_UUID}/fields`)
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ title: 'Leak?' })
       .expect(404);

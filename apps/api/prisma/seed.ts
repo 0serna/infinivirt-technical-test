@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import {
   CommentVisibility,
   Priority,
@@ -1071,7 +1071,6 @@ async function replaceTicketGraph(
     }
     await prisma.ticketStatusHistory.create({
       data: {
-        id: randomUUID(),
         ticketId,
         fromStatus: row.fromStatus,
         toStatus: row.toStatus,
@@ -1100,7 +1099,6 @@ async function replaceTicketGraph(
     }
     await prisma.ticketAssignment.create({
       data: {
-        id: randomUUID(),
         ticketId,
         fromAssigneeId,
         toAssigneeId,
@@ -1117,7 +1115,6 @@ async function replaceTicketGraph(
     }
     await prisma.comment.create({
       data: {
-        id: randomUUID(),
         ticketId,
         authorId,
         body: row.body,

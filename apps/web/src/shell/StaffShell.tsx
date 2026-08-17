@@ -98,7 +98,6 @@ export function StaffShell() {
             <Group gap="sm" wrap="nowrap">
               <ThemeIcon
                 size={34}
-                radius="md"
                 variant="gradient"
                 gradient={{ from: 'indigo', to: 'violet', deg: 135 }}
               >

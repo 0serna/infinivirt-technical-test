@@ -22,14 +22,7 @@ import {
 } from '../test/render-app';
 
 beforeEach(() => {
-  localStorage.clear();
   localStorage.setItem('accessToken', 'token-abc');
-  vi.stubGlobal('fetch', vi.fn());
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  localStorage.clear();
 });
 
 type SessionUser = typeof ada | typeof alex | typeof sam;

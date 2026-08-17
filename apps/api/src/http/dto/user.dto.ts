@@ -19,7 +19,7 @@ export class CreateUserDto implements CreateUserBody {
   @IsNotEmpty()
   displayName!: string;
 
-  @IsIn([...ROLES])
+  @IsIn(ROLES)
   role!: Role;
 
   @Trim()
@@ -36,7 +36,7 @@ export class UpdateUserDto implements UpdateUserBody {
   displayName?: string;
 
   @IsOptional()
-  @IsIn([...ROLES])
+  @IsIn(ROLES)
   role?: Role;
 
   @Allow()

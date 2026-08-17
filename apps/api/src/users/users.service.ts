@@ -10,6 +10,7 @@ import {
   type AdminUserRow,
   type CreateUserBody,
   type ResetPasswordBody,
+  type Role,
   type UpdateUserBody,
   type UserCatalogRow,
 } from '@support-ticketing/shared';
@@ -30,7 +31,7 @@ type UserRecord = {
   id: string;
   email: string;
   displayName: string;
-  role: (typeof ROLES)[number];
+  role: Role;
   deletedAt: Date | null;
 };
 
@@ -106,7 +107,7 @@ export class UsersService {
       displayName = requireTrimmed(raw.displayName, 'displayName');
     }
 
-    let role: (typeof ROLES)[number] | undefined;
+    let role: Role | undefined;
     if (hasRole) {
       if (!isRole(raw.role)) {
         throw new BadRequestException('Invalid role');
@@ -213,7 +214,7 @@ export class UsersService {
   }
 }
 
-function isRole(value: unknown): value is (typeof ROLES)[number] {
+function isRole(value: unknown): value is Role {
   return (
     typeof value === 'string' && (ROLES as readonly string[]).includes(value)
   );

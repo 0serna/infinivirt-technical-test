@@ -244,7 +244,7 @@ export function AdminClientsPage() {
       ) : list.kind === 'loading' ? (
         <LoadingState label="Loading Clients…" />
       ) : list.clients.length === 0 ? (
-        <Card withBorder radius="md">
+        <Card withBorder>
           <Center py="xl">
             <Stack align="center" gap="sm">
               <ThemeIcon size={48} radius="xl" variant="light" color="gray">
@@ -255,7 +255,7 @@ export function AdminClientsPage() {
           </Center>
         </Card>
       ) : (
-        <Card withBorder radius="md" p={0}>
+        <Card withBorder p={0}>
           <Table.ScrollContainer minWidth={520}>
             <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
               <Table.Thead>

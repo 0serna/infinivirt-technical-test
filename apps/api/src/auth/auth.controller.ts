@@ -1,16 +1,9 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Post,
-  Req,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Req } from '@nestjs/common';
 import type { AuthenticatedRequest } from './auth.guard';
 import { AuthService, type LoginResult } from './auth.service';
 import type { PublicUser } from './public-user';
 import { Public } from './public.decorator';
+import { requireUser } from './require-user';
 
 @Controller('auth')
 export class AuthController {
@@ -27,10 +20,6 @@ export class AuthController {
 
   @Get('me')
   me(@Req() request: AuthenticatedRequest): Promise<PublicUser> {
-    const userId = request.user?.id;
-    if (!userId) {
-      throw new UnauthorizedException();
-    }
-    return this.authService.me(userId);
+    return this.authService.me(requireUser(request).id);
   }
 }

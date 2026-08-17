@@ -26,11 +26,7 @@ export function renderApp(
 }
 
 export function jsonResponse(status: number, body: unknown): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-  } as Response;
+  return Response.json(body, { status });
 }
 
 export const unauthorized = jsonResponse(401, {

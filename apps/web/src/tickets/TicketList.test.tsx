@@ -14,13 +14,7 @@ import {
 } from '../test/render-app';
 
 beforeEach(() => {
-  localStorage.clear();
-  vi.stubGlobal('fetch', vi.fn());
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  localStorage.clear();
+  localStorage.setItem('accessToken', 'token-abc');
 });
 
 function filterControl(name: string) {
@@ -32,7 +26,6 @@ function filterOption(name: string) {
 }
 
 test('authenticated /tickets serves the Ticket List', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets);
 
   renderApp(['/tickets']);
@@ -45,7 +38,6 @@ test('authenticated /tickets serves the Ticket List', async () => {
 });
 
 test('Ticket List rows render Title, Status, Priority, Client, Assignee, creator, and updatedAt', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets);
 
   renderApp(['/tickets']);
@@ -78,7 +70,6 @@ test('Ticket List rows render Title, Status, Priority, Client, Assignee, creator
 });
 
 test('empty Ticket List shows an empty state', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(emptyTickets);
 
   renderApp(['/tickets']);
@@ -88,7 +79,6 @@ test('empty Ticket List shows an empty state', async () => {
 });
 
 test('in-flight Ticket List shows loading before rows', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   let resolveTickets!: (value: Response) => void;
   const ticketsPending = new Promise<Response>((resolve) => {
     resolveTickets = resolve;
@@ -121,7 +111,6 @@ test('in-flight Ticket List shows loading before rows', async () => {
 });
 
 test('failed Ticket List fetch shows error copy without the raw server body', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
     if (url === '/api/auth/me') {
@@ -141,7 +130,6 @@ test('failed Ticket List fetch shows error copy without the raw server body', as
 
 test('failed first Ticket List load can be retried without a page reload', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   let ticketCalls = 0;
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
@@ -171,7 +159,6 @@ test('failed first Ticket List load can be retried without a page reload', async
 });
 
 test('Ticket List uses /api/tickets with the session Bearer token', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets);
 
   renderApp(['/tickets']);
@@ -189,7 +176,6 @@ test('Ticket List uses /api/tickets with the session Bearer token', async () => 
 });
 
 test('Ticket List 401 signs the User out', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
     if (url === '/api/auth/me') {
@@ -212,7 +198,6 @@ test('Ticket List 401 signs the User out', async () => {
 });
 
 test('Agent Ticket List has Status, Priority, and Client filters and no Assignee filter', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets, alex);
 
   renderApp(['/tickets']);
@@ -225,7 +210,6 @@ test('Agent Ticket List has Status, Priority, and Client filters and no Assignee
 
 test('Supervisor Ticket List has an Assignee filter including unassigned from filterOptions', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets, sam);
 
   renderApp(['/tickets']);
@@ -237,7 +221,6 @@ test('Supervisor Ticket List has an Assignee filter including unassigned from fi
 
 test('Administrator Ticket List has an Assignee filter including unassigned from filterOptions', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets);
 
   renderApp(['/tickets']);
@@ -249,7 +232,6 @@ test('Administrator Ticket List has an Assignee filter including unassigned from
 
 test('Ticket List filter choices come from filterOptions and do not list Client or User catalogs', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession({
     ...sampleTickets,
     filterOptions: {
@@ -280,7 +262,6 @@ test('Ticket List filter choices come from filterOptions and do not list Client 
 
 test('choosing Status and Client refetches tickets with those query params', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets);
 
   renderApp(['/tickets']);
@@ -298,7 +279,6 @@ test('choosing Status and Client refetches tickets with those query params', asy
 });
 
 test('Ticket List Titles link to the Ticket consult route', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets);
 
   renderApp(['/tickets']);
@@ -315,7 +295,6 @@ test('Ticket List Titles link to the Ticket consult route', async () => {
 });
 
 test('opening /tickets with filter search params applies them in the UI and list request', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets);
 
   renderApp([
@@ -340,7 +319,6 @@ test('opening /tickets with filter search params applies them in the UI and list
 
 test('changing Ticket List filters updates the URL search params', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets);
 
   renderApp(['/tickets'], { probeLocation: true });
@@ -361,7 +339,6 @@ test('changing Ticket List filters updates the URL search params', async () => {
 });
 
 test('opening /tickets with Active Tickets, Stale, and assigned-open params drives the list request', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets, alex);
 
   renderApp(['/tickets?status=open%2Cin_progress&stale=1&scope=assignedOpen']);
@@ -383,7 +360,6 @@ test('opening /tickets with Active Tickets, Stale, and assigned-open params driv
 
 test('choosing Active Tickets updates the URL and list request', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets, alex);
 
   renderApp(['/tickets'], { probeLocation: true });

@@ -13,13 +13,7 @@ import {
 } from '../test/render-app';
 
 beforeEach(() => {
-  localStorage.clear();
-  vi.stubGlobal('fetch', vi.fn());
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  localStorage.clear();
+  localStorage.setItem('accessToken', 'token-abc');
 });
 
 function mockCreateSession({
@@ -116,7 +110,6 @@ function ticketPostCalls() {
 }
 
 test('Ticket List New ticket opens the create form without treating new as a Ticket id', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockCreateSession();
 
   await openCreateModal();
@@ -139,7 +132,6 @@ test('Ticket List New ticket opens the create form without treating new as a Tic
 });
 
 test('create form loads Clients from GET /api/clients not Ticket List filterOptions', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockCreateSession();
 
   const user = await openCreateModal();
@@ -159,7 +151,6 @@ test('create form loads Clients from GET /api/clients not Ticket List filterOpti
 });
 
 test('create form shows Client, Title, description, and Priority defaulting to medium', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockCreateSession();
 
   await openCreateModal();
@@ -175,7 +166,6 @@ test('create form shows Client, Title, description, and Priority defaulting to m
 });
 
 test('client-side validation blocks submit when Client, Title, or description is missing', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockCreateSession();
 
   const user = await openCreateModal();
@@ -208,7 +198,6 @@ test('client-side validation blocks submit when Client, Title, or description is
 });
 
 test('successful create posts the Ticket and navigates to the new Ticket detail', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   const created = {
     ...sampleTicketDetail,
     id: 'ticket-new',
@@ -254,7 +243,6 @@ test('successful create posts the Ticket and navigates to the new Ticket detail'
 });
 
 test('submit is disabled while create is in flight', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   let resolvePost!: (value: Response) => void;
   const pending = new Promise<Response>((resolve) => {
     resolvePost = resolve;
@@ -295,7 +283,6 @@ test('submit is disabled while create is in flight', async () => {
 });
 
 test('failed create shows English error copy without the raw server body', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockCreateSession({
     onPost: () => jsonResponse(500, { message: 'Internal boom stack' }),
   });
@@ -317,7 +304,6 @@ test('failed create shows English error copy without the raw server body', async
 });
 
 test('failed Client catalog load shows error copy without the raw server body', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
     if (url === '/api/auth/me') {

@@ -41,13 +41,13 @@ import { LoadingState } from '../components/LoadingState';
 import { PersonCell } from '../components/PersonCell';
 import { TicketCreateModal } from './TicketCreateModal';
 import {
+  assigneeLabel,
   formatTicketInstant,
   PRIORITY_COLOR,
   PRIORITY_LABEL,
   PRIORITY_SELECT_DATA,
   STATUS_COLOR,
   STATUS_LABEL,
-  assigneeLabel,
 } from './ticketLabels';
 
 const STATUS_FILTER_DATA = [
@@ -67,10 +67,10 @@ const TICKET_LIST_QUERY_KEYS = [
   'scope',
 ] as const satisfies readonly (keyof TicketListFilters)[];
 
-function ticketListParams(
+function ticketsUrl(
   searchParams: URLSearchParams,
   includeAssignee: boolean,
-): URLSearchParams {
+): string {
   const params = new URLSearchParams();
   for (const key of TICKET_LIST_QUERY_KEYS) {
     if (key === 'assigneeId' && !includeAssignee) {
@@ -81,24 +81,8 @@ function ticketListParams(
       params.set(key, value);
     }
   }
-  return params;
-}
-
-function ticketsUrl(
-  searchParams: URLSearchParams,
-  includeAssignee: boolean,
-): string {
-  const query = ticketListParams(searchParams, includeAssignee).toString();
+  const query = params.toString();
   return query ? `/api/tickets?${query}` : '/api/tickets';
-}
-
-function filtersFromSearchParams(
-  searchParams: URLSearchParams,
-  includeAssignee: boolean,
-): TicketListFilters {
-  return Object.fromEntries(
-    ticketListParams(searchParams, includeAssignee),
-  ) as TicketListFilters;
 }
 
 function assigneeSelectData(options: TicketListFilterOptions) {
@@ -121,7 +105,6 @@ export function TicketList() {
     user != null && hasMinimumRole(user.role, 'supervisor');
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const filters = filtersFromSearchParams(searchParams, includeAssignee);
   const filterQuery = searchParams.toString();
   const hasActiveFilters = filterQuery.length > 0;
   const [tickets, setTickets] = useState<TicketListRow[] | null>(null);
@@ -153,7 +136,7 @@ export function TicketList() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again; filterQuery tracks URL filters
   useEffect(() => {
     let cancelled = false;
-    void apiFetch(ticketsUrl(new URLSearchParams(filterQuery), includeAssignee))
+    void apiFetch(ticketsUrl(searchParams, includeAssignee))
       .then(async (response) => {
         if (cancelled || response.status === 401) {
           return;
@@ -199,7 +182,7 @@ export function TicketList() {
             label="Status"
             clearable
             leftSection={<IconProgress size={16} stroke={1.6} />}
-            value={filters.status ?? null}
+            value={searchParams.get('status') || null}
             onChange={(status) => setFilter('status', status)}
             data={STATUS_FILTER_DATA}
           />
@@ -207,7 +190,7 @@ export function TicketList() {
             label="Priority"
             clearable
             leftSection={<IconFlag size={16} stroke={1.6} />}
-            value={filters.priority ?? null}
+            value={searchParams.get('priority') || null}
             onChange={(priority) => setFilter('priority', priority)}
             data={PRIORITY_SELECT_DATA}
           />
@@ -215,7 +198,7 @@ export function TicketList() {
             label="Client"
             clearable
             leftSection={<IconBuildings size={16} stroke={1.6} />}
-            value={filters.clientId ?? null}
+            value={searchParams.get('clientId') || null}
             onChange={(clientId) => setFilter('clientId', clientId)}
             data={filterOptions.clients.map((client) => ({
               value: client.id,
@@ -227,7 +210,7 @@ export function TicketList() {
               label="Assignee"
               clearable
               leftSection={<IconUser size={16} stroke={1.6} />}
-              value={filters.assigneeId ?? null}
+              value={searchParams.get('assigneeId') || null}
               onChange={(assigneeId) => setFilter('assigneeId', assigneeId)}
               data={assigneeSelectData(filterOptions)}
             />
@@ -267,7 +250,7 @@ export function TicketList() {
           </Stack>
         </Center>
       ) : (
-        <Card withBorder radius="md" p={0}>
+        <Card withBorder p={0}>
           <Table.ScrollContainer minWidth={760}>
             <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
               <Table.Thead>
@@ -329,7 +312,7 @@ export function TicketList() {
                         <PersonCell name={ticket.assignee.displayName} />
                       ) : (
                         <Text size="sm" c="dimmed">
-                          Unassigned
+                          {assigneeLabel(null)}
                         </Text>
                       )}
                     </Table.Td>

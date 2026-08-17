@@ -13,17 +13,10 @@ import {
 } from '../test/render-app';
 
 beforeEach(() => {
-  localStorage.clear();
-  vi.stubGlobal('fetch', vi.fn());
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  localStorage.clear();
+  localStorage.setItem('accessToken', 'token-abc');
 });
 
 test('authenticated / redirects to /dashboard', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(emptyTickets, alex);
 
   renderApp(['/'], { probeLocation: true });
@@ -36,7 +29,6 @@ test('authenticated / redirects to /dashboard', async () => {
 });
 
 test('Agent dashboard shows Open Ticket Assignee KPI deep-link and short table rows to consult', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(emptyTickets, alex);
 
   renderApp(['/dashboard']);
@@ -74,7 +66,6 @@ test('Agent dashboard shows Open Ticket Assignee KPI deep-link and short table r
 });
 
 test('dashboard loading and error states use English copy', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   let resolveDashboard: ((value: Response) => void) | undefined;
   const dashboardPromise = new Promise<Response>((resolve) => {
     resolveDashboard = resolve;
@@ -106,7 +97,6 @@ test('dashboard loading and error states use English copy', async () => {
 
 test('dashboard Try again refetches after a failure', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   let dashboardCalls = 0;
 
   vi.mocked(fetch).mockImplementation(async (input) => {
@@ -138,7 +128,6 @@ test('dashboard Try again refetches after a failure', async () => {
 });
 
 test('team dashboard shows KPI strip deep-links and Stale short table', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(emptyTickets, sam, undefined, sampleTeamDashboard);
 
   renderApp(['/dashboard']);

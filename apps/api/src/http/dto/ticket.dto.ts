@@ -36,7 +36,7 @@ export class CreateTicketDto implements CreateTicketBody {
   description!: string;
 
   @IsOptional()
-  @IsIn([...PRIORITIES])
+  @IsIn(PRIORITIES)
   priority?: Priority;
 }
 
@@ -47,12 +47,12 @@ export class CreateTicketCommentDto implements CreateTicketCommentBody {
   body!: string;
 
   @IsOptional()
-  @IsIn([...COMMENT_VISIBILITIES])
+  @IsIn(COMMENT_VISIBILITIES)
   visibility?: CommentVisibility;
 }
 
 export class PatchTicketStatusDto implements PatchTicketStatusBody {
-  @IsIn([...TICKET_STATUSES])
+  @IsIn(TICKET_STATUSES)
   status!: TicketStatus;
 }
 
@@ -76,6 +76,6 @@ export class PatchTicketFieldsDto implements PatchTicketFieldsBody {
   description?: string;
 
   @ValidateIf((_, value) => value !== undefined)
-  @IsIn([...PRIORITIES])
+  @IsIn(PRIORITIES)
   priority?: Priority;
 }

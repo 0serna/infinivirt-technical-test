@@ -17,9 +17,9 @@ import {
   setUnauthorizedListener,
 } from './api';
 
-export type SignInResult = 'ok' | 'unauthorized' | 'unreachable';
+type SignInResult = 'ok' | 'unauthorized' | 'unreachable';
 
-export type PublicUser = {
+type PublicUser = {
   id: string;
   email: string;
   displayName: string;

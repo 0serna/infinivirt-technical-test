@@ -13,16 +13,6 @@ import {
   sampleUserCatalog,
 } from '../test/render-app';
 
-beforeEach(() => {
-  localStorage.clear();
-  vi.stubGlobal('fetch', vi.fn());
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  localStorage.clear();
-});
-
 test('Administrator sees Users nav link and Agent and Supervisor do not', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(emptyTickets, ada);

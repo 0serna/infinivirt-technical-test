@@ -21,3 +21,13 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 Element.prototype.scrollIntoView = () => undefined;
+
+beforeEach(() => {
+  localStorage.clear();
+  vi.stubGlobal('fetch', vi.fn());
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});

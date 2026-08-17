@@ -13,7 +13,6 @@ import {
   TextInput,
   ThemeIcon,
 } from '@mantine/core';
-import type { Role } from '@support-ticketing/shared';
 import {
   IconAlertCircle,
   IconAlertTriangle,
@@ -27,11 +26,11 @@ import { ROLE_LABEL } from '../users/roleLabels';
 
 const DEMO_PASSWORD = 'DemoPassword123!';
 
-const DEMO_ACCOUNTS: ReadonlyArray<{ email: string; role: Role }> = [
+const DEMO_ACCOUNTS = [
   { email: 'agent@example.com', role: 'agent' },
   { email: 'supervisor@example.com', role: 'supervisor' },
   { email: 'admin@example.com', role: 'admin' },
-];
+] as const;
 
 export function LoginPage() {
   const { signIn, sessionExpired } = useAuth();
@@ -75,7 +74,6 @@ export function LoginPage() {
         <Group justify="center" gap="sm">
           <ThemeIcon
             size={40}
-            radius="md"
             variant="gradient"
             gradient={{ from: 'indigo', to: 'violet', deg: 135 }}
           >
@@ -86,7 +84,7 @@ export function LoginPage() {
           </Text>
         </Group>
         <Card withBorder shadow="sm" radius="lg" p="xl">
-          <Box component="form" onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit}>
             <Stack gap="md">
               {sessionExpired ? (
                 <Alert color="yellow" icon={<IconAlertTriangle size={16} />}>
@@ -124,7 +122,7 @@ export function LoginPage() {
                 Sign in
               </Button>
             </Stack>
-          </Box>
+          </form>
         </Card>
         <Box>
           <Divider label="Demo accounts" labelPosition="center" />

@@ -31,7 +31,6 @@ import {
   type TicketListFilterOptions,
   type TicketListFilters,
   type TicketListPerson,
-  type TicketListRow,
   type TicketStatus,
   UNASSIGNED_ASSIGNEE_QUERY,
 } from '@support-ticketing/shared';
@@ -40,6 +39,7 @@ import { requireTrimmed } from '../http/require-trimmed';
 import { requireUuid } from '../http/require-uuid';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  type TicketListRowRecord,
   ticketListRowSelect,
   ticketPersonSelect,
   toTicketListRow,
@@ -47,26 +47,13 @@ import {
 
 type AssigneeFilter = { kind: 'unassigned' } | { kind: 'user'; id: string };
 
-type ScopedTicket = Omit<TicketListRow, 'updatedAt' | 'createdAt'> & {
-  updatedAt: Date;
-  createdAt: Date;
-};
-
 const historyAsc = [{ changedAt: 'asc' as const }, { id: 'asc' as const }];
 
 const ticketDetailSelect = {
-  id: true,
-  title: true,
-  status: true,
-  priority: true,
-  updatedAt: true,
-  createdAt: true,
+  ...ticketListRowSelect,
   description: true,
   resolvedAt: true,
   closedAt: true,
-  client: { select: { id: true, name: true } },
-  assignee: { select: ticketPersonSelect },
-  createdBy: { select: ticketPersonSelect },
   statusHistory: {
     orderBy: historyAsc,
     select: {
@@ -152,18 +139,17 @@ function parseStatusFilters(
   if (value === undefined) {
     return undefined;
   }
-  const rawParts = Array.isArray(value) ? value : value.split(',');
-  const parts = rawParts
+  const parts = (Array.isArray(value) ? value : value.split(','))
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
   if (parts.length === 0) {
     return undefined;
   }
-  const statuses: TicketStatus[] = [];
-  for (const part of parts) {
-    statuses.push(parseRequiredEnum(part, TICKET_STATUSES, 'status'));
-  }
-  return [...new Set(statuses)];
+  return [
+    ...new Set(
+      parts.map((part) => parseRequiredEnum(part, TICKET_STATUSES, 'status')),
+    ),
+  ];
 }
 
 function parseExactQueryFlag(
@@ -181,9 +167,9 @@ function parseExactQueryFlag(
 }
 
 function matchesFilters(
-  ticket: ScopedTicket,
+  ticket: TicketListRowRecord,
   filters: {
-    statuses?: TicketStatus[];
+    statuses?: readonly TicketStatus[];
     priority?: Priority;
     clientId?: string;
     assignee?: AssigneeFilter;
@@ -210,17 +196,20 @@ function matchesFilters(
       return false;
     }
   }
-  if (filters.assignee?.kind === 'unassigned') {
-    return ticket.assignee === null;
+  if (filters.assignee?.kind === 'unassigned' && ticket.assignee !== null) {
+    return false;
   }
-  if (filters.assignee?.kind === 'user') {
-    return ticket.assignee?.id === filters.assignee.id;
+  if (
+    filters.assignee?.kind === 'user' &&
+    ticket.assignee?.id !== filters.assignee.id
+  ) {
+    return false;
   }
   return true;
 }
 
 function filterOptionsFromScope(
-  tickets: ScopedTicket[],
+  tickets: TicketListRowRecord[],
 ): TicketListFilterOptions {
   const clientsById = new Map<string, TicketListClient>();
   const assigneesById = new Map<string, TicketListPerson>();
@@ -320,12 +309,12 @@ export class TicketsService {
       ? parseAssigneeFilter(query.assigneeId)
       : undefined;
 
-    let effectiveStatuses = statuses;
+    let effectiveStatuses: readonly TicketStatus[] | undefined = statuses;
     if (assignedOpen) {
       // Assigned-open is always Open Ticket load for the current Assignee —
       // ignore any client `status` that would widen or narrow away from Open.
       assignee = { kind: 'user', id: user.id };
-      effectiveStatuses = [...OPEN_TICKET_STATUSES];
+      effectiveStatuses = OPEN_TICKET_STATUSES;
     }
 
     const staleBefore = stale ? staleTicketCutoff() : undefined;
@@ -568,25 +557,22 @@ export class TicketsService {
       throw new ForbiddenException();
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.ticket.update({
-        where: { id: ticket.id },
-        data: {
-          status: to,
-          ...(to === 'resolved' && { resolvedAt: new Date() }),
-          ...(to === 'closed' && { closedAt: new Date() }),
-          ...(ticket.status === 'closed' &&
-            to === 'open' && { resolvedAt: null, closedAt: null }),
+    await this.prisma.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        status: to,
+        ...(to === 'resolved' && { resolvedAt: new Date() }),
+        ...(to === 'closed' && { closedAt: new Date() }),
+        ...(ticket.status === 'closed' &&
+          to === 'open' && { resolvedAt: null, closedAt: null }),
+        statusHistory: {
+          create: {
+            fromStatus: ticket.status,
+            toStatus: to,
+            changedById: user.id,
+          },
         },
-      });
-      await tx.ticketStatusHistory.create({
-        data: {
-          ticketId: ticket.id,
-          fromStatus: ticket.status,
-          toStatus: to,
-          changedById: user.id,
-        },
-      });
+      },
     });
 
     return this.getById(user, ticket.id);

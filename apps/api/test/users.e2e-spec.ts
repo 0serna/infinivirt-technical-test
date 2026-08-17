@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import type { AdminUserRow, UserCatalogRow } from '@support-ticketing/shared';
 import request from 'supertest';

@@ -53,7 +53,7 @@ import {
   IconUserCheck,
   IconUserMinus,
 } from '@tabler/icons-react';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
@@ -61,9 +61,9 @@ import { LoadErrorAlert } from '../components/LoadErrorAlert';
 import { LoadingState } from '../components/LoadingState';
 import { TicketEditModal } from './TicketEditModal';
 import {
+  assigneeLabel,
   COMMENT_VISIBILITY_COLOR,
   COMMENT_VISIBILITY_LABEL,
-  assigneeLabel,
   formatTicketInstant,
   PRIORITY_COLOR,
   PRIORITY_LABEL,
@@ -121,7 +121,7 @@ function PersonInstant({
 
 function StatusTimeline({ history }: { history: TicketStatusHistoryRow[] }) {
   return (
-    <Card withBorder radius="md">
+    <Card withBorder>
       <Stack gap="sm" aria-label="Status history">
         <Text fw={600} size="sm">
           Status history
@@ -151,7 +151,7 @@ function AssignmentTimeline({
   history: TicketAssignmentHistoryRow[];
 }) {
   return (
-    <Card withBorder radius="md">
+    <Card withBorder>
       <Stack gap="sm" aria-label="Assignment history">
         <Text fw={600} size="sm">
           Assignment history
@@ -208,7 +208,7 @@ function CommentThread({ comments }: { comments: TicketComment[] }) {
         </Center>
       ) : (
         comments.map((comment, index) => (
-          <Stack key={comment.id} gap="md">
+          <Fragment key={comment.id}>
             {index > 0 ? <Divider /> : null}
             <Group gap="sm" align="flex-start" wrap="nowrap">
               <Avatar
@@ -237,7 +237,7 @@ function CommentThread({ comments }: { comments: TicketComment[] }) {
                 </Text>
               </Stack>
             </Group>
-          </Stack>
+          </Fragment>
         ))
       )}
     </Stack>
@@ -345,7 +345,7 @@ function PropertiesCard({
     draftAssigneeId !== null && draftAssigneeId !== currentId && !busy;
 
   return (
-    <Card withBorder radius="md">
+    <Card withBorder>
       <Stack gap="md" aria-label="Ticket properties">
         <Text fw={600} size="sm">
           Properties
@@ -757,7 +757,7 @@ export function TicketDetail() {
       ) : null}
       <Grid gap="lg" align="flex-start">
         <Grid.Col span={{ base: 12, lg: 8 }}>
-          <Card withBorder radius="md">
+          <Card withBorder>
             <Stack gap="lg">
               <CommentThread comments={ticket.comments} />
               <Divider />

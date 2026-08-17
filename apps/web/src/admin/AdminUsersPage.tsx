@@ -53,6 +53,10 @@ const ROLE_OPTIONS = ROLES.map((value) => ({
   label: ROLE_LABEL[value],
 }));
 
+function isRole(value: string | null): value is Role {
+  return value !== null && (ROLES as readonly string[]).includes(value);
+}
+
 export function AdminUsersPage() {
   const { user } = useAuth();
   const [list, setList] = useState<ListState>({ kind: 'loading' });
@@ -176,7 +180,7 @@ export function AdminUsersPage() {
       setFormError('Display name is required.');
       return;
     }
-    if (role === null || !(ROLES as readonly string[]).includes(role)) {
+    if (!isRole(role)) {
       setFormError('Role is required.');
       return;
     }
@@ -230,7 +234,7 @@ export function AdminUsersPage() {
       setRowError('Display name is required.');
       return;
     }
-    if (editRole === null || !(ROLES as readonly string[]).includes(editRole)) {
+    if (!isRole(editRole)) {
       setRowError('Role is required.');
       return;
     }
@@ -378,7 +382,7 @@ export function AdminUsersPage() {
       ) : list.kind === 'loading' ? (
         <LoadingState label="Loading Users…" />
       ) : list.users.length === 0 ? (
-        <Card withBorder radius="md">
+        <Card withBorder>
           <Center py="xl">
             <Stack align="center" gap="sm">
               <ThemeIcon size={48} radius="xl" variant="light" color="gray">
@@ -389,7 +393,7 @@ export function AdminUsersPage() {
           </Center>
         </Card>
       ) : (
-        <Card withBorder radius="md" p={0}>
+        <Card withBorder p={0}>
           <Table.ScrollContainer minWidth={720}>
             <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
               <Table.Thead>

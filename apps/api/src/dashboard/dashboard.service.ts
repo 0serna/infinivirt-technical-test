@@ -19,10 +19,18 @@ export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getOperational(user: PublicUser): Promise<DashboardEnvelope> {
-    if (hasMinimumRole(user.role, 'supervisor')) {
-      return this.teamDashboard();
-    }
-    return this.agentDashboard(user.id);
+    return hasMinimumRole(user.role, 'supervisor')
+      ? this.teamDashboard()
+      : this.agentDashboard(user.id);
+  }
+
+  private findShortList(where: Prisma.TicketWhereInput) {
+    return this.prisma.ticket.findMany({
+      where,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: DASHBOARD_SHORT_LIST_CAP,
+      select: ticketListRowSelect,
+    });
   }
 
   private async teamDashboard(): Promise<DashboardEnvelope> {
@@ -36,12 +44,7 @@ export class DashboardService {
         this.prisma.ticket.count({ where: { status: 'open' } }),
         this.prisma.ticket.count({ where: { status: 'in_progress' } }),
         this.prisma.ticket.count({ where: staleWhere }),
-        this.prisma.ticket.findMany({
-          where: staleWhere,
-          orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
-          take: DASHBOARD_SHORT_LIST_CAP,
-          select: ticketListRowSelect,
-        }),
+        this.findShortList(staleWhere),
       ]);
 
     return {
@@ -64,12 +67,7 @@ export class DashboardService {
 
     const [openCount, rows] = await Promise.all([
       this.prisma.ticket.count({ where }),
-      this.prisma.ticket.findMany({
-        where,
-        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
-        take: DASHBOARD_SHORT_LIST_CAP,
-        select: ticketListRowSelect,
-      }),
+      this.findShortList(where),
     ]);
 
     return {

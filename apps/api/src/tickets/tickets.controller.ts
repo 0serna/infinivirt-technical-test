@@ -27,11 +27,11 @@ import {
 import { TicketsService } from './tickets.service';
 
 @Controller('tickets')
+@RequireRole('agent')
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
 
   @Get()
-  @RequireRole('agent')
   list(
     @Req() request: AuthenticatedRequest,
     @Query() query: TicketListFilters,
@@ -40,7 +40,6 @@ export class TicketsController {
   }
 
   @Post()
-  @RequireRole('agent')
   create(
     @Req() request: AuthenticatedRequest,
     @Body() body: CreateTicketDto,
@@ -49,7 +48,6 @@ export class TicketsController {
   }
 
   @Get(':id')
-  @RequireRole('agent')
   getById(
     @Req() request: AuthenticatedRequest,
     @Param() params: IdParamDto,
@@ -58,7 +56,6 @@ export class TicketsController {
   }
 
   @Post(':id/comments')
-  @RequireRole('agent')
   createComment(
     @Req() request: AuthenticatedRequest,
     @Param() params: IdParamDto,
@@ -72,7 +69,6 @@ export class TicketsController {
   }
 
   @Patch(':id/assignee')
-  @RequireRole('agent')
   recordReassignment(
     @Req() request: AuthenticatedRequest,
     @Param() params: IdParamDto,
@@ -86,7 +82,6 @@ export class TicketsController {
   }
 
   @Patch(':id/fields')
-  @RequireRole('agent')
   recordFieldEdit(
     @Req() request: AuthenticatedRequest,
     @Param() params: IdParamDto,
@@ -100,7 +95,6 @@ export class TicketsController {
   }
 
   @Patch(':id')
-  @RequireRole('agent')
   recordStatusTransition(
     @Req() request: AuthenticatedRequest,
     @Param() params: IdParamDto,

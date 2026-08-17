@@ -11,13 +11,11 @@ import { ADMIN_EMAIL, AGENT_EMAIL, SUPERVISOR_EMAIL } from './demo-credentials';
 import { login } from './login';
 
 function sortOldestUpdatedFirst(tickets: TicketListRow[]): TicketListRow[] {
-  return [...tickets].sort((left, right) => {
-    const byUpdated = left.updatedAt.localeCompare(right.updatedAt);
-    if (byUpdated !== 0) {
-      return byUpdated;
-    }
-    return left.id.localeCompare(right.id);
-  });
+  return [...tickets].sort(
+    (left, right) =>
+      left.updatedAt.localeCompare(right.updatedAt) ||
+      left.id.localeCompare(right.id),
+  );
 }
 
 describe('Dashboard (e2e)', () => {

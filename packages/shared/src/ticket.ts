@@ -12,8 +12,6 @@ export type TicketStatus = (typeof TICKET_STATUSES)[number];
 /** Open Ticket load (not resolved/closed). */
 export const OPEN_TICKET_STATUSES = ['open', 'in_progress'] as const;
 
-export type OpenTicketStatus = (typeof OPEN_TICKET_STATUSES)[number];
-
 /** Prefer this over inventing a separate list endpoint for dashboard deep-links. */
 export const OPEN_TICKET_LOAD_STATUS_QUERY = 'open,in_progress';
 

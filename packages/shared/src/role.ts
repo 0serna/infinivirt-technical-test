@@ -3,7 +3,7 @@ export const ROLES = ['agent', 'supervisor', 'admin'] as const;
 
 export type Role = (typeof ROLES)[number];
 
-export const ROLE_RANK: Record<Role, number> = {
+const ROLE_RANK: Record<Role, number> = {
   agent: 1,
   supervisor: 2,
   admin: 3,

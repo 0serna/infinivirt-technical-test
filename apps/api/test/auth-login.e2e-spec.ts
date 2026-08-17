@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { createTestApp } from './create-test-app';

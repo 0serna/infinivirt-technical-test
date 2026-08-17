@@ -1,4 +1,3 @@
-import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
