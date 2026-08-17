@@ -151,8 +151,17 @@ export type PatchTicketAssigneeBody = {
 /** Read-only staff catalog row for Assignee picker. Not User administration. */
 export type UserCatalogRow = {
   id: string;
+  email: string;
   displayName: string;
   role: Role;
+};
+
+/** Administrator User create. Email/displayName/password non-empty after trim; role is enum. */
+export type CreateUserBody = {
+  email: string;
+  displayName: string;
+  role: Role;
+  password: string;
 };
 
 /** Visibility omitted defaults to `public`. */

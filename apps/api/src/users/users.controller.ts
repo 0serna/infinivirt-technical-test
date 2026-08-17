@@ -1,5 +1,5 @@
-import { Controller, Get } from '@nestjs/common';
-import type { UserCatalogRow } from '@support-ticketing/shared';
+import { Body, Controller, Get, Post } from '@nestjs/common';
+import type { CreateUserBody, UserCatalogRow } from '@support-ticketing/shared';
 import { RequireRole } from '../auth/require-role.decorator';
 import { UsersService } from './users.service';
 
@@ -11,5 +11,11 @@ export class UsersController {
   @RequireRole('supervisor')
   list(): Promise<UserCatalogRow[]> {
     return this.usersService.listCatalog();
+  }
+
+  @Post()
+  @RequireRole('admin')
+  create(@Body() body: CreateUserBody): Promise<UserCatalogRow> {
+    return this.usersService.create(body);
   }
 }

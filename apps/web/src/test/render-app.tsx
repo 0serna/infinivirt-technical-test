@@ -196,10 +196,30 @@ export const sampleClientCatalog = [
 
 /** Read-only staff catalog for Assignee picker. Wider than list filterOptions.assignees. */
 export const sampleUserCatalog = [
-  { id: 'user-1', displayName: 'Ada Lovelace', role: 'admin' as const },
-  { id: 'user-2', displayName: 'Alex Agent', role: 'agent' as const },
-  { id: 'user-3', displayName: 'Sam Supervisor', role: 'supervisor' as const },
-  { id: 'user-4', displayName: 'Jamie Agent', role: 'agent' as const },
+  {
+    id: 'user-1',
+    email: 'ada@example.com',
+    displayName: 'Ada Lovelace',
+    role: 'admin' as const,
+  },
+  {
+    id: 'user-2',
+    email: 'agent@example.com',
+    displayName: 'Alex Agent',
+    role: 'agent' as const,
+  },
+  {
+    id: 'user-3',
+    email: 'supervisor@example.com',
+    displayName: 'Sam Supervisor',
+    role: 'supervisor' as const,
+  },
+  {
+    id: 'user-4',
+    email: 'jamie@example.com',
+    displayName: 'Jamie Agent',
+    role: 'agent' as const,
+  },
 ];
 
 export const sampleTicketDetail = {
