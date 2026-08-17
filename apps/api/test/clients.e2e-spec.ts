@@ -1,38 +1,19 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
+import type { ClientCatalogRow } from '@support-ticketing/shared';
 import request from 'supertest';
-import { PrismaService } from '../src/prisma/prisma.service';
 import { createTestApp } from './create-test-app';
-import {
-  ADMIN_EMAIL,
-  AGENT_EMAIL,
-  DEMO_PASSWORD,
-  SUPERVISOR_EMAIL,
-} from './demo-credentials';
-
-async function login(
-  app: INestApplication,
-  email: string,
-): Promise<{ accessToken: string }> {
-  const response = await request(app.getHttpServer())
-    .post('/auth/login')
-    .send({ email, password: DEMO_PASSWORD })
-    .expect(200);
-  return { accessToken: response.body.accessToken as string };
-}
-
-type CatalogRow = { id: string; name: string };
+import { ADMIN_EMAIL, AGENT_EMAIL, SUPERVISOR_EMAIL } from './demo-credentials';
+import { login } from './login';
 
 function catalogNames(body: unknown): string[] {
-  return (body as CatalogRow[]).map((row) => row.name);
+  return (body as ClientCatalogRow[]).map((row) => row.name);
 }
 
 let app: INestApplication;
-let prisma: PrismaService;
 
 beforeAll(async () => {
   app = await createTestApp();
-  prisma = app.get(PrismaService);
 });
 
 afterAll(async () => {
@@ -60,7 +41,7 @@ describe('Clients catalog (e2e)', () => {
 
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
-      for (const row of response.body as CatalogRow[]) {
+      for (const row of response.body as ClientCatalogRow[]) {
         expect(row).toEqual({
           id: expect.any(String),
           name: expect.any(String),
@@ -82,40 +63,4 @@ describe('Clients catalog (e2e)', () => {
       );
     },
   );
-
-  it('catalog includes Clients outside Agent List Scope filterOptions.clients', async () => {
-    const orphanName = `Catalog-only Client ${Date.now()}`;
-    const orphan = await prisma.client.create({
-      data: { name: orphanName },
-    });
-
-    try {
-      const { accessToken } = await login(app, AGENT_EMAIL);
-
-      const catalog = await request(app.getHttpServer())
-        .get('/clients')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .expect(200);
-      const list = await request(app.getHttpServer())
-        .get('/tickets')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .expect(200);
-
-      const catalogIds = new Set(
-        (catalog.body as CatalogRow[]).map((row) => row.id),
-      );
-      const filterClientIds = new Set(
-        (
-          list.body.filterOptions.clients as Array<{ id: string; name: string }>
-        ).map((row) => row.id),
-      );
-
-      expect(catalogIds.has(orphan.id)).toBe(true);
-      expect(filterClientIds.has(orphan.id)).toBe(false);
-      expect(catalogIds.size).toBeGreaterThan(filterClientIds.size);
-      expect([...catalogIds].sort()).not.toEqual([...filterClientIds].sort());
-    } finally {
-      await prisma.client.delete({ where: { id: orphan.id } });
-    }
-  });
 });

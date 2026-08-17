@@ -152,7 +152,6 @@ export function TicketCreate() {
           <Stack>
             <Select
               label="Client"
-              searchable
               value={clientId}
               onChange={setClientId}
               data={catalog.clients.map((client) => ({
