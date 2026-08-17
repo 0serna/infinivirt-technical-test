@@ -11,7 +11,10 @@ import {
 import {
   EMPTY_TICKET_LIST_FILTER_OPTIONS,
   hasMinimumRole,
+  OPEN_TICKET_LOAD_STATUS_QUERY,
   PRIORITIES,
+  TICKET_LIST_ASSIGNED_OPEN_SCOPE,
+  TICKET_LIST_STALE_QUERY,
   TICKET_STATUSES,
   type TicketListEnvelope,
   type TicketListFilterOptions,
@@ -28,6 +31,14 @@ import {
   PRIORITY_LABEL,
   STATUS_LABEL,
 } from './ticketLabels';
+
+const STATUS_FILTER_DATA = [
+  ...TICKET_STATUSES.map((value) => ({
+    value,
+    label: STATUS_LABEL[value],
+  })),
+  { value: OPEN_TICKET_LOAD_STATUS_QUERY, label: 'Open load' },
+];
 
 function ticketsUrl(
   filters: TicketListFilters,
@@ -46,6 +57,12 @@ function ticketsUrl(
   if (includeAssignee && filters.assigneeId) {
     params.set('assigneeId', filters.assigneeId);
   }
+  if (filters.stale) {
+    params.set('stale', filters.stale);
+  }
+  if (filters.scope) {
+    params.set('scope', filters.scope);
+  }
   const query = params.toString();
   return query ? `/api/tickets?${query}` : '/api/tickets';
 }
@@ -59,6 +76,8 @@ function filtersFromSearchParams(
   const priority = searchParams.get('priority');
   const clientId = searchParams.get('clientId');
   const assigneeId = searchParams.get('assigneeId');
+  const stale = searchParams.get('stale');
+  const scope = searchParams.get('scope');
   if (status) {
     filters.status = status;
   }
@@ -70,6 +89,12 @@ function filtersFromSearchParams(
   }
   if (includeAssignee && assigneeId) {
     filters.assigneeId = assigneeId;
+  }
+  if (stale) {
+    filters.stale = stale;
+  }
+  if (scope) {
+    filters.scope = scope;
   }
   return filters;
 }
@@ -163,10 +188,7 @@ export function TicketList() {
             clearable
             value={filters.status ?? null}
             onChange={(status) => setFilter('status', status)}
-            data={TICKET_STATUSES.map((value) => ({
-              value,
-              label: STATUS_LABEL[value],
-            }))}
+            data={STATUS_FILTER_DATA}
           />
           <Select
             label="Priority"
@@ -197,6 +219,25 @@ export function TicketList() {
               data={assigneeSelectData(filterOptions)}
             />
           ) : null}
+          <Select
+            label="Stale"
+            clearable
+            value={filters.stale ?? null}
+            onChange={(stale) => setFilter('stale', stale)}
+            data={[{ value: TICKET_LIST_STALE_QUERY, label: 'Stale only' }]}
+          />
+          <Select
+            label="Scope"
+            clearable
+            value={filters.scope ?? null}
+            onChange={(scope) => setFilter('scope', scope)}
+            data={[
+              {
+                value: TICKET_LIST_ASSIGNED_OPEN_SCOPE,
+                label: 'My assigned open',
+              },
+            ]}
+          />
         </Group>
       ) : null}
       {failed ? (

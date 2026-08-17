@@ -9,6 +9,26 @@ export const TICKET_STATUSES = [
 
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
+/** Statuses that count as Open Ticket load (not resolved/closed). */
+export const OPEN_TICKET_STATUSES = ['open', 'in_progress'] as const;
+
+export type OpenTicketStatus = (typeof OPEN_TICKET_STATUSES)[number];
+
+/**
+ * Ticket List `status` query for Open Ticket load (multi-Status).
+ * Prefer this over inventing a separate list endpoint for dashboard deep-links.
+ */
+export const OPEN_TICKET_LOAD_STATUS_QUERY = 'open,in_progress';
+
+/** Ticket List `stale` query: `updated_at` older than 48h and Status ≠ closed. */
+export const TICKET_LIST_STALE_QUERY = '1';
+
+/** Ticket List `scope` query: Open Tickets where Assignee is the current User. */
+export const TICKET_LIST_ASSIGNED_OPEN_SCOPE = 'assignedOpen';
+
+/** Stale Ticket age threshold (ADR 0011). */
+export const STALE_TICKET_MAX_AGE_HOURS = 48;
+
 export const PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
 
 export type Priority = (typeof PRIORITIES)[number];
@@ -44,11 +64,22 @@ export type TicketListRow = {
   createdAt: string;
 };
 
+/**
+ * Ticket List query filters (synced with `/tickets` URL search params).
+ *
+ * - `status`: one Status, or comma-separated multi-Status for Open Ticket load
+ *   (`open,in_progress`). The API also accepts repeated `status` values.
+ * - `stale`: `1` for Stale Tickets (`updated_at` older than 48h, Status ≠ closed).
+ * - `scope`: `assignedOpen` for Open Tickets assigned to the current User
+ *   (does not widen List Scope).
+ */
 export type TicketListFilters = {
   status?: string;
   priority?: string;
   clientId?: string;
   assigneeId?: string;
+  stale?: string;
+  scope?: string;
 };
 
 export type TicketListFilterOptions = {

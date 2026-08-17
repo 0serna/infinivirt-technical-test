@@ -432,6 +432,148 @@ describe('Tickets list (e2e)', () => {
     expect(titles(response.body)).toContain('High: warehouse scanner pairing');
     expect(titles(response.body)).not.toContain('Resolved: SSO redirect loop');
   });
+
+  it('status=open,in_progress returns Open Ticket load and excludes resolved/closed', async () => {
+    const { accessToken } = await login(app, SUPERVISOR_EMAIL);
+    const response = await request(app.getHttpServer())
+      .get('/tickets')
+      .query({ status: 'open,in_progress' })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    const statuses = new Set(
+      (response.body.tickets as Array<{ status: string }>).map(
+        (ticket) => ticket.status,
+      ),
+    );
+    expect(statuses.has('open')).toBe(true);
+    expect(statuses.has('in_progress')).toBe(true);
+    expect(statuses.has('resolved')).toBe(false);
+    expect(statuses.has('closed')).toBe(false);
+    expect(titles(response.body)).toContain('High: patient portal MFA reset');
+    expect(titles(response.body)).toContain(
+      'In progress: shipment tracking API',
+    );
+    expect(titles(response.body)).not.toContain('Resolved: SSO redirect loop');
+    expect(titles(response.body)).not.toContain('Closed: invoice PDF encoding');
+  });
+
+  it('repeated status query values also express Open Ticket load', async () => {
+    const { accessToken } = await login(app, SUPERVISOR_EMAIL);
+    const response = await request(app.getHttpServer())
+      .get('/tickets')
+      .query({ status: ['open', 'in_progress'] })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(
+      (response.body.tickets as Array<{ status: string }>).every((ticket) =>
+        ['open', 'in_progress'].includes(ticket.status),
+      ),
+    ).toBe(true);
+  });
+
+  it('stale=1 returns Tickets with updated_at older than 48h and Status ≠ closed, including resolved', async () => {
+    const { accessToken } = await login(app, SUPERVISOR_EMAIL);
+    const response = await request(app.getHttpServer())
+      .get('/tickets')
+      .query({ stale: '1' })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    const listed = titles(response.body);
+    expect(listed).toContain('Stale open: billing portal timeout');
+    expect(listed).toContain('Resolved: gift-card balance mismatch');
+    expect(listed).toContain('Low: documentation typo');
+    expect(listed).not.toContain('Closed (older): dealer SSO onboarding');
+    expect(listed).not.toContain('Closed: invoice PDF encoding');
+    expect(listed).not.toContain('High: patient portal MFA reset');
+    expect(listed).not.toContain('Open: webhook signature mismatch');
+
+    for (const ticket of response.body.tickets as Array<{
+      status: string;
+      updatedAt: string;
+    }>) {
+      expect(ticket.status).not.toBe('closed');
+      expect(Date.parse(ticket.updatedAt)).toBeLessThan(
+        Date.now() - 48 * 60 * 60 * 1000,
+      );
+    }
+  });
+
+  it('scope=assignedOpen returns Open Tickets where Assignee is the current User within List Scope', async () => {
+    const agent = await login(app, AGENT_EMAIL);
+    const response = await request(app.getHttpServer())
+      .get('/tickets')
+      .query({ scope: 'assignedOpen' })
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .expect(200);
+
+    const tickets = response.body.tickets as Array<{
+      title: string;
+      status: string;
+      assignee: { id: string } | null;
+    }>;
+    expect(tickets.length).toBeGreaterThan(0);
+    expect(
+      tickets.every((ticket) => ticket.assignee?.id === agent.userId),
+    ).toBe(true);
+    expect(
+      tickets.every((ticket) =>
+        ['open', 'in_progress'].includes(ticket.status),
+      ),
+    ).toBe(true);
+    expect(titles(response.body)).toContain(
+      'In progress: shipment tracking API',
+    );
+    expect(titles(response.body)).not.toContain(
+      'High: patient portal MFA reset',
+    );
+    expect(titles(response.body)).not.toContain(
+      'High: warehouse scanner pairing',
+    );
+    expect(titles(response.body)).not.toContain(
+      'Resolved: gift-card balance mismatch',
+    );
+  });
+
+  it('Agent scope=assignedOpen does not widen List Scope to team-wide Open Tickets', async () => {
+    const agent = await login(app, AGENT_EMAIL);
+    const response = await request(app.getHttpServer())
+      .get('/tickets')
+      .query({ scope: 'assignedOpen' })
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .expect(200);
+
+    expect(titles(response.body)).not.toContain(
+      'High: warehouse scanner pairing',
+    );
+  });
+
+  it('invalid multi-status, stale, or scope return HTTP 400', async () => {
+    const { accessToken } = await login(app, SUPERVISOR_EMAIL);
+
+    const status = await request(app.getHttpServer())
+      .get('/tickets')
+      .query({ status: 'open,not-a-status' })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(400);
+    const stale = await request(app.getHttpServer())
+      .get('/tickets')
+      .query({ stale: 'yes' })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(400);
+    const scope = await request(app.getHttpServer())
+      .get('/tickets')
+      .query({ scope: 'team' })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(400);
+
+    for (const response of [status, stale, scope]) {
+      expect(response.body).not.toHaveProperty('stack');
+      expect(JSON.stringify(response.body)).not.toMatch(/TicketsService/);
+    }
+  });
 });
 
 describe('Tickets get by id (e2e)', () => {

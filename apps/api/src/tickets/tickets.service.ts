@@ -14,10 +14,14 @@ import {
   isLegalStatusEdge,
   mayRecordReassignment,
   mayRecordStatusTransition,
+  OPEN_TICKET_STATUSES,
   type PatchTicketAssigneeBody,
   type PatchTicketStatusBody,
   PRIORITIES,
   type Priority,
+  STALE_TICKET_MAX_AGE_HOURS,
+  TICKET_LIST_ASSIGNED_OPEN_SCOPE,
+  TICKET_LIST_STALE_QUERY,
   TICKET_STATUSES,
   type TicketDetail,
   type TicketListClient,
@@ -152,16 +156,60 @@ function parseAssigneeId(value: unknown): string | null {
   return requireUuid(value, 'assigneeId');
 }
 
+function parseStatusFilters(
+  value: string | string[] | undefined,
+): TicketStatus[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const rawParts = Array.isArray(value) ? value : value.split(',');
+  const parts = rawParts
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length === 0) {
+    return undefined;
+  }
+  const statuses: TicketStatus[] = [];
+  for (const part of parts) {
+    statuses.push(parseRequiredEnum(part, TICKET_STATUSES, 'status'));
+  }
+  return [...new Set(statuses)];
+}
+
+function parseStaleFilter(value?: string): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  if (value !== TICKET_LIST_STALE_QUERY) {
+    throw new BadRequestException('Invalid stale');
+  }
+  return true;
+}
+
+function parseAssignedOpenScope(value?: string): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  if (value !== TICKET_LIST_ASSIGNED_OPEN_SCOPE) {
+    throw new BadRequestException('Invalid scope');
+  }
+  return true;
+}
+
 function matchesFilters(
   ticket: ScopedTicket,
   filters: {
-    status?: TicketStatus;
+    statuses?: TicketStatus[];
     priority?: Priority;
     clientId?: string;
     assignee?: AssigneeFilter;
+    staleBefore?: Date;
   },
 ): boolean {
-  if (filters.status !== undefined && ticket.status !== filters.status) {
+  if (
+    filters.statuses !== undefined &&
+    !filters.statuses.includes(ticket.status)
+  ) {
     return false;
   }
   if (filters.priority !== undefined && ticket.priority !== filters.priority) {
@@ -169,6 +217,14 @@ function matchesFilters(
   }
   if (filters.clientId !== undefined && ticket.client.id !== filters.clientId) {
     return false;
+  }
+  if (filters.staleBefore !== undefined) {
+    if (ticket.status === 'closed') {
+      return false;
+    }
+    if (ticket.updatedAt >= filters.staleBefore) {
+      return false;
+    }
   }
   if (filters.assignee?.kind === 'unassigned') {
     return ticket.assignee === null;
@@ -257,17 +313,31 @@ export class TicketsService {
 
   async list(
     user: PublicUser,
-    query: TicketListFilters = {},
+    query: TicketListFilters & { status?: string | string[] } = {},
   ): Promise<TicketListEnvelope> {
-    const status = parseOptionalEnum(query.status, TICKET_STATUSES, 'status');
+    const statuses = parseStatusFilters(query.status);
     const priority = parseOptionalEnum(query.priority, PRIORITIES, 'priority');
     const clientId =
       query.clientId === undefined
         ? undefined
         : requireUuid(query.clientId, 'clientId');
+    const stale = parseStaleFilter(query.stale);
+    const assignedOpen = parseAssignedOpenScope(query.scope);
     const seesAllTickets = hasMinimumRole(user.role, 'supervisor');
-    const assignee = seesAllTickets
+    let assignee = seesAllTickets
       ? parseAssigneeFilter(query.assigneeId)
+      : undefined;
+
+    let effectiveStatuses = statuses;
+    if (assignedOpen) {
+      assignee = { kind: 'user', id: user.id };
+      if (effectiveStatuses === undefined) {
+        effectiveStatuses = [...OPEN_TICKET_STATUSES];
+      }
+    }
+
+    const staleBefore = stale
+      ? new Date(Date.now() - STALE_TICKET_MAX_AGE_HOURS * 60 * 60 * 1000)
       : undefined;
 
     const scoped = await this.prisma.ticket.findMany({
@@ -287,7 +357,13 @@ export class TicketsService {
     });
 
     const tickets = scoped.filter((ticket) =>
-      matchesFilters(ticket, { status, priority, clientId, assignee }),
+      matchesFilters(ticket, {
+        statuses: effectiveStatuses,
+        priority,
+        clientId,
+        assignee,
+        staleBefore,
+      }),
     );
 
     return {
