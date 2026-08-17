@@ -91,6 +91,81 @@ export function isTicketsUrl(url: string): boolean {
   return url === '/api/tickets' || url.startsWith('/api/tickets?');
 }
 
+export function isTicketDetailUrl(url: string): boolean {
+  return /^\/api\/tickets\/[^/?]+$/.test(url);
+}
+
+export const sampleTicketDetail = {
+  id: 'ticket-1',
+  title: 'High: patient portal MFA reset',
+  description: 'MFA reset emails not arriving.',
+  status: 'open' as const,
+  priority: 'high' as const,
+  client: { id: 'client-1', name: 'Contoso Health' },
+  assignee: null,
+  createdBy: { id: 'user-2', displayName: 'Alex Agent' },
+  updatedAt: '2026-08-01T12:00:00.000Z',
+  createdAt: '2026-07-31T12:00:00.000Z',
+  resolvedAt: null,
+  closedAt: null,
+  statusHistory: [
+    {
+      from: null,
+      to: 'open' as const,
+      changedAt: '2026-07-31T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+  ],
+};
+
+export const sampleReopenedTicketDetail = {
+  id: 'ticket-3',
+  title: 'Reopened: returns portal blank page',
+  description:
+    'Was closed after hotfix; Client reports regression. Projection timestamps cleared on reopen.',
+  status: 'open' as const,
+  priority: 'high' as const,
+  client: { id: 'client-2', name: 'Northwind Retail' },
+  assignee: { id: 'user-2', displayName: 'Alex Agent' },
+  createdBy: { id: 'user-2', displayName: 'Alex Agent' },
+  updatedAt: '2026-08-16T12:00:00.000Z',
+  createdAt: '2026-07-22T12:00:00.000Z',
+  resolvedAt: null,
+  closedAt: null,
+  statusHistory: [
+    {
+      from: null,
+      to: 'open' as const,
+      changedAt: '2026-07-22T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'open' as const,
+      to: 'in_progress' as const,
+      changedAt: '2026-07-23T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'in_progress' as const,
+      to: 'resolved' as const,
+      changedAt: '2026-07-25T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'resolved' as const,
+      to: 'closed' as const,
+      changedAt: '2026-07-26T12:00:00.000Z',
+      changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
+    },
+    {
+      from: 'closed' as const,
+      to: 'open' as const,
+      changedAt: '2026-08-16T06:00:00.000Z',
+      changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
+    },
+  ],
+};
+
 export function mockAuthedSession(
   tickets: unknown = emptyTickets,
   user: typeof ada | typeof alex | typeof sam = ada,

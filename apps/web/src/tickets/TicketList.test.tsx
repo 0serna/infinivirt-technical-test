@@ -303,3 +303,20 @@ test('choosing Status and Client refetches tickets with those query params', asy
     .filter((url) => isTicketsUrl(url));
   expect(ticketUrls).toContain('/api/tickets?status=open&clientId=client-1');
 });
+
+test('Ticket List Titles link to the Ticket consult route', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockAuthedSession(sampleTickets);
+
+  renderApp(['/']);
+
+  const title = await screen.findByRole('link', {
+    name: 'High: patient portal MFA reset',
+  });
+  expect(title.getAttribute('href')).toBe('/tickets/ticket-1');
+  expect(
+    screen
+      .getByRole('link', { name: 'Resolved: SSO redirect loop' })
+      .getAttribute('href'),
+  ).toBe('/tickets/ticket-2');
+});

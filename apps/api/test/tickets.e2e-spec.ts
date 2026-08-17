@@ -361,3 +361,226 @@ describe('Tickets list (e2e)', () => {
     expect(titles(response.body)).not.toContain('Resolved: SSO redirect loop');
   });
 });
+
+describe('Tickets get by id (e2e)', () => {
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    app = await createTestApp();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('GET /tickets/:id without a token returns the same opaque 401 as GET /auth/me', async () => {
+    const me = await request(app.getHttpServer()).get('/auth/me').expect(401);
+    const ticket = await request(app.getHttpServer())
+      .get('/tickets/00000000-0000-4000-8000-000000000001')
+      .expect(401);
+
+    expect(ticket.body).toEqual(me.body);
+  });
+
+  it('Agent GET of a Ticket they created (unassigned) returns current fields and Status Transition history', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const list = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    const listed = (
+      list.body.tickets as Array<{ id: string; title: string }>
+    ).find((ticket) => ticket.title === 'High: patient portal MFA reset');
+    expect(listed).toBeDefined();
+
+    const response = await request(app.getHttpServer())
+      .get(`/tickets/${listed?.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(response.body).toEqual({
+      id: listed?.id,
+      title: 'High: patient portal MFA reset',
+      description: 'MFA reset emails not arriving.',
+      status: 'open',
+      priority: 'high',
+      client: { id: expect.any(String), name: 'Contoso Health' },
+      assignee: null,
+      createdBy: { id: expect.any(String), displayName: 'Alex Agent' },
+      updatedAt: expect.any(String),
+      createdAt: expect.any(String),
+      resolvedAt: null,
+      closedAt: null,
+      statusHistory: [
+        {
+          from: null,
+          to: 'open',
+          changedAt: expect.any(String),
+          changedBy: { id: expect.any(String), displayName: 'Alex Agent' },
+        },
+      ],
+    });
+    expect(response.body).not.toHaveProperty('comments');
+    expect(response.body).not.toHaveProperty('assignments');
+  });
+
+  it('Agent GET of a Ticket where they are Assignee includes full Status Transition history oldest first', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const list = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    const listed = (
+      list.body.tickets as Array<{ id: string; title: string }>
+    ).find((ticket) => ticket.title === 'Reopened: returns portal blank page');
+    expect(listed).toBeDefined();
+
+    const response = await request(app.getHttpServer())
+      .get(`/tickets/${listed?.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(response.body.title).toBe('Reopened: returns portal blank page');
+    expect(response.body.status).toBe('open');
+    expect(response.body.assignee).toEqual({
+      id: expect.any(String),
+      displayName: 'Alex Agent',
+    });
+    expect(response.body.resolvedAt).toBeNull();
+    expect(response.body.closedAt).toBeNull();
+    expect(
+      response.body.statusHistory.map(
+        (row: { from: string | null; to: string }) => [row.from, row.to],
+      ),
+    ).toEqual([
+      [null, 'open'],
+      ['open', 'in_progress'],
+      ['in_progress', 'resolved'],
+      ['resolved', 'closed'],
+      ['closed', 'open'],
+    ]);
+    const changedAt = response.body.statusHistory.map(
+      (row: { changedAt: string }) => Date.parse(row.changedAt),
+    );
+    for (let index = 1; index < changedAt.length; index += 1) {
+      expect(changedAt[index]).toBeGreaterThanOrEqual(changedAt[index - 1]);
+    }
+    expect(response.body).not.toHaveProperty('comments');
+    expect(response.body).not.toHaveProperty('assignments');
+  });
+
+  it('Agent GET of a Ticket they created that is assigned to another User includes resolvedAt', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const list = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    const listed = (
+      list.body.tickets as Array<{ id: string; title: string }>
+    ).find((ticket) => ticket.title === 'Resolved: SSO redirect loop');
+    expect(listed).toBeDefined();
+
+    const response = await request(app.getHttpServer())
+      .get(`/tickets/${listed?.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(response.body.title).toBe('Resolved: SSO redirect loop');
+    expect(response.body.status).toBe('resolved');
+    expect(response.body.resolvedAt).toEqual(expect.any(String));
+    expect(response.body.closedAt).toBeNull();
+    expect(response.body.assignee).toEqual({
+      id: expect.any(String),
+      displayName: 'Sam Supervisor',
+    });
+  });
+
+  it('Agent cannot distinguish a well-formed unknown id from a Ticket outside List Scope', async () => {
+    const agent = await login(app, AGENT_EMAIL);
+    const supervisor = await login(app, SUPERVISOR_EMAIL);
+    const supervisorList = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .expect(200);
+    const outOfScope = (
+      supervisorList.body.tickets as Array<{ id: string; title: string }>
+    ).find((ticket) => ticket.title === 'High: warehouse scanner pairing');
+    expect(outOfScope).toBeDefined();
+
+    const unknownId = '00000000-0000-4000-8000-000000000099';
+    const unknown = await request(app.getHttpServer())
+      .get(`/tickets/${unknownId}`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .expect(404);
+    const hidden = await request(app.getHttpServer())
+      .get(`/tickets/${outOfScope?.id}`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .expect(404);
+
+    expect(unknown.body).toEqual(hidden.body);
+    expect(JSON.stringify(unknown.body)).not.toMatch(/warehouse scanner/);
+    expect(JSON.stringify(hidden.body)).not.toMatch(/warehouse scanner/);
+  });
+
+  it('Supervisor and Administrator can GET Tickets the Agent cannot', async () => {
+    const agent = await login(app, AGENT_EMAIL);
+    const supervisor = await login(app, SUPERVISOR_EMAIL);
+    const admin = await login(app, ADMIN_EMAIL);
+    const supervisorList = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .expect(200);
+    const warehouse = (
+      supervisorList.body.tickets as Array<{ id: string; title: string }>
+    ).find((ticket) => ticket.title === 'High: warehouse scanner pairing');
+    expect(warehouse).toBeDefined();
+
+    await request(app.getHttpServer())
+      .get(`/tickets/${warehouse?.id}`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .expect(404);
+
+    const asSupervisor = await request(app.getHttpServer())
+      .get(`/tickets/${warehouse?.id}`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .expect(200);
+    const asAdmin = await request(app.getHttpServer())
+      .get(`/tickets/${warehouse?.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .expect(200);
+
+    expect(asSupervisor.body.title).toBe('High: warehouse scanner pairing');
+    expect(asAdmin.body.title).toBe('High: warehouse scanner pairing');
+    expect(asSupervisor.body.description).toBe(
+      'New scanners fail Bluetooth pairing.',
+    );
+
+    const closed = (
+      supervisorList.body.tickets as Array<{ id: string; title: string }>
+    ).find(
+      (ticket) => ticket.title === 'Closed (older): dealer SSO onboarding',
+    );
+    expect(closed).toBeDefined();
+    await request(app.getHttpServer())
+      .get(`/tickets/${closed?.id}`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .expect(404);
+    const closedBody = await request(app.getHttpServer())
+      .get(`/tickets/${closed?.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .expect(200);
+    expect(closedBody.body.closedAt).toEqual(expect.any(String));
+    expect(closedBody.body.resolvedAt).toEqual(expect.any(String));
+  });
+
+  it('malformed Ticket id returns HTTP 400 without a stack', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const response = await request(app.getHttpServer())
+      .get('/tickets/not-a-uuid')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(400);
+
+    expect(response.body).not.toHaveProperty('stack');
+    expect(JSON.stringify(response.body)).not.toMatch(/TicketsService/);
+  });
+});

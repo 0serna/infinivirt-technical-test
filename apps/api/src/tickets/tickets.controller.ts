@@ -1,11 +1,13 @@
 import {
   Controller,
   Get,
+  Param,
   Query,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
 import type {
+  TicketDetail,
   TicketListEnvelope,
   TicketListFilters,
 } from '@support-ticketing/shared';
@@ -28,5 +30,18 @@ export class TicketsController {
       throw new UnauthorizedException();
     }
     return this.ticketsService.list(user, query);
+  }
+
+  @Get(':id')
+  @RequireRole('agent')
+  getById(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+  ): Promise<TicketDetail> {
+    const user = request.user;
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+    return this.ticketsService.getById(user, id);
   }
 }

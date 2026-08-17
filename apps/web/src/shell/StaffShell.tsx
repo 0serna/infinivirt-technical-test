@@ -1,6 +1,6 @@
 import { AppShell, Button, Group, Text, Title } from '@mantine/core';
+import { Link, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
-import { TicketList } from '../tickets/TicketList';
 
 const ROLE_LABEL = {
   agent: 'Agent',
@@ -19,7 +19,9 @@ export function StaffShell() {
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
           <Title order={1} size="h3">
-            Support Ticketing
+            <Link to="/" style={{ color: 'inherit', textDecoration: 'none' }}>
+              Support Ticketing
+            </Link>
           </Title>
           <Group>
             <Text>{user.displayName}</Text>
@@ -31,7 +33,7 @@ export function StaffShell() {
         </Group>
       </AppShell.Header>
       <AppShell.Main>
-        <TicketList />
+        <Outlet />
       </AppShell.Main>
     </AppShell>
   );

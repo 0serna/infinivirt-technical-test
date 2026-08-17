@@ -22,6 +22,7 @@ import {
   UNASSIGNED_ASSIGNEE_QUERY,
 } from '@support-ticketing/shared';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
 
@@ -224,7 +225,9 @@ export function TicketList() {
           <Table.Tbody>
             {tickets.map((ticket) => (
               <Table.Tr key={ticket.id}>
-                <Table.Td>{ticket.title}</Table.Td>
+                <Table.Td>
+                  <Link to={`/tickets/${ticket.id}`}>{ticket.title}</Link>
+                </Table.Td>
                 <Table.Td>{STATUS_LABEL[ticket.status]}</Table.Td>
                 <Table.Td>{PRIORITY_LABEL[ticket.priority]}</Table.Td>
                 <Table.Td>{ticket.client.name}</Table.Td>

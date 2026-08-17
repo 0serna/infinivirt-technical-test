@@ -41,8 +41,8 @@ Message on a Ticket thread. Visibility is `public` (customer-facing) or `interna
 _Avoid_: Note, message, reply (as a domain type)
 
 **Status Transition**:
-Change of Ticket Status recorded in an append-only history (from, to, at, by). Status on the Ticket is the current projection. On reopen (`closed` → `open`), `resolved_at` and `closed_at` on the Ticket are cleared; history keeps prior cycles.
-_Avoid_: Overwriting columns with no history; status derived only from history with no projection
+Change of Ticket Status recorded in an append-only history (from, to, at, by). Status on the Ticket is the current projection. The actor names `to`; `from` is always the current Status. Creating a Ticket records a birth row (`from` absent → `open`, by `created_by`). Consult of a Ticket includes the full history, every cycle, oldest first — same visibility as the Ticket. On reopen (`closed` → `open`), `resolved_at` and `closed_at` are cleared; Assignee is unchanged; history keeps prior cycles. Entering `resolved` sets `resolved_at`; entering `closed` sets `closed_at`. Same `to` as current is not a legal transition. Rejected attempts do not append a row or change timestamps. Who may consult is List Scope; who may record a Status Transition is Authorization — a consultable Ticket can still reject a Transition (illegal edge vs Role/Assignee) without pretending the Ticket does not exist.
+_Avoid_: Overwriting columns with no history; status derived only from history with no projection; hiding history from Agents; treating reopen as Reassignment; skipping birth; showing only the current cycle; no-op “transitions” to the current Status; collapsing out-of-scope, illegal edge, and unauthorized into one outcome
 
 **List Scope**:
 The set of Tickets a User may consult — the Ticket List and any later single-Ticket consult. Agent: Tickets where they are Assignee or `created_by` (unassigned Tickets they did not create are out). Supervisor and Administrator: all Tickets. A Ticket outside this set is not consultable; consult does not announce that it exists. Distinct from the Operational Dashboard, which counts Open Tickets assigned to the Agent.
@@ -55,8 +55,8 @@ _Avoid_: Search-by-Title as a required list dimension; Assignee as a filter that
 ### Status and priority
 
 **Ticket Status**:
-Current lifecycle state of a Ticket: `open` → `in_progress` → `resolved` → `closed`. Reopen: from `closed` to `open`, Administrator only.
-_Avoid_: State-machine labels outside this set
+Current lifecycle state of a Ticket. The only legal forward edges are the next step in `open` → `in_progress` → `resolved` → `closed`. The only reverse edge is reopen: `closed` → `open`. No Role may skip or jump (Administrator included). Close and reopen are Administrator-only; Agent and Supervisor stop at `resolved` even when Assignee.
+_Avoid_: State-machine labels outside this set; a second graph for Administrator; `resolved` → `in_progress` or other back-steps; treating the current Status as a legal `to`
 
 **Open Ticket**:
 Ticket in operational load: Status `open` or `in_progress`. Does not include `resolved` or `closed`.
@@ -69,13 +69,13 @@ _Avoid_: Severity (unless split later), custom priorities; treating Priority as 
 ### Authorization (cascade)
 
 **Agent**:
-May consult Tickets in their List Scope, create tickets, update and change Status only when Assignee, add `public` Comments, move to `resolved` when Assignee.
+May consult Tickets in their List Scope, create tickets, add `public` Comments. May record forward Status Transitions through `resolved` only when Assignee. Creating the Ticket, or consulting it, is not enough. Cannot close or reopen. Unassigned Tickets are frozen for this Role.
 
 **Supervisor**:
-Everything an Agent can do, plus: list all tickets, reassign, see team metrics, review stale/overdue tickets, `internal` Comments. Does not close or reopen. Does not edit fields/status on a ticket they are not Assignee of (except reassignment).
+Everything an Agent can do, plus: list all tickets, reassign, see team metrics, review stale/overdue tickets, `internal` Comments. Same Status rules as Agent (Assignee, through `resolved` only). Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment). Unassigned Tickets are frozen for this Role too.
 
 **Administrator**:
-Everything a Supervisor can do, plus: update any ticket, assign to anyone, list Users and Clients, close and reopen.
+Everything a Supervisor can do, plus: update any ticket, assign to anyone, list Users and Clients, close and reopen. May record any legal Status Transition on any Ticket (including unassigned) without being Assignee. Still cannot skip or jump.
 
 ### Metrics views
 

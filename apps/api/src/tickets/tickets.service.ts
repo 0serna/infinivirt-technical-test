@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import {
   EMPTY_TICKET_LIST_FILTER_OPTIONS,
   hasMinimumRole,
@@ -6,6 +11,7 @@ import {
   type Priority,
   TICKET_STATUSES,
   type TicketListClient,
+  type TicketDetail,
   type TicketListEnvelope,
   type TicketListFilterOptions,
   type TicketListFilters,
@@ -112,6 +118,15 @@ function filterOptionsFromScope(
   };
 }
 
+function listScopeWhere(user: PublicUser): Prisma.TicketWhereInput {
+  if (hasMinimumRole(user.role, 'supervisor')) {
+    return {};
+  }
+  return {
+    OR: [{ assigneeId: user.id }, { createdById: user.id }],
+  };
+}
+
 @Injectable()
 export class TicketsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -132,11 +147,7 @@ export class TicketsService {
       : undefined;
 
     const scoped = await this.prisma.ticket.findMany({
-      where: seesAllTickets
-        ? {}
-        : {
-            OR: [{ assigneeId: user.id }, { createdById: user.id }],
-          },
+      where: listScopeWhere(user),
       orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
       select: {
         id: true,
@@ -164,6 +175,60 @@ export class TicketsService {
       filterOptions: scoped.length
         ? filterOptionsFromScope(scoped)
         : EMPTY_TICKET_LIST_FILTER_OPTIONS,
+    };
+  }
+
+  async getById(user: PublicUser, id: string): Promise<TicketDetail> {
+    const ticketId = requireUuid(id, 'id');
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, AND: [listScopeWhere(user)] },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        priority: true,
+        updatedAt: true,
+        createdAt: true,
+        description: true,
+        resolvedAt: true,
+        closedAt: true,
+        client: { select: { id: true, name: true } },
+        assignee: { select: { id: true, displayName: true } },
+        createdBy: { select: { id: true, displayName: true } },
+        statusHistory: {
+          orderBy: [{ changedAt: 'asc' }, { id: 'asc' }],
+          select: {
+            fromStatus: true,
+            toStatus: true,
+            changedAt: true,
+            changedBy: { select: { id: true, displayName: true } },
+          },
+        },
+      },
+    });
+    if (!ticket) {
+      throw new NotFoundException();
+    }
+
+    return {
+      id: ticket.id,
+      title: ticket.title,
+      status: ticket.status,
+      priority: ticket.priority,
+      client: ticket.client,
+      assignee: ticket.assignee,
+      createdBy: ticket.createdBy,
+      updatedAt: ticket.updatedAt.toISOString(),
+      createdAt: ticket.createdAt.toISOString(),
+      description: ticket.description,
+      resolvedAt: ticket.resolvedAt?.toISOString() ?? null,
+      closedAt: ticket.closedAt?.toISOString() ?? null,
+      statusHistory: ticket.statusHistory.map((row) => ({
+        from: row.fromStatus,
+        to: row.toStatus,
+        changedAt: row.changedAt.toISOString(),
+        changedBy: row.changedBy,
+      })),
     };
   }
 }

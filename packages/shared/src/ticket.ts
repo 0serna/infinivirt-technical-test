@@ -54,6 +54,20 @@ export type TicketListEnvelope = {
   filterOptions: TicketListFilterOptions;
 };
 
+export type TicketStatusHistoryRow = {
+  from: TicketStatus | null;
+  to: TicketStatus;
+  changedAt: string;
+  changedBy: TicketListPerson;
+};
+
+export type TicketDetail = TicketListRow & {
+  description: string;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  statusHistory: TicketStatusHistoryRow[];
+};
+
 export const EMPTY_TICKET_LIST_FILTER_OPTIONS: TicketListFilterOptions = {
   clients: [],
   assignees: [],
