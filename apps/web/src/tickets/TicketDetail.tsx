@@ -153,12 +153,12 @@ function HistoryTimeline<Row extends HistoryRow>({
   rowKey: (row: Row) => string;
 }) {
   return (
-    <Timeline active={rows.length - 1} bulletSize={12} lineWidth={2}>
+    <Timeline active={rows.length - 1} bulletSize={14} lineWidth={2}>
       {rows.map((row) => (
         <Timeline.Item
           key={rowKey(row)}
           title={
-            <Text size="sm" fw={600}>
+            <Text size="sm" fw={600} lh={1}>
               {formatLabel(row)}
             </Text>
           }
