@@ -11,8 +11,8 @@ Authenticated company staff (Administrator, Agent, or Supervisor). Login identit
 _Avoid_: Account, operator, employee
 
 **Client**:
-Person or organization receiving support. A business record identified by a unique name; does not authenticate in the first release.
-_Avoid_: Customer, account, company (when referring to the subject of a ticket)
+Person or organization receiving support. A business record identified by a unique name; does not authenticate in the first release. Creating a Ticket attaches an existing Client; the create form does not invent Clients.
+_Avoid_: Customer, account, company (when referring to the subject of a ticket); creating Clients inline from the Ticket form
 
 **Role**:
 Access permission for a User. Cascading hierarchy: Administrator ⊃ Supervisor ⊃ Agent (each role includes the permissions of the one below and adds its own).
@@ -21,12 +21,12 @@ _Avoid_: Profile, permission set, flat unrelated roles
 ### Core
 
 **Ticket**:
-Unit of support work tied to a single Client for its lifetime (Client does not change after create). Aggregate root: status, priority, assignment, and comments live on it. Created by a User on behalf of the Client. Current-cycle fields: Title, Status, Priority, Assignee (nullable), description, created_by, created_at, updated_at, resolved_at (nullable), closed_at (nullable).
-_Avoid_: Request, case, issue, incident (as a synonym for the aggregate)
+Unit of support work tied to a single Client for its lifetime (Client does not change after create). Aggregate root: status, priority, assignment, and comments live on it. Created by a User on behalf of the Client — `created_by` is always that authenticated User (no create-as-another-User). At birth: Status `open`, Assignee null, Priority default `medium` (may be set on create), Title and description required (non-empty after trim), plus the Status Transition birth row; no Reassignment row yet. Current-cycle fields: Title, Status, Priority, Assignee (nullable), description, created_by, created_at, updated_at, resolved_at (nullable), closed_at (nullable).
+_Avoid_: Request, case, issue, incident (as a synonym for the aggregate); assigning on create; inventing a Client at create; blank Title or description; forging `created_by`
 
 **Title**:
-Short label of a Ticket for queues and lists. Distinct from description, which is the body.
-_Avoid_: Subject, summary (as synonyms that replace Title)
+Short label of a Ticket for queues and lists. Distinct from description, which is the body. Required on create (non-empty after trim); not a unique key — duplicates are allowed across and within a Client.
+_Avoid_: Subject, summary (as synonyms that replace Title); treating Title as a natural key
 
 **Assignee**:
 The single User responsible for the Ticket at a given time. May be null if the ticket is unassigned. Any User may be Assignee (Agent, Supervisor, or Administrator); the Role of the target is not filtered.
@@ -34,7 +34,7 @@ _Avoid_: Owner, handler; Assignee limited to Agent
 
 **Reassignment**:
 Change of a Ticket's Assignee. Every change — first assignment (`null`→user), reassignment (user→user), and unassignment (user→`null`) — is stored in an append-only history; `assignee` on the Ticket is the current projection. “Reassigned more than twice” means more than two rows in that history. Creating a Ticket leaves Assignee null and does not write a history row; the first `null`→user is a Reassignment. Same Assignee as current (including null→null) is not a Reassignment. Supervisor and Administrator share the same Reassignment power on every Ticket in List Scope; Agent has none. Allowed in any Ticket Status. The actor may choose themselves as Assignee. A non-null `to` that is not an existing User rejects the change; that is not “Ticket does not exist”. A successful Reassignment refreshes the Ticket's `updated_at`. Consult of a Ticket includes the full assignment history, oldest first — same visibility as the Ticket.
-_Avoid_: Transfer, handoff (as an entity); treating create as the first Reassignment; a birth row for Assignee; distinct “assign” vs “reassign” operations by Role; forbidding self-assignment; collapsing unknown Assignee target into out-of-scope; blocking Reassignment by Ticket Status
+_Avoid_: Transfer, handoff (as an entity); treating create as the first Reassignment; a birth row for Assignee; a birth `null→null` assignment row; distinct “assign” vs “reassign” operations by Role; forbidding self-assignment; collapsing unknown Assignee target into out-of-scope; blocking Reassignment by Ticket Status
 
 **Comment**:
 Message on a Ticket thread. Visibility is `public` (customer-facing) or `internal` (staff only). In the first release, with no Client portal, every authenticated User who can consult the Ticket sees both types. Consult includes the full Comment thread, oldest first (both visibilities). Adding a Comment requires List Scope (same as consult); being Assignee or `created_by` is not an extra gate. Allowed in any Ticket Status. Append-only: body and visibility do not change after create. Creating a Comment refreshes the Ticket's `updated_at`. Agent may create only `public`; Supervisor and Administrator may create `public` or `internal` (cascade). Composer defaults: Agent `public`; Supervisor and Administrator `internal`. When visibility is omitted on create (API), it is `public`. A consultable Ticket can still reject a create when the Role may not use the requested visibility — that is Authorization, not “Ticket does not exist”.
@@ -49,8 +49,8 @@ The set of Tickets a User may consult — the Ticket List and any later single-T
 _Avoid_: “within list scope” without this set; treating consult as assignee-only; a shared unassigned queue for Agents; equating List Scope with who may update; a table-only recorte that a direct consult can bypass
 
 **Ticket List**:
-Consult view of Tickets in the User’s List Scope, all Status values unless filtered. Each row includes Title, Status, Priority, Client, Assignee (nullable), `created_by`, and `updatedAt`. Narrows by Status, Priority, and Client; Supervisor and Administrator may also narrow by Assignee, including unassigned (`Assignee` null). Filter choices come from Tickets already in List Scope; they do not require listing the Client or User catalogs.
-_Avoid_: Search-by-Title as a required list dimension; Assignee as a filter that widens an Agent’s List Scope; treating list filters as Administrator catalog access
+Consult view of Tickets in the User’s List Scope, all Status values unless filtered. Each row includes Title, Status, Priority, Client, Assignee (nullable), `created_by`, and `updatedAt`. Narrows by Status, Priority, and Client; Supervisor and Administrator may also narrow by Assignee, including unassigned (`Assignee` null). Filter choices come from Tickets already in List Scope; they do not require listing the Client or User catalogs. Distinct from the read-only Client catalog used when creating a Ticket.
+_Avoid_: Search-by-Title as a required list dimension; Assignee as a filter that widens an Agent’s List Scope; treating list filters as Administrator catalog access; overloading list `filterOptions.clients` as the create-time Client picker
 
 ### Status and priority
 
@@ -69,13 +69,13 @@ _Avoid_: Severity (unless split later), custom priorities; treating Priority as 
 ### Authorization (cascade)
 
 **Agent**:
-May consult Tickets in their List Scope, create tickets, add `public` Comments. May record forward Status Transitions through `resolved` only when Assignee. Creating the Ticket, or consulting it, is not enough. Cannot close or reopen. Cannot record a Reassignment (even on Tickets they created or are Assignee of). Unassigned Tickets are frozen for this Role.
+May consult Tickets in their List Scope, create tickets, add `public` Comments. To create, may consult the full Client catalog read-only (`id`, name) — not Client administration and not List Scope filter options. May record forward Status Transitions through `resolved` only when Assignee. Creating the Ticket, or consulting it, is not enough. Cannot close or reopen. Cannot record a Reassignment (even on Tickets they created or are Assignee of). Unassigned Tickets are frozen for this Role.
 
 **Supervisor**:
 Everything an Agent can do, plus: list all tickets, Reassignment (first assign, reassign, and unassign), consult a read-only list of Users to choose an Assignee, see team metrics, review stale/overdue tickets, and `internal` Comments (in addition to `public`). Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment). Does not administer Users or Clients.
 
 **Administrator**:
-Everything a Supervisor can do, plus: update any ticket, administer Users and Clients, close and reopen. May record any legal Status Transition on any Ticket (including unassigned) without being Assignee. Reassignment power matches Supervisor (any User as Assignee); “assign to anyone” is that shared power, not a separate Admin-only operation.
+Everything a Supervisor can do, plus: update any ticket, administer Users and Clients (full catalog management), close and reopen. May record any legal Status Transition on any Ticket (including unassigned) without being Assignee. Reassignment power matches Supervisor (any User as Assignee); “assign to anyone” is that shared power, not a separate Admin-only operation.
 
 ### Metrics views
 

@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { LoginPage } from './pages/LoginPage';
 import { StaffShell } from './shell/StaffShell';
+import { TicketCreate } from './tickets/TicketCreate';
 import { TicketDetail } from './tickets/TicketDetail';
 import { TicketList } from './tickets/TicketList';
 
@@ -46,6 +47,7 @@ export function App() {
             }
           >
             <Route index element={<TicketList />} />
+            <Route path="tickets/new" element={<TicketCreate />} />
             <Route path="tickets/:id" element={<TicketDetail />} />
           </Route>
         </Routes>

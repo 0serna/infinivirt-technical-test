@@ -8,6 +8,7 @@ import {
 import type { Prisma } from '@prisma/client';
 import {
   COMMENT_VISIBILITIES,
+  type CreateTicketBody,
   type CreateTicketCommentBody,
   hasMinimumRole,
   isLegalStatusEdge,
@@ -107,6 +108,14 @@ function requireUuid(value: string, field: string): string {
     throw new BadRequestException(`Invalid ${field}`);
   }
   return value;
+}
+
+function requireTrimmed(value: unknown, field: string): string {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (trimmed.length === 0) {
+    throw new BadRequestException(`Invalid ${field}`);
+  }
+  return trimmed;
 }
 
 function parseAssigneeFilter(value?: string): AssigneeFilter | undefined {
@@ -266,15 +275,55 @@ export class TicketsService {
     );
   }
 
+  async create(
+    user: PublicUser,
+    body: CreateTicketBody,
+  ): Promise<TicketDetail> {
+    const title = requireTrimmed(body?.title, 'title');
+    const description = requireTrimmed(body?.description, 'description');
+    if (typeof body?.clientId !== 'string') {
+      throw new BadRequestException('Invalid clientId');
+    }
+    const clientId = requireUuid(body.clientId, 'clientId');
+    const priority =
+      parseOptionalEnum(body.priority, PRIORITIES, 'priority') ?? 'medium';
+
+    const client = await this.prisma.client.findUnique({
+      where: { id: clientId },
+      select: { id: true },
+    });
+    if (!client) {
+      throw new NotFoundException();
+    }
+
+    const created = await this.prisma.ticket.create({
+      data: {
+        clientId,
+        title,
+        description,
+        status: 'open',
+        priority,
+        createdById: user.id,
+        statusHistory: {
+          create: {
+            fromStatus: null,
+            toStatus: 'open',
+            changedById: user.id,
+          },
+        },
+      },
+      select: ticketDetailSelect,
+    });
+
+    return toTicketDetail(created);
+  }
+
   async createComment(
     user: PublicUser,
     id: string,
     body: CreateTicketCommentBody,
   ): Promise<TicketDetail> {
-    const commentBody = typeof body?.body === 'string' ? body.body.trim() : '';
-    if (commentBody.length === 0) {
-      throw new BadRequestException('Invalid body');
-    }
+    const commentBody = requireTrimmed(body?.body, 'body');
     const visibility =
       parseOptionalEnum(body.visibility, COMMENT_VISIBILITIES, 'visibility') ??
       'public';
