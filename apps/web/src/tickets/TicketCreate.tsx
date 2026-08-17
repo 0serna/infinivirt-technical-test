@@ -1,8 +1,10 @@
 import {
   Alert,
   Anchor,
+  Box,
   Breadcrumbs,
   Button,
+  Center,
   Select,
   Stack,
   Text,
@@ -109,86 +111,93 @@ export function TicketCreate() {
   }
 
   return (
-    <Stack>
-      <Breadcrumbs>
-        <Anchor component={Link} to="/">
-          Tickets
-        </Anchor>
-        <Text>New ticket</Text>
-      </Breadcrumbs>
-      <Title order={2}>New ticket</Title>
-      {catalog.kind === 'loading' ? (
-        <Text>Loading clients…</Text>
-      ) : catalog.kind === 'error' ? (
-        <Alert>
-          <Stack gap="sm">
-            <Text>Couldn't load clients.</Text>
-            <Button
-              type="button"
-              variant="default"
-              onClick={() => {
-                setCatalog({ kind: 'loading' });
-                setReloadToken((token) => token + 1);
-              }}
-            >
-              Try again
-            </Button>
-          </Stack>
-        </Alert>
-      ) : (
-        <form
-          onSubmit={handleSubmit}
-          style={{ maxWidth: '32rem', width: '100%' }}
-        >
-          <Stack>
-            <Select
-              label="Client"
-              value={clientId}
-              onChange={setClientId}
-              data={catalog.clients.map((client) => ({
-                value: client.id,
-                label: client.name,
-              }))}
-              disabled={submitting}
-            />
-            <TextInput
-              label="Title"
-              value={title}
-              onChange={(event) => setTitle(event.currentTarget.value)}
-              disabled={submitting}
-            />
-            <Textarea
-              label="Description"
-              value={description}
-              onChange={(event) => setDescription(event.currentTarget.value)}
-              minRows={4}
-              disabled={submitting}
-            />
-            <Select
-              label="Priority"
-              value={priority}
-              onChange={(value) => {
-                if (value != null) {
-                  setPriority(value as Priority);
-                }
-              }}
-              data={PRIORITIES.map((value) => ({
-                value,
-                label: PRIORITY_LABEL[value],
-              }))}
-              disabled={submitting}
-            />
-            {formError ? (
-              <Text c="red" size="sm">
-                {formError}
-              </Text>
-            ) : null}
-            <Button type="submit" loading={submitting} disabled={submitting}>
-              Create ticket
-            </Button>
-          </Stack>
-        </form>
-      )}
-    </Stack>
+    <Center>
+      <Box w="100%" maw="32rem">
+        <Stack>
+          <Breadcrumbs>
+            <Anchor component={Link} to="/">
+              Tickets
+            </Anchor>
+            <Text>New ticket</Text>
+          </Breadcrumbs>
+          <Title order={2}>New ticket</Title>
+          {catalog.kind === 'loading' ? (
+            <Text>Loading clients…</Text>
+          ) : catalog.kind === 'error' ? (
+            <Alert>
+              <Stack gap="sm">
+                <Text>Couldn't load clients.</Text>
+                <Button
+                  type="button"
+                  variant="default"
+                  onClick={() => {
+                    setCatalog({ kind: 'loading' });
+                    setReloadToken((token) => token + 1);
+                  }}
+                >
+                  Try again
+                </Button>
+              </Stack>
+            </Alert>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <Stack>
+                <Select
+                  label="Client"
+                  value={clientId}
+                  onChange={setClientId}
+                  data={catalog.clients.map((client) => ({
+                    value: client.id,
+                    label: client.name,
+                  }))}
+                  disabled={submitting}
+                />
+                <TextInput
+                  label="Title"
+                  value={title}
+                  onChange={(event) => setTitle(event.currentTarget.value)}
+                  disabled={submitting}
+                />
+                <Textarea
+                  label="Description"
+                  value={description}
+                  onChange={(event) =>
+                    setDescription(event.currentTarget.value)
+                  }
+                  minRows={4}
+                  disabled={submitting}
+                />
+                <Select
+                  label="Priority"
+                  value={priority}
+                  onChange={(value) => {
+                    if (value != null) {
+                      setPriority(value as Priority);
+                    }
+                  }}
+                  data={PRIORITIES.map((value) => ({
+                    value,
+                    label: PRIORITY_LABEL[value],
+                  }))}
+                  disabled={submitting}
+                />
+                {formError ? (
+                  <Text c="red" size="sm">
+                    {formError}
+                  </Text>
+                ) : null}
+                <Button
+                  type="submit"
+                  loading={submitting}
+                  disabled={submitting}
+                >
+                  Create ticket
+                </Button>
+              </Stack>
+            </form>
+          )}
+        </Stack>
+      </Box>
+    </Center>
   );
 }
