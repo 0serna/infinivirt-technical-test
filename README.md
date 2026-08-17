@@ -7,11 +7,11 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Web: http://localhost:5173 · API: http://localhost:3000 · Postgres: localhost:5432
+Web: http://localhost:5173 · API: http://localhost:3000 · Postgres: localhost on `POSTGRES_PORT` (default `5432`)
 
 Stop with `docker compose down`.
 
-Set `JWT_SECRET` (and optionally `JWT_EXPIRES_IN`, default `8h`) in `.env` before starting Compose. The API signs Bearer access tokens with that secret; access lifetime is about one support shift (~8 hours).
+Set `JWT_SECRET` (and optionally `JWT_EXPIRES_IN`, default `8h`) in `.env` before starting Compose. The API signs Bearer access tokens with that secret; access lifetime is about one support shift (~8 hours). If host port `5432` is already taken, set `POSTGRES_PORT` in `.env` (for example `15432`).
 
 ## Database migrations
 
@@ -19,7 +19,7 @@ Prisma lives in `@support-ticketing/api`. Migrations run on API container startu
 
 ### Host CLI (migrate / seed from your machine)
 
-`.env.example` sets `DATABASE_URL` with hostname `postgres` for Compose. From the host, point at the published Postgres port instead:
+`.env.example` sets `DATABASE_URL` with hostname `postgres` for Compose. From the host, point at the published Postgres port (`POSTGRES_PORT`, default `5432`) instead:
 
 ```bash
 DATABASE_URL=postgresql://support:support@localhost:5432/support_ticketing npm run db:migrate

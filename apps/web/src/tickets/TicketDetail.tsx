@@ -7,15 +7,21 @@ import {
   Button,
   Group,
   Menu,
-  SimpleGrid,
   Stack,
+  Switch,
   Text,
+  Textarea,
   Title,
 } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import {
+  type CommentVisibility,
+  type CreateTicketCommentBody,
+  hasMinimumRole,
   nextRecordableStatus,
   type PatchTicketStatusBody,
   type Priority,
+  type TicketComment,
   type TicketDetail as TicketDetailBody,
   type TicketStatus,
   type TicketStatusHistoryRow,
@@ -25,6 +31,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
 import {
+  COMMENT_VISIBILITY_LABEL,
   formatTicketInstant,
   PRIORITY_LABEL,
   STATUS_LABEL,
@@ -42,6 +49,11 @@ const PRIORITY_COLOR: Record<Priority, string> = {
   medium: 'blue',
   high: 'orange',
   critical: 'red',
+};
+
+const COMMENT_VISIBILITY_COLOR: Record<CommentVisibility, string> = {
+  public: 'blue',
+  internal: 'orange',
 };
 
 function transitionMenuLabel(from: TicketStatus, to: TicketStatus): string {
@@ -62,6 +74,20 @@ function MetaItem({ label, children }: { label: string; children: string }) {
       </Text>
       <Text size="sm">{children}</Text>
     </Stack>
+  );
+}
+
+function PersonInstant({
+  person,
+  at,
+}: {
+  person: { id: string; displayName: string };
+  at: string;
+}) {
+  return (
+    <Text size="xs" c="dimmed" title={person.id}>
+      {person.displayName} ({person.id}) · {formatTicketInstant(at)}
+    </Text>
   );
 }
 
@@ -96,13 +122,140 @@ function StatusTimeline({ history }: { history: TicketStatusHistoryRow[] }) {
               {row.from ? STATUS_LABEL[row.from] : 'Created'} →{' '}
               {STATUS_LABEL[row.to]}
             </Text>
-            <Text size="xs" c="dimmed" title={row.changedBy.id}>
-              {row.changedBy.displayName} ({row.changedBy.id}) ·{' '}
-              {formatTicketInstant(row.changedAt)}
-            </Text>
+            <PersonInstant person={row.changedBy} at={row.changedAt} />
           </Stack>
         </Group>
       ))}
+    </Stack>
+  );
+}
+
+function CommentThread({ comments }: { comments: TicketComment[] }) {
+  return (
+    <Stack gap="sm" aria-label="Comments">
+      <Text fw={600} size="sm">
+        Comments
+      </Text>
+      {comments.length === 0 ? (
+        <Text size="sm" c="dimmed">
+          No comments yet.
+        </Text>
+      ) : (
+        comments.map((comment) => (
+          <Stack key={comment.id} gap={6}>
+            <Group gap="sm" wrap="wrap">
+              <Badge
+                color={COMMENT_VISIBILITY_COLOR[comment.visibility]}
+                variant="light"
+                aria-label={`Visibility: ${COMMENT_VISIBILITY_LABEL[comment.visibility]}`}
+              >
+                {COMMENT_VISIBILITY_LABEL[comment.visibility]}
+              </Badge>
+              <PersonInstant person={comment.author} at={comment.createdAt} />
+            </Group>
+            <Text size="sm">{comment.body}</Text>
+          </Stack>
+        ))
+      )}
+    </Stack>
+  );
+}
+
+function CommentComposer({
+  disabled,
+  error,
+  allowInternal,
+  onSubmit,
+}: {
+  disabled: boolean;
+  error: boolean;
+  allowInternal: boolean;
+  onSubmit: (body: string, visibility: CommentVisibility) => Promise<boolean>;
+}) {
+  const defaultVisibility: CommentVisibility = allowInternal
+    ? 'internal'
+    : 'public';
+  const [draft, setDraft] = useState('');
+  const [visibility, setVisibility] =
+    useState<CommentVisibility>(defaultVisibility);
+
+  return (
+    <Stack
+      gap="sm"
+      component="form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const body = draft.trim();
+        if (body.length === 0 || disabled) {
+          return;
+        }
+        void onSubmit(body, visibility).then((ok) => {
+          if (ok) {
+            setDraft('');
+            setVisibility(defaultVisibility);
+          }
+        });
+      }}
+    >
+      <Textarea
+        label="Comment"
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.currentTarget.value);
+        }}
+        minRows={3}
+        disabled={disabled}
+      />
+      {allowInternal ? (
+        <Switch
+          label={COMMENT_VISIBILITY_LABEL[visibility]}
+          checked={visibility === 'internal'}
+          onChange={(event) => {
+            setVisibility(event.currentTarget.checked ? 'internal' : 'public');
+          }}
+          disabled={disabled}
+          aria-label="Visibility"
+        />
+      ) : null}
+      <Button type="submit" loading={disabled} disabled={draft.trim() === ''}>
+        Add comment
+      </Button>
+      {error ? (
+        <Text c="red" size="sm">
+          Couldn't add this comment.
+        </Text>
+      ) : null}
+    </Stack>
+  );
+}
+
+function PropertiesColumn({ ticket }: { ticket: TicketDetailBody }) {
+  return (
+    <Stack gap="md" aria-label="Ticket properties">
+      <Text fw={600} size="sm">
+        Properties
+      </Text>
+      <MetaItem label="Client">{ticket.client.name}</MetaItem>
+      <MetaItem label="Assignee">
+        {ticket.assignee?.displayName ?? 'Unassigned'}
+      </MetaItem>
+      <MetaItem label="Created by">{ticket.createdBy.displayName}</MetaItem>
+      <MetaItem label="Created">
+        {formatTicketInstant(ticket.createdAt)}
+      </MetaItem>
+      <MetaItem label="Updated">
+        {formatTicketInstant(ticket.updatedAt)}
+      </MetaItem>
+      {ticket.resolvedAt ? (
+        <MetaItem label="Resolved">
+          {formatTicketInstant(ticket.resolvedAt)}
+        </MetaItem>
+      ) : null}
+      {ticket.closedAt ? (
+        <MetaItem label="Closed">
+          {formatTicketInstant(ticket.closedAt)}
+        </MetaItem>
+      ) : null}
     </Stack>
   );
 }
@@ -116,10 +269,13 @@ type LoadState =
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const isWide = useMediaQuery('(min-width: 62em)');
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [reloadToken, setReloadToken] = useState(0);
   const [transitionError, setTransitionError] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [commentError, setCommentError] = useState(false);
+  const [isCommenting, setIsCommenting] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
   useEffect(() => {
@@ -130,6 +286,7 @@ export function TicketDetail() {
     let cancelled = false;
     setState({ kind: 'loading' });
     setTransitionError(false);
+    setCommentError(false);
 
     void apiFetch(`/api/tickets/${id}`)
       .then(async (response) => {
@@ -193,32 +350,61 @@ export function TicketDetail() {
       })
     : null;
 
-  async function recordTransition(to: TicketStatus) {
+  async function mutateTicket(
+    path: string,
+    init: RequestInit,
+    setBusy: (busy: boolean) => void,
+    setError: (error: boolean) => void,
+  ): Promise<boolean> {
     if (!id) {
-      return;
+      return false;
     }
-    setIsTransitioning(true);
-    setTransitionError(false);
+    setBusy(true);
+    setError(false);
     try {
-      const body: PatchTicketStatusBody = { status: to };
-      const response = await apiFetch(`/api/tickets/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      });
+      const response = await apiFetch(path, init);
       if (response.status === 401) {
-        return;
+        return false;
       }
       if (!response.ok) {
-        setTransitionError(true);
-        return;
+        setError(true);
+        return false;
       }
       const updated = (await response.json()) as TicketDetailBody;
       setState({ kind: 'ready', ticket: updated });
+      return true;
     } catch {
-      setTransitionError(true);
+      setError(true);
+      return false;
     } finally {
-      setIsTransitioning(false);
+      setBusy(false);
     }
+  }
+
+  async function recordTransition(to: TicketStatus) {
+    const body: PatchTicketStatusBody = { status: to };
+    await mutateTicket(
+      `/api/tickets/${id}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+      setIsTransitioning,
+      setTransitionError,
+    );
+  }
+
+  async function createComment(
+    bodyText: string,
+    visibility: CommentVisibility,
+  ): Promise<boolean> {
+    const body: CreateTicketCommentBody = {
+      body: bodyText,
+      visibility,
+    };
+    return mutateTicket(
+      `/api/tickets/${id}/comments`,
+      { method: 'POST', body: JSON.stringify(body) },
+      setIsCommenting,
+      setCommentError,
+    );
   }
 
   return (
@@ -291,30 +477,30 @@ export function TicketDetail() {
           Couldn't update this ticket's status.
         </Text>
       ) : null}
-      <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
-        <MetaItem label="Client">{ticket.client.name}</MetaItem>
-        <MetaItem label="Assignee">
-          {ticket.assignee?.displayName ?? 'Unassigned'}
-        </MetaItem>
-        <MetaItem label="Created by">{ticket.createdBy.displayName}</MetaItem>
-        <MetaItem label="Created">
-          {formatTicketInstant(ticket.createdAt)}
-        </MetaItem>
-        <MetaItem label="Updated">
-          {formatTicketInstant(ticket.updatedAt)}
-        </MetaItem>
-        {ticket.resolvedAt ? (
-          <MetaItem label="Resolved">
-            {formatTicketInstant(ticket.resolvedAt)}
-          </MetaItem>
-        ) : null}
-        {ticket.closedAt ? (
-          <MetaItem label="Closed">
-            {formatTicketInstant(ticket.closedAt)}
-          </MetaItem>
-        ) : null}
-      </SimpleGrid>
-      <StatusTimeline history={ticket.statusHistory} />
+      <Box
+        style={{
+          display: 'grid',
+          gap: 24,
+          alignItems: 'start',
+          gridTemplateColumns: isWide
+            ? 'minmax(160px, 0.9fr) minmax(0, 2fr) minmax(180px, 1fr)'
+            : '1fr',
+        }}
+      >
+        <PropertiesColumn ticket={ticket} />
+        <Stack gap="md">
+          <CommentThread comments={ticket.comments} />
+          <CommentComposer
+            disabled={isCommenting}
+            error={commentError}
+            allowInternal={
+              user !== null && hasMinimumRole(user.role, 'supervisor')
+            }
+            onSubmit={createComment}
+          />
+        </Stack>
+        <StatusTimeline history={ticket.statusHistory} />
+      </Box>
     </Stack>
   );
 }

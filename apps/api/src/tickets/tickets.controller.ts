@@ -4,11 +4,13 @@ import {
   Get,
   Param,
   Patch,
+  Post,
   Query,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
 import type {
+  CreateTicketCommentBody,
   PatchTicketStatusBody,
   TicketDetail,
   TicketListEnvelope,
@@ -47,6 +49,16 @@ export class TicketsController {
     @Param('id') id: string,
   ): Promise<TicketDetail> {
     return this.ticketsService.getById(requireUser(request), id);
+  }
+
+  @Post(':id/comments')
+  @RequireRole('agent')
+  createComment(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: CreateTicketCommentBody,
+  ): Promise<TicketDetail> {
+    return this.ticketsService.createComment(requireUser(request), id, body);
   }
 
   @Patch(':id')

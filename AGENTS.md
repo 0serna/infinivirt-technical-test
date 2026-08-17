@@ -30,7 +30,15 @@
 - `npm run lint:fix`: apply Biome safe lint fixes.
 - `npm run typecheck`: typecheck all workspaces.
 
-Host vs Compose `DATABASE_URL` hostname: see README (Host CLI) and `.env.example`.
+Host vs Compose `DATABASE_URL` hostname and optional `POSTGRES_PORT`: see README (Host CLI) and `.env.example`.
+
+## Worktrees
+
+When creating or using a **new** git worktree:
+
+1. Copy `.env` from the **primary worktree** into the new worktree (prefer that over only copying `.env.example`, so JWT and local secrets stay aligned). Never commit `.env`.
+2. Reassign host-facing ports and related env so they do **not** collide with the primary stack or other worktrees already running Compose. At minimum set a free `POSTGRES_PORT`. Keep Compose `DATABASE_URL` on hostname `postgres`; for host `db:migrate` / `db:seed`, use `localhost` with **this** worktree’s `POSTGRES_PORT`.
+3. Before `compose:up`, confirm the API (`3000`) and web (`5173`) host ports are free for this worktree, or remap those Compose publish ports so this worktree does not fight another stack.
 
 ## Agent skills
 

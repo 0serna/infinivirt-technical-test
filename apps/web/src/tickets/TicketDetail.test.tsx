@@ -80,6 +80,34 @@ function mockTicketPatchSession({
   });
 }
 
+function mockTicketCommentSession({
+  detail = sampleTicketDetail,
+  user,
+  onPost,
+}: {
+  detail?: unknown;
+  user: SessionUser;
+  onPost: (body: string) => Response;
+}) {
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, user);
+    }
+    if (isTicketsUrl(url)) {
+      return jsonResponse(200, sampleTickets);
+    }
+    if (url === '/api/tickets/ticket-1/comments' && method === 'POST') {
+      return onPost(String(init?.body ?? ''));
+    }
+    if (isTicketDetailUrl(url)) {
+      return jsonResponse(200, detail);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+}
+
 test('signed-in Ticket consult is inside the staff shell and loads GET /api/tickets/:id', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   mockTicketSession();
@@ -129,7 +157,7 @@ test('Ticket consult shows current fields and Status Transition history oldest f
   expect(screen.getByLabelText('Created: 22 Jul 2026, 12:00')).toBeDefined();
   expect(screen.queryByText('Waiting on Client network details.')).toBeNull();
   expect(screen.queryByRole('button', { name: /assign/i })).toBeNull();
-  expect(screen.queryByRole('textbox')).toBeNull();
+  expect(screen.getByRole('textbox', { name: 'Comment' })).toBeDefined();
   expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Change status' })).toBeDefined();
@@ -146,6 +174,60 @@ test('Ticket consult shows current fields and Status Transition history oldest f
   expect(
     within(history).getByText(/Alex Agent \(user-2\) · 22 Jul 2026/),
   ).toBeDefined();
+});
+
+test('Ticket consult shows Comment thread oldest first with visibility, author, and timestamp', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockTicketSession(sampleReopenedTicketDetail, alex);
+
+  renderApp(['/tickets/ticket-3']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Reopened: returns portal blank page',
+    }),
+  ).toBeDefined();
+
+  const thread = screen.getByLabelText('Comments');
+  expect(within(thread).getByText('Comments')).toBeDefined();
+  expect(
+    within(thread).getByText(
+      'Reopened after regression report; prior closed cycle kept in history.',
+    ),
+  ).toBeDefined();
+  expect(
+    within(thread).getByText(
+      'Investigating blank page on returns portal again.',
+    ),
+  ).toBeDefined();
+  expect(within(thread).getByLabelText('Visibility: Internal')).toBeDefined();
+  expect(within(thread).getByLabelText('Visibility: Public')).toBeDefined();
+  expect(
+    within(thread).getByText(/Ada Lovelace \(user-1\) · 16 Aug 2026/),
+  ).toBeDefined();
+  expect(
+    within(thread).getByText(/Alex Agent \(user-2\) · 16 Aug 2026/),
+  ).toBeDefined();
+  expect(screen.getByRole('textbox', { name: 'Comment' })).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Add comment' })).toBeDefined();
+  expect(screen.queryByRole('combobox')).toBeNull();
+  expect(screen.queryByRole('radio')).toBeNull();
+});
+
+test('Ticket consult with no Comments shows an empty thread state', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockTicketSession(sampleClosedTicketDetail);
+
+  renderApp(['/tickets/ticket-invoice']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Closed: invoice PDF encoding',
+    }),
+  ).toBeDefined();
+  const thread = screen.getByLabelText('Comments');
+  expect(within(thread).getByText('No comments yet.')).toBeDefined();
+  expect(within(thread).queryByLabelText(/Visibility:/)).toBeNull();
 });
 
 test('in-flight Ticket consult shows loading before fields', async () => {
@@ -291,6 +373,247 @@ test('Agent who is not Assignee sees no Status Transition control', async () => 
   expect(screen.queryByRole('button', { name: 'Change status' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
+  expect(screen.getByRole('textbox', { name: 'Comment' })).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Add comment' })).toBeDefined();
+});
+
+test('Agent can submit a public Comment and the thread updates without a visibility control', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const updated = {
+    ...sampleTicketDetail,
+    updatedAt: '2026-08-16T14:00:00.000Z',
+    comments: [
+      ...sampleTicketDetail.comments,
+      {
+        id: 'comment-new',
+        body: 'Client confirmed MFA emails still missing.',
+        visibility: 'public' as const,
+        createdAt: '2026-08-16T14:00:00.000Z',
+        author: { id: 'user-2', displayName: 'Alex Agent' },
+      },
+    ],
+  };
+  mockTicketCommentSession({
+    user: alex,
+    onPost: (body) => {
+      expect(body).toBe(
+        JSON.stringify({
+          body: 'Client confirmed MFA emails still missing.',
+          visibility: 'public',
+        }),
+      );
+      return jsonResponse(201, updated);
+    },
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  expect(screen.queryByRole('combobox')).toBeNull();
+  expect(screen.queryByRole('radio')).toBeNull();
+  await user.type(
+    screen.getByRole('textbox', { name: 'Comment' }),
+    'Client confirmed MFA emails still missing.',
+  );
+  await user.click(screen.getByRole('button', { name: 'Add comment' }));
+
+  const thread = await screen.findByLabelText('Comments');
+  expect(
+    within(thread).getByText('Client confirmed MFA emails still missing.'),
+  ).toBeDefined();
+  expect(within(thread).getByText('Created; needs assignment.')).toBeDefined();
+  expect(
+    (screen.getByRole('textbox', { name: 'Comment' }) as HTMLTextAreaElement)
+      .value,
+  ).toBe('');
+});
+
+test('failed Comment create shows error copy without the raw server body', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  mockTicketCommentSession({
+    user: alex,
+    onPost: () => jsonResponse(500, { message: 'Internal boom stack' }),
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  await user.type(
+    screen.getByRole('textbox', { name: 'Comment' }),
+    'Should fail.',
+  );
+  await user.click(screen.getByRole('button', { name: 'Add comment' }));
+
+  expect(await screen.findByText("Couldn't add this comment.")).toBeDefined();
+  expect(screen.queryByText('Internal boom stack')).toBeNull();
+  const thread = screen.getByLabelText('Comments');
+  expect(within(thread).getByText('Created; needs assignment.')).toBeDefined();
+  expect(within(thread).queryByText('Should fail.')).toBeNull();
+});
+
+test('Supervisor Comment composer defaults to internal and can post public', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const updated = {
+    ...sampleTicketDetail,
+    updatedAt: '2026-08-16T14:05:00.000Z',
+    comments: [
+      ...sampleTicketDetail.comments,
+      {
+        id: 'comment-internal',
+        body: 'Internal: escalate if firmware lag persists.',
+        visibility: 'internal' as const,
+        createdAt: '2026-08-16T14:05:00.000Z',
+        author: { id: 'user-3', displayName: 'Sam Supervisor' },
+      },
+    ],
+  };
+  const updatedPublic = {
+    ...updated,
+    updatedAt: '2026-08-16T14:06:00.000Z',
+    comments: [
+      ...updated.comments,
+      {
+        id: 'comment-public',
+        body: 'Public update for the Client.',
+        visibility: 'public' as const,
+        createdAt: '2026-08-16T14:06:00.000Z',
+        author: { id: 'user-3', displayName: 'Sam Supervisor' },
+      },
+    ],
+  };
+  let postCount = 0;
+  mockTicketCommentSession({
+    user: sam,
+    onPost: (body) => {
+      postCount += 1;
+      if (postCount === 1) {
+        expect(body).toBe(
+          JSON.stringify({
+            body: 'Internal: escalate if firmware lag persists.',
+            visibility: 'internal',
+          }),
+        );
+        return jsonResponse(201, updated);
+      }
+      expect(body).toBe(
+        JSON.stringify({
+          body: 'Public update for the Client.',
+          visibility: 'public',
+        }),
+      );
+      return jsonResponse(201, updatedPublic);
+    },
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  expect(
+    (screen.getByRole('switch', { name: 'Visibility' }) as HTMLInputElement)
+      .checked,
+  ).toBe(true);
+  expect(screen.getByText('Internal')).toBeDefined();
+  await user.type(
+    screen.getByRole('textbox', { name: 'Comment' }),
+    'Internal: escalate if firmware lag persists.',
+  );
+  await user.click(screen.getByRole('button', { name: 'Add comment' }));
+
+  const thread = await screen.findByLabelText('Comments');
+  expect(
+    within(thread).getByText('Internal: escalate if firmware lag persists.'),
+  ).toBeDefined();
+  expect(within(thread).getByLabelText('Visibility: Internal')).toBeDefined();
+
+  expect(
+    (screen.getByRole('switch', { name: 'Visibility' }) as HTMLInputElement)
+      .checked,
+  ).toBe(true);
+  await user.click(screen.getByRole('switch', { name: 'Visibility' }));
+  expect(
+    (screen.getByRole('switch', { name: 'Visibility' }) as HTMLInputElement)
+      .checked,
+  ).toBe(false);
+  await user.type(
+    screen.getByRole('textbox', { name: 'Comment' }),
+    'Public update for the Client.',
+  );
+  await user.click(screen.getByRole('button', { name: 'Add comment' }));
+
+  expect(
+    await within(screen.getByLabelText('Comments')).findByText(
+      'Public update for the Client.',
+    ),
+  ).toBeDefined();
+});
+
+test('Administrator Comment composer defaults to internal without changing visibility', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const updated = {
+    ...sampleTicketDetail,
+    updatedAt: '2026-08-16T14:10:00.000Z',
+    comments: [
+      ...sampleTicketDetail.comments,
+      {
+        id: 'comment-admin-internal',
+        body: 'Administrator internal note for staff.',
+        visibility: 'internal' as const,
+        createdAt: '2026-08-16T14:10:00.000Z',
+        author: { id: 'user-1', displayName: 'Ada Lovelace' },
+      },
+    ],
+  };
+  mockTicketCommentSession({
+    user: ada,
+    onPost: (body) => {
+      expect(body).toBe(
+        JSON.stringify({
+          body: 'Administrator internal note for staff.',
+          visibility: 'internal',
+        }),
+      );
+      return jsonResponse(201, updated);
+    },
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  expect(
+    (screen.getByRole('switch', { name: 'Visibility' }) as HTMLInputElement)
+      .checked,
+  ).toBe(true);
+  await user.type(
+    screen.getByRole('textbox', { name: 'Comment' }),
+    'Administrator internal note for staff.',
+  );
+  await user.click(screen.getByRole('button', { name: 'Add comment' }));
+
+  const thread = await screen.findByLabelText('Comments');
+  expect(
+    within(thread).getByText('Administrator internal note for staff.'),
+  ).toBeDefined();
+  expect(within(thread).getByLabelText('Visibility: Internal')).toBeDefined();
 });
 
 test('Agent Assignee can record the next forward Status Transition', async () => {
