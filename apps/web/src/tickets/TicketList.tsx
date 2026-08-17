@@ -9,32 +9,21 @@ import {
   Title,
 } from '@mantine/core';
 import {
+  EMPTY_TICKET_LIST_FILTER_OPTIONS,
   hasMinimumRole,
   PRIORITIES,
-  TICKET_STATUSES,
   type Priority,
+  TICKET_STATUSES,
+  type TicketListEnvelope,
+  type TicketListFilterOptions,
+  type TicketListFilters,
+  type TicketListRow,
   type TicketStatus,
+  UNASSIGNED_ASSIGNEE_QUERY,
 } from '@support-ticketing/shared';
 import { useEffect, useState } from 'react';
-import { apiFetch } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
-
-type TicketListRow = {
-  id: string;
-  title: string;
-  status: TicketStatus;
-  priority: Priority;
-  client: { id: string; name: string };
-  assignee: { id: string; displayName: string } | null;
-  createdBy: { id: string; displayName: string };
-  updatedAt: string;
-  createdAt: string;
-};
-
-type FilterOptions = {
-  clients: Array<{ id: string; name: string }>;
-  assignees: Array<{ id: string; displayName: string }>;
-};
+import { apiFetch } from '../auth/api';
 
 const STATUS_LABEL: Record<TicketStatus, string> = {
   open: 'Open',
@@ -58,13 +47,10 @@ function formatUpdatedAt(value: string): string {
   }).format(new Date(value));
 }
 
-function ticketsUrl(filters: {
-  status: string | null;
-  priority: string | null;
-  clientId: string | null;
-  assigneeId: string | null;
-  includeAssignee: boolean;
-}): string {
+function ticketsUrl(
+  filters: TicketListFilters,
+  includeAssignee: boolean,
+): string {
   const params = new URLSearchParams();
   if (filters.status) {
     params.set('status', filters.status);
@@ -75,25 +61,32 @@ function ticketsUrl(filters: {
   if (filters.clientId) {
     params.set('clientId', filters.clientId);
   }
-  if (filters.includeAssignee && filters.assigneeId) {
+  if (includeAssignee && filters.assigneeId) {
     params.set('assigneeId', filters.assigneeId);
   }
   const query = params.toString();
   return query === '' ? '/api/tickets' : `/api/tickets?${query}`;
 }
 
+function assigneeSelectData(options: TicketListFilterOptions) {
+  const people = options.assignees.map((assignee) => ({
+    value: assignee.id,
+    label: assignee.displayName,
+  }));
+  if (options.includeUnassigned) {
+    people.push({ value: UNASSIGNED_ASSIGNEE_QUERY, label: 'Unassigned' });
+  }
+  return people;
+}
+
 export function TicketList() {
   const { user } = useAuth();
   const includeAssignee =
     user != null && hasMinimumRole(user.role, 'supervisor');
-  const [status, setStatus] = useState<string | null>(null);
-  const [priority, setPriority] = useState<string | null>(null);
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [assigneeId, setAssigneeId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<TicketListFilters>({});
   const [tickets, setTickets] = useState<TicketListRow[] | null>(null);
-  const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(
-    null,
-  );
+  const [filterOptions, setFilterOptions] =
+    useState<TicketListFilterOptions | null>(null);
   const [failed, setFailed] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -101,15 +94,7 @@ export function TicketList() {
   useEffect(() => {
     let cancelled = false;
 
-    void apiFetch(
-      ticketsUrl({
-        status,
-        priority,
-        clientId,
-        assigneeId,
-        includeAssignee,
-      }),
-    )
+    void apiFetch(ticketsUrl(filters, includeAssignee))
       .then(async (response) => {
         if (cancelled || response.status === 401) {
           return;
@@ -118,13 +103,12 @@ export function TicketList() {
           setFailed(true);
           return;
         }
-        const body = (await response.json()) as {
-          tickets?: TicketListRow[];
-          filterOptions?: FilterOptions;
-        };
+        const body = (await response.json()) as Partial<TicketListEnvelope>;
         setFailed(false);
         setTickets(Array.isArray(body.tickets) ? body.tickets : []);
-        setFilterOptions(body.filterOptions ?? { clients: [], assignees: [] });
+        setFilterOptions(
+          body.filterOptions ?? EMPTY_TICKET_LIST_FILTER_OPTIONS,
+        );
       })
       .catch(() => {
         if (!cancelled) {
@@ -135,7 +119,7 @@ export function TicketList() {
     return () => {
       cancelled = true;
     };
-  }, [status, priority, clientId, assigneeId, includeAssignee, reloadToken]);
+  }, [filters, includeAssignee, reloadToken]);
 
   return (
     <Stack>
@@ -145,8 +129,13 @@ export function TicketList() {
           <Select
             label="Status"
             clearable
-            value={status}
-            onChange={setStatus}
+            value={filters.status ?? null}
+            onChange={(status) =>
+              setFilters((current) => ({
+                ...current,
+                status: status ?? undefined,
+              }))
+            }
             data={TICKET_STATUSES.map((value) => ({
               value,
               label: STATUS_LABEL[value],
@@ -155,8 +144,13 @@ export function TicketList() {
           <Select
             label="Priority"
             clearable
-            value={priority}
-            onChange={setPriority}
+            value={filters.priority ?? null}
+            onChange={(priority) =>
+              setFilters((current) => ({
+                ...current,
+                priority: priority ?? undefined,
+              }))
+            }
             data={PRIORITIES.map((value) => ({
               value,
               label: PRIORITY_LABEL[value],
@@ -165,8 +159,13 @@ export function TicketList() {
           <Select
             label="Client"
             clearable
-            value={clientId}
-            onChange={setClientId}
+            value={filters.clientId ?? null}
+            onChange={(clientId) =>
+              setFilters((current) => ({
+                ...current,
+                clientId: clientId ?? undefined,
+              }))
+            }
             data={filterOptions.clients.map((client) => ({
               value: client.id,
               label: client.name,
@@ -176,12 +175,14 @@ export function TicketList() {
             <Select
               label="Assignee"
               clearable
-              value={assigneeId}
-              onChange={setAssigneeId}
-              data={filterOptions.assignees.map((assignee) => ({
-                value: assignee.id,
-                label: assignee.displayName,
-              }))}
+              value={filters.assigneeId ?? null}
+              onChange={(assigneeId) =>
+                setFilters((current) => ({
+                  ...current,
+                  assigneeId: assigneeId ?? undefined,
+                }))
+              }
+              data={assigneeSelectData(filterOptions)}
             />
           ) : null}
         </Group>

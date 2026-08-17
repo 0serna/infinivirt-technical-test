@@ -5,8 +5,12 @@ import {
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
+import type {
+  TicketListEnvelope,
+  TicketListFilters,
+} from '@support-ticketing/shared';
 import type { AuthenticatedRequest } from '../auth/auth.guard';
-import { TicketsService, type TicketListEnvelope } from './tickets.service';
+import { TicketsService } from './tickets.service';
 
 @Controller('tickets')
 export class TicketsController {
@@ -15,20 +19,12 @@ export class TicketsController {
   @Get()
   list(
     @Req() request: AuthenticatedRequest,
-    @Query('status') status?: string,
-    @Query('priority') priority?: string,
-    @Query('clientId') clientId?: string,
-    @Query('assigneeId') assigneeId?: string,
+    @Query() query: TicketListFilters,
   ): Promise<TicketListEnvelope> {
     const user = request.user;
     if (!user) {
       throw new UnauthorizedException();
     }
-    return this.ticketsService.list(user, {
-      status,
-      priority,
-      clientId,
-      assigneeId,
-    });
+    return this.ticketsService.list(user, query);
   }
 }

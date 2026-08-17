@@ -215,11 +215,14 @@ describe('Tickets list (e2e)', () => {
       expect.arrayContaining(['Contoso Health', 'Initech Soft']),
     );
 
+    expect(response.body.filterOptions.includeUnassigned).toBe(true);
     expect(response.body.filterOptions.assignees).toEqual(
       expect.arrayContaining([
-        { id: 'unassigned', displayName: 'Unassigned' },
         expect.objectContaining({ displayName: 'Sam Supervisor' }),
       ]),
+    );
+    expect(response.body.filterOptions.assignees).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'unassigned' })]),
     );
   });
 
