@@ -12,9 +12,6 @@ export class CreateClientDto implements CreateClientBody {
   name!: string;
 }
 
-export class UpdateClientDto implements UpdateClientBody {
-  @Trim()
-  @IsString()
-  @IsNotEmpty()
-  name!: string;
-}
+export class UpdateClientDto
+  extends CreateClientDto
+  implements UpdateClientBody {}

@@ -8,36 +8,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { Response } from 'express';
-
-const ERROR_NAMES: Partial<Record<number, string>> = {
-  [HttpStatus.BAD_REQUEST]: 'Bad Request',
-  [HttpStatus.UNAUTHORIZED]: 'Unauthorized',
-  [HttpStatus.FORBIDDEN]: 'Forbidden',
-  [HttpStatus.NOT_FOUND]: 'Not Found',
-  [HttpStatus.CONFLICT]: 'Conflict',
-  [HttpStatus.INTERNAL_SERVER_ERROR]: 'Internal Server Error',
-};
-
-function errorName(status: number): string {
-  return ERROR_NAMES[status] ?? 'Error';
-}
-
-function isPrismaUniqueConflict(error: unknown): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === 'P2002'
-  );
-}
-
-function asMessage(value: unknown, fallback: string): string {
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (Array.isArray(value) && typeof value[0] === 'string') {
-    return value[0];
-  }
-  return fallback;
-}
+import { STATUS_CODES } from 'node:http';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -49,27 +20,26 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const payload = exception.getResponse();
-      if (typeof payload === 'string') {
-        response.status(status).json({
-          statusCode: status,
-          message: payload,
-          error: errorName(status),
-        });
-        return;
-      }
-      if (typeof payload === 'object' && payload !== null) {
-        const body = payload as { message?: unknown; error?: unknown };
-        response.status(status).json({
-          statusCode: status,
-          message: asMessage(body.message, exception.message),
-          error:
-            typeof body.error === 'string' ? body.error : errorName(status),
-        });
-        return;
-      }
+      const body =
+        typeof payload === 'object' && payload !== null
+          ? (payload as { message?: unknown; error?: unknown })
+          : { message: payload };
+      response.status(status).json({
+        statusCode: status,
+        message:
+          typeof body.message === 'string' ? body.message : exception.message,
+        error:
+          typeof body.error === 'string'
+            ? body.error
+            : (STATUS_CODES[status] ?? 'Error'),
+      });
+      return;
     }
 
-    if (isPrismaUniqueConflict(exception)) {
+    if (
+      exception instanceof Prisma.PrismaClientKnownRequestError &&
+      exception.code === 'P2002'
+    ) {
       response.status(HttpStatus.CONFLICT).json({
         statusCode: HttpStatus.CONFLICT,
         message: 'Conflict',

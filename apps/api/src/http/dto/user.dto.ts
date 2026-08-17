@@ -1,11 +1,4 @@
-import {
-  IsIn,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  ValidateIf,
-  registerDecorator,
-} from 'class-validator';
+import { Allow, IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import {
   ROLES,
   type CreateUserBody,
@@ -14,20 +7,6 @@ import {
   type UpdateUserBody,
 } from '@support-ticketing/shared';
 import { Trim } from './trim';
-
-function CannotChangeEmail() {
-  return (object: object, propertyName: string) => {
-    registerDecorator({
-      name: 'cannotChangeEmail',
-      target: object.constructor,
-      propertyName,
-      validator: {
-        validate: () => false,
-        defaultMessage: () => 'Email cannot be changed',
-      },
-    });
-  };
-}
 
 export class CreateUserDto implements CreateUserBody {
   @Trim()
@@ -60,8 +39,7 @@ export class UpdateUserDto implements UpdateUserBody {
   @IsIn([...ROLES])
   role?: Role;
 
-  @ValidateIf((_, value) => value !== undefined)
-  @CannotChangeEmail()
+  @Allow()
   email?: unknown;
 }
 

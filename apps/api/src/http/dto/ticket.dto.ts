@@ -3,9 +3,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  Validate,
-  ValidatorConstraint,
-  type ValidatorConstraintInterface,
+  ValidateIf,
 } from 'class-validator';
 import {
   COMMENT_VISIBILITIES,
@@ -19,16 +17,8 @@ import {
   TICKET_STATUSES,
   type TicketStatus,
 } from '@support-ticketing/shared';
-import { isUuid } from '../require-uuid';
 import { IsRfcUuid } from './is-rfc-uuid';
 import { Trim } from './trim';
-
-@ValidatorConstraint({ name: 'isUuidOrNull', async: false })
-class IsUuidOrNullConstraint implements ValidatorConstraintInterface {
-  validate(value: unknown): boolean {
-    return value === null || (typeof value === 'string' && isUuid(value));
-  }
-}
 
 export class CreateTicketDto implements CreateTicketBody {
   @IsRfcUuid()
@@ -66,6 +56,7 @@ export class PatchTicketStatusDto implements PatchTicketStatusBody {
 }
 
 export class PatchTicketAssigneeDto implements PatchTicketAssigneeBody {
-  @Validate(IsUuidOrNullConstraint)
+  @ValidateIf((_, value) => value !== null)
+  @IsRfcUuid()
   assigneeId!: string | null;
 }

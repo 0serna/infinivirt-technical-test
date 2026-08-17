@@ -1,7 +1,11 @@
-import { Module } from '@nestjs/common';
+import {
+  BadRequestException,
+  Module,
+  ValidationPipe,
+  type ValidationError,
+} from '@nestjs/common';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { AllExceptionsFilter } from './all-exceptions.filter';
-import { createValidationPipe } from './create-validation-pipe';
 
 @Module({
   providers: [
@@ -11,7 +15,13 @@ import { createValidationPipe } from './create-validation-pipe';
     },
     {
       provide: APP_PIPE,
-      useFactory: createValidationPipe,
+      useValue: new ValidationPipe({
+        whitelist: true,
+        transform: true,
+        transformOptions: { exposeUnsetFields: false },
+        exceptionFactory: (errors: ValidationError[]) =>
+          new BadRequestException(`Invalid ${errors[0]?.property ?? 'input'}`),
+      }),
     },
   ],
 })
