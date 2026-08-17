@@ -11,6 +11,7 @@ import {
 import {
   EMPTY_TICKET_LIST_FILTER_OPTIONS,
   hasMinimumRole,
+  OPEN_TICKET_LOAD_STATUS_QUERY,
   PRIORITIES,
   TICKET_STATUSES,
   type TicketListEnvelope,
@@ -20,14 +21,23 @@ import {
   UNASSIGNED_ASSIGNEE_QUERY,
 } from '@support-ticketing/shared';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
 import {
   formatTicketInstant,
   PRIORITY_LABEL,
   STATUS_LABEL,
+  assigneeLabel,
 } from './ticketLabels';
+
+const STATUS_FILTER_DATA = [
+  ...TICKET_STATUSES.map((value) => ({
+    value,
+    label: STATUS_LABEL[value],
+  })),
+  { value: OPEN_TICKET_LOAD_STATUS_QUERY, label: 'Open Ticket load' },
+];
 
 function ticketsUrl(
   filters: TicketListFilters,
@@ -46,8 +56,46 @@ function ticketsUrl(
   if (includeAssignee && filters.assigneeId) {
     params.set('assigneeId', filters.assigneeId);
   }
+  if (filters.stale) {
+    params.set('stale', filters.stale);
+  }
+  if (filters.scope) {
+    params.set('scope', filters.scope);
+  }
   const query = params.toString();
   return query ? `/api/tickets?${query}` : '/api/tickets';
+}
+
+function filtersFromSearchParams(
+  searchParams: URLSearchParams,
+  includeAssignee: boolean,
+): TicketListFilters {
+  const filters: TicketListFilters = {};
+  const status = searchParams.get('status');
+  const priority = searchParams.get('priority');
+  const clientId = searchParams.get('clientId');
+  const assigneeId = searchParams.get('assigneeId');
+  const stale = searchParams.get('stale');
+  const scope = searchParams.get('scope');
+  if (status) {
+    filters.status = status;
+  }
+  if (priority) {
+    filters.priority = priority;
+  }
+  if (clientId) {
+    filters.clientId = clientId;
+  }
+  if (includeAssignee && assigneeId) {
+    filters.assigneeId = assigneeId;
+  }
+  if (stale) {
+    filters.stale = stale;
+  }
+  if (scope) {
+    filters.scope = scope;
+  }
+  return filters;
 }
 
 function assigneeSelectData(options: TicketListFilterOptions) {
@@ -56,7 +104,10 @@ function assigneeSelectData(options: TicketListFilterOptions) {
     label: assignee.displayName,
   }));
   if (options.includeUnassigned) {
-    people.push({ value: UNASSIGNED_ASSIGNEE_QUERY, label: 'Unassigned' });
+    people.push({
+      value: UNASSIGNED_ASSIGNEE_QUERY,
+      label: assigneeLabel(null),
+    });
   }
   return people;
 }
@@ -65,7 +116,9 @@ export function TicketList() {
   const { user } = useAuth();
   const includeAssignee =
     user != null && hasMinimumRole(user.role, 'supervisor');
-  const [filters, setFilters] = useState<TicketListFilters>({});
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = filtersFromSearchParams(searchParams, includeAssignee);
+  const filterQuery = searchParams.toString();
   const [tickets, setTickets] = useState<TicketListRow[] | null>(null);
   const [filterOptions, setFilterOptions] =
     useState<TicketListFilterOptions | null>(null);
@@ -73,17 +126,29 @@ export function TicketList() {
   const [reloadToken, setReloadToken] = useState(0);
 
   function setFilter(key: keyof TicketListFilters, value: string | null) {
-    setFilters((current) => ({
-      ...current,
-      [key]: value ?? undefined,
-    }));
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (value) {
+          next.set(key, value);
+        } else {
+          next.delete(key);
+        }
+        return next;
+      },
+      { replace: true },
+    );
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again; filterQuery tracks URL filters
   useEffect(() => {
     let cancelled = false;
+    const listFilters = filtersFromSearchParams(
+      new URLSearchParams(filterQuery),
+      includeAssignee,
+    );
 
-    void apiFetch(ticketsUrl(filters, includeAssignee))
+    void apiFetch(ticketsUrl(listFilters, includeAssignee))
       .then(async (response) => {
         if (cancelled || response.status === 401) {
           return;
@@ -108,7 +173,7 @@ export function TicketList() {
     return () => {
       cancelled = true;
     };
-  }, [filters, includeAssignee, reloadToken]);
+  }, [filterQuery, includeAssignee, reloadToken]);
 
   return (
     <Stack>
@@ -125,10 +190,7 @@ export function TicketList() {
             clearable
             value={filters.status ?? null}
             onChange={(status) => setFilter('status', status)}
-            data={TICKET_STATUSES.map((value) => ({
-              value,
-              label: STATUS_LABEL[value],
-            }))}
+            data={STATUS_FILTER_DATA}
           />
           <Select
             label="Priority"
@@ -204,9 +266,7 @@ export function TicketList() {
                 <Table.Td>{STATUS_LABEL[ticket.status]}</Table.Td>
                 <Table.Td>{PRIORITY_LABEL[ticket.priority]}</Table.Td>
                 <Table.Td>{ticket.client.name}</Table.Td>
-                <Table.Td>
-                  {ticket.assignee?.displayName ?? 'Unassigned'}
-                </Table.Td>
+                <Table.Td>{assigneeLabel(ticket.assignee)}</Table.Td>
                 <Table.Td>{ticket.createdBy.displayName}</Table.Td>
                 <Table.Td>{formatTicketInstant(ticket.updatedAt)}</Table.Td>
               </Table.Tr>

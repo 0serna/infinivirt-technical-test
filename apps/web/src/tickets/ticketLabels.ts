@@ -23,6 +23,12 @@ export const COMMENT_VISIBILITY_LABEL: Record<CommentVisibility, string> = {
   internal: 'Internal',
 };
 
+export function assigneeLabel(
+  person: { displayName: string } | null | undefined,
+): string {
+  return person?.displayName ?? 'Unassigned';
+}
+
 export function formatTicketInstant(value: string): string {
   return new Intl.DateTimeFormat('en-GB', {
     dateStyle: 'medium',

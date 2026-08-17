@@ -103,7 +103,7 @@ test('Ticket List New ticket opens the create form without treating new as a Tic
   localStorage.setItem('accessToken', 'token-abc');
   mockCreateSession();
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   expect(await screen.findByRole('heading', { name: 'Tickets' })).toBeDefined();
   await user.click(screen.getByRole('link', { name: 'New ticket' }));

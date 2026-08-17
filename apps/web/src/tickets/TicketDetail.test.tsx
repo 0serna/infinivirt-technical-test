@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import {
   ada,
   alex,
+  isDashboardUrl,
   isTicketDetailUrl,
   isTicketsUrl,
   isUsersUrl,
@@ -10,6 +11,7 @@ import {
   mockAuthedSession,
   renderApp,
   sam,
+  sampleAgentDashboard,
   sampleClosedTicketDetail,
   sampleReopenedTicketDetail,
   sampleResolvedTicketDetail,
@@ -67,6 +69,9 @@ function mockStaffTicketFetches({
     const method = (init?.method ?? 'GET').toUpperCase();
     if (url === '/api/auth/me') {
       return jsonResponse(200, user);
+    }
+    if (isDashboardUrl(url)) {
+      return jsonResponse(200, sampleAgentDashboard);
     }
     if (isTicketsUrl(url)) {
       return jsonResponse(200, sampleTickets);
@@ -208,7 +213,9 @@ test('Ticket consult shows current fields and Status Transition history oldest f
   expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Change status' })).toBeDefined();
-  expect(screen.getByRole('link', { name: 'Tickets' })).toBeDefined();
+  expect(
+    screen.getAllByRole('link', { name: 'Tickets' }).length,
+  ).toBeGreaterThan(0);
 
   const history = screen.getByLabelText('Status history');
   expect(within(history).getByText('Created → Open')).toBeDefined();
@@ -432,7 +439,7 @@ test('Ticket consult 401 signs the User out', async () => {
   expect(localStorage.getItem('accessToken')).toBeNull();
 });
 
-test('staff shell title returns to the Ticket List', async () => {
+test('staff shell title returns to the Operational Dashboard home', async () => {
   const user = userEvent.setup();
   mockTicketSession();
 
@@ -444,8 +451,9 @@ test('staff shell title returns to the Ticket List', async () => {
     }),
   ).toBeDefined();
   await user.click(screen.getByRole('link', { name: 'Support Ticketing' }));
-  expect(await screen.findByRole('heading', { name: 'Tickets' })).toBeDefined();
-  expect(screen.getByText('High: patient portal MFA reset')).toBeDefined();
+  expect(
+    await screen.findByRole('heading', { name: 'Operational Dashboard' }),
+  ).toBeDefined();
 });
 
 test('Agent who is not Assignee sees no Status Transition control', async () => {

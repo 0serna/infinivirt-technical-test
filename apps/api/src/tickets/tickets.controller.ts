@@ -7,7 +7,6 @@ import {
   Post,
   Query,
   Req,
-  UnauthorizedException,
 } from '@nestjs/common';
 import type {
   CreateTicketBody,
@@ -19,17 +18,9 @@ import type {
   TicketListFilters,
 } from '@support-ticketing/shared';
 import type { AuthenticatedRequest } from '../auth/auth.guard';
-import type { PublicUser } from '../auth/public-user';
 import { RequireRole } from '../auth/require-role.decorator';
+import { requireUser } from '../auth/require-user';
 import { TicketsService } from './tickets.service';
-
-function requireUser(request: AuthenticatedRequest): PublicUser {
-  const user = request.user;
-  if (!user) {
-    throw new UnauthorizedException();
-  }
-  return user;
-}
 
 @Controller('tickets')
 export class TicketsController {
