@@ -1,12 +1,26 @@
 import { EMPTY_TICKET_LIST_FILTER_OPTIONS } from '@support-ticketing/shared';
 import { render } from '@testing-library/react';
-import { type InitialEntry, MemoryRouter } from 'react-router-dom';
+import { type InitialEntry, MemoryRouter, useLocation } from 'react-router-dom';
 import { App } from '../App';
 
-export function renderApp(initialEntries: InitialEntry[]) {
+function LocationProbe() {
+  const location = useLocation();
+  return (
+    <div data-testid="location-path">
+      {location.pathname}
+      {location.search}
+    </div>
+  );
+}
+
+export function renderApp(
+  initialEntries: InitialEntry[],
+  options?: { probeLocation?: boolean },
+) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <App />
+      {options?.probeLocation ? <LocationProbe /> : null}
     </MemoryRouter>,
   );
 }
@@ -100,6 +114,78 @@ export function isClientsUrl(url: string): boolean {
 export function isUsersUrl(url: string): boolean {
   return url === '/api/users';
 }
+
+export function isDashboardUrl(url: string): boolean {
+  return url === '/api/dashboard';
+}
+
+export const sampleAgentDashboard = {
+  kind: 'agent' as const,
+  openCount: 2,
+  openTickets: [
+    {
+      id: 'ticket-ship',
+      title: 'In progress: shipment tracking API',
+      status: 'in_progress' as const,
+      priority: 'high' as const,
+      client: { id: 'client-1', name: 'Acme Logistics' },
+      assignee: { id: 'user-2', displayName: 'Alex Agent' },
+      createdBy: { id: 'user-2', displayName: 'Alex Agent' },
+      updatedAt: '2026-08-15T12:00:00.000Z',
+      createdAt: '2026-08-14T12:00:00.000Z',
+    },
+    {
+      id: 'ticket-webhook',
+      title: 'Open: webhook signature mismatch',
+      status: 'open' as const,
+      priority: 'medium' as const,
+      client: { id: 'client-2', name: 'Northwind Retail' },
+      assignee: { id: 'user-2', displayName: 'Alex Agent' },
+      createdBy: { id: 'user-3', displayName: 'Sam Supervisor' },
+      updatedAt: '2026-08-16T09:00:00.000Z',
+      createdAt: '2026-08-16T08:00:00.000Z',
+    },
+  ],
+};
+
+export const emptyTeamDashboard = {
+  kind: 'team' as const,
+  openTotal: 0,
+  openByStatus: { open: 0, in_progress: 0 },
+  staleCount: 0,
+  stale: [],
+};
+
+export const sampleTeamDashboard = {
+  kind: 'team' as const,
+  openTotal: 5,
+  openByStatus: { open: 3, in_progress: 2 },
+  staleCount: 4,
+  stale: [
+    {
+      id: 'ticket-stale-billing',
+      title: 'Stale open: billing portal timeout',
+      status: 'open' as const,
+      priority: 'high' as const,
+      client: { id: 'client-acme', name: 'Acme Logistics' },
+      assignee: null,
+      createdBy: { id: 'user-3', displayName: 'Sam Supervisor' },
+      updatedAt: '2026-08-10T12:00:00.000Z',
+      createdAt: '2026-08-08T12:00:00.000Z',
+    },
+    {
+      id: 'ticket-gift-card',
+      title: 'Resolved: gift-card balance mismatch',
+      status: 'resolved' as const,
+      priority: 'medium' as const,
+      client: { id: 'client-2', name: 'Northwind Retail' },
+      assignee: { id: 'user-2', displayName: 'Alex Agent' },
+      createdBy: { id: 'user-2', displayName: 'Alex Agent' },
+      updatedAt: '2026-08-12T09:00:00.000Z',
+      createdAt: '2026-08-11T09:00:00.000Z',
+    },
+  ],
+};
 
 /** Full Client catalog (ADR 0010). Includes Clients absent from list filterOptions. */
 export const sampleClientCatalog = [
@@ -309,11 +395,17 @@ export function mockAuthedSession(
   tickets: unknown = emptyTickets,
   user: typeof ada | typeof alex | typeof sam = ada,
   detail?: unknown,
+  dashboard: unknown = user.role === 'agent'
+    ? sampleAgentDashboard
+    : emptyTeamDashboard,
 ) {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
     if (url === '/api/auth/me') {
       return jsonResponse(200, user);
+    }
+    if (isDashboardUrl(url)) {
+      return jsonResponse(200, dashboard);
     }
     if (isTicketsUrl(url)) {
       return jsonResponse(200, tickets);

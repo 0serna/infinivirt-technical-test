@@ -49,8 +49,8 @@ The set of Tickets a User may consult — the Ticket List and any later single-T
 _Avoid_: “within list scope” without this set; treating consult as assignee-only; a shared unassigned queue for Agents; equating List Scope with who may update; a table-only recorte that a direct consult can bypass
 
 **Ticket List**:
-Consult view of Tickets in the User’s List Scope, all Status values unless filtered. Each row includes Title, Status, Priority, Client, Assignee (nullable), `created_by`, and `updatedAt`. Narrows by Status, Priority, and Client; Supervisor and Administrator may also narrow by Assignee, including unassigned (`Assignee` null). Filter choices come from Tickets already in List Scope; they do not require listing the Client or User catalogs. Distinct from the read-only Client catalog used when creating a Ticket.
-_Avoid_: Search-by-Title as a required list dimension; Assignee as a filter that widens an Agent’s List Scope; treating list filters as Administrator catalog access; overloading list `filterOptions.clients` as the create-time Client picker
+Consult view of Tickets in the User’s List Scope, all Status values unless filtered. Route `/tickets` (not the post-login home). Each row includes Title, Status, Priority, Client, Assignee (nullable), `created_by`, and `updatedAt`. Narrows by Status (including multi-Status for Open Ticket load), Priority, Client, and Stale Ticket; Supervisor and Administrator may also narrow by Assignee, including unassigned (`Assignee` null). An Agent may narrow to Open Tickets where they are Assignee (dashboard “my load” deep-link) without widening List Scope. Filter choices come from Tickets already in List Scope; they do not require listing the Client or User catalogs. Distinct from the read-only Client catalog used when creating a Ticket. Accepts the same filters from the URL so Operational Dashboard counters can deep-link here.
+_Avoid_: Search-by-Title as a required list dimension; Assignee as a filter that widens an Agent’s List Scope; treating list filters as Administrator catalog access; overloading list `filterOptions.clients` as the create-time Client picker; ignoring URL filters from the dashboard
 
 ### Status and priority
 
@@ -62,6 +62,10 @@ _Avoid_: State-machine labels outside this set; a second graph for Administrator
 Ticket in operational load: Status `open` or `in_progress`. Does not include `resolved` or `closed`.
 _Avoid_: Active, pending (as the metric definition)
 
+**Stale Ticket**:
+Ticket with `updated_at` older than 48 hours and Status ≠ `closed`. Includes `resolved`. Distinct from Open Ticket: a Stale Ticket may be `resolved`; an Open Ticket may be fresh. There is no separate due-date or SLA “overdue” concept in the first release.
+_Avoid_: Overdue, vencido (as a second metric); equating Stale with Open; excluding `resolved` from Stale to match Open Ticket
+
 **Priority**:
 Urgency of a Ticket: `low`, `medium`, `high`, or `critical`. Default on create: `medium`. May change over the Ticket's life; only the current value is kept (no append-only Priority history, unlike Status and Assignee).
 _Avoid_: Severity (unless split later), custom priorities; treating Priority as immutable
@@ -72,7 +76,7 @@ _Avoid_: Severity (unless split later), custom priorities; treating Priority as 
 May consult Tickets in their List Scope, create tickets, add `public` Comments. To create, may consult the full Client catalog read-only (`id`, name) — not Client administration and not List Scope filter options. May record forward Status Transitions through `resolved` only when Assignee. Creating the Ticket, or consulting it, is not enough. Cannot close or reopen. Cannot record a Reassignment (even on Tickets they created or are Assignee of). Unassigned Tickets are frozen for this Role.
 
 **Supervisor**:
-Everything an Agent can do, plus: list all tickets, Reassignment (first assign, reassign, and unassign), consult a read-only list of Users to choose an Assignee, see team metrics, review stale/overdue tickets, and `internal` Comments (in addition to `public`). Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment). Does not administer Users or Clients.
+Everything an Agent can do, plus: list all tickets, Reassignment (first assign, reassign, and unassign), consult a read-only list of Users to choose an Assignee, see team metrics, review Stale Tickets, and `internal` Comments (in addition to `public`). Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment). Does not administer Users or Clients.
 
 **Administrator**:
 Everything a Supervisor can do, plus: update any ticket, administer Users and Clients (full catalog management), close and reopen. May record any legal Status Transition on any Ticket (including unassigned) without being Assignee. Reassignment power matches Supervisor (any User as Assignee); “assign to anyone” is that shared power, not a separate Admin-only operation.
@@ -80,5 +84,5 @@ Everything a Supervisor can do, plus: update any ticket, administer Users and Cl
 ### Metrics views
 
 **Operational Dashboard**:
-View at `/dashboard`. Administrator and Supervisor see team/account metrics; Agent sees only their own load (Open Tickets assigned to them). Same route, different data by Role.
-_Avoid_: Separate agent home vs admin dashboard as different products
+Default authenticated home for every Role (`/` redirects to `/dashboard`; same page component). Layout: KPI strip of counters plus short tables (chosen prototype variant A). Payload differs by Role. Agent: personal load only — count and short list (cap 10, oldest `updated_at` first) of Open Tickets where they are Assignee (not merely `created_by`); no team totals; no Stale section. Supervisor and Administrator: the same team payload — total Open Tickets (unassigned included), Open breakdown by Status (`open` / `in_progress`), Stale Ticket count and short linkable list (cap 10, oldest `updated_at` first). Open-by-Priority and Open-by-Assignee are out of the required set for this view. Each counter deep-links to the Ticket List with the matching filter(s) applied via URL; row links go to Ticket consult.
+_Avoid_: Separate agent home vs admin dashboard as different products; Agent team-wide metrics; treating List Scope as the Agent dashboard filter; a richer Admin-only dashboard in this view; Ticket List as the post-login landing; counters that only display with no path into the filtered list

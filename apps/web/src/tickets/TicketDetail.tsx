@@ -37,6 +37,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
 import {
   COMMENT_VISIBILITY_LABEL,
+  assigneeLabel,
   formatTicketInstant,
   PRIORITY_LABEL,
   STATUS_LABEL,
@@ -148,10 +149,6 @@ function StatusTimeline({ history }: { history: TicketStatusHistoryRow[] }) {
       ))}
     </Stack>
   );
-}
-
-function assigneeLabel(person: { displayName: string } | null): string {
-  return person?.displayName ?? 'Unassigned';
 }
 
 function AssignmentTimeline({
@@ -321,7 +318,9 @@ function PropertiesColumn({
           <Select
             label="Assignee"
             placeholder={
-              assigneeControls.usersLoading ? 'Loading users…' : 'Unassigned'
+              assigneeControls.usersLoading
+                ? 'Loading users…'
+                : assigneeLabel(null)
             }
             data={assigneeControls.users.map((row) => ({
               value: row.id,
@@ -367,9 +366,7 @@ function PropertiesColumn({
           ) : null}
         </Stack>
       ) : (
-        <MetaItem label="Assignee">
-          {ticket.assignee?.displayName ?? 'Unassigned'}
-        </MetaItem>
+        <MetaItem label="Assignee">{assigneeLabel(ticket.assignee)}</MetaItem>
       )}
       <MetaItem label="Created by">{ticket.createdBy.displayName}</MetaItem>
       <MetaItem label="Created">
@@ -595,7 +592,7 @@ export function TicketDetail() {
   return (
     <Stack gap="lg">
       <Breadcrumbs separator="›" separatorMargin="xs">
-        <Anchor component={Link} to="/" size="sm" c="dimmed">
+        <Anchor component={Link} to="/tickets" size="sm" c="dimmed">
           Tickets
         </Anchor>
         <Text size="sm" lineClamp={1} maw={420}>

@@ -14,10 +14,14 @@ import {
   isLegalStatusEdge,
   mayRecordReassignment,
   mayRecordStatusTransition,
+  OPEN_TICKET_STATUSES,
   type PatchTicketAssigneeBody,
   type PatchTicketStatusBody,
   PRIORITIES,
   type Priority,
+  staleTicketCutoff,
+  TICKET_LIST_ASSIGNED_OPEN_SCOPE,
+  TICKET_LIST_STALE_QUERY,
   TICKET_STATUSES,
   type TicketDetail,
   type TicketListClient,
@@ -31,6 +35,11 @@ import {
 } from '@support-ticketing/shared';
 import type { PublicUser } from '../auth/public-user';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  ticketListRowSelect,
+  ticketPersonSelect,
+  toTicketListRow,
+} from './ticket-list-row';
 
 type AssigneeFilter = { kind: 'unassigned' } | { kind: 'user'; id: string };
 
@@ -42,7 +51,6 @@ type ScopedTicket = Omit<TicketListRow, 'updatedAt' | 'createdAt'> & {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const ticketPersonSelect = { id: true, displayName: true } as const;
 const historyAsc = [{ changedAt: 'asc' as const }, { id: 'asc' as const }];
 
 const ticketDetailSelect = {
@@ -152,16 +160,54 @@ function parseAssigneeId(value: unknown): string | null {
   return requireUuid(value, 'assigneeId');
 }
 
+function parseStatusFilters(
+  value: string | string[] | undefined,
+): TicketStatus[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const rawParts = Array.isArray(value) ? value : value.split(',');
+  const parts = rawParts
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length === 0) {
+    return undefined;
+  }
+  const statuses: TicketStatus[] = [];
+  for (const part of parts) {
+    statuses.push(parseRequiredEnum(part, TICKET_STATUSES, 'status'));
+  }
+  return [...new Set(statuses)];
+}
+
+function parseExactQueryFlag(
+  value: string | undefined,
+  allowed: string,
+  field: string,
+): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  if (value !== allowed) {
+    throw new BadRequestException(`Invalid ${field}`);
+  }
+  return true;
+}
+
 function matchesFilters(
   ticket: ScopedTicket,
   filters: {
-    status?: TicketStatus;
+    statuses?: TicketStatus[];
     priority?: Priority;
     clientId?: string;
     assignee?: AssigneeFilter;
+    staleBefore?: Date;
   },
 ): boolean {
-  if (filters.status !== undefined && ticket.status !== filters.status) {
+  if (
+    filters.statuses !== undefined &&
+    !filters.statuses.includes(ticket.status)
+  ) {
     return false;
   }
   if (filters.priority !== undefined && ticket.priority !== filters.priority) {
@@ -169,6 +215,14 @@ function matchesFilters(
   }
   if (filters.clientId !== undefined && ticket.client.id !== filters.clientId) {
     return false;
+  }
+  if (filters.staleBefore !== undefined) {
+    if (ticket.status === 'closed') {
+      return false;
+    }
+    if (ticket.updatedAt >= filters.staleBefore) {
+      return false;
+    }
   }
   if (filters.assignee?.kind === 'unassigned') {
     return ticket.assignee === null;
@@ -257,45 +311,57 @@ export class TicketsService {
 
   async list(
     user: PublicUser,
-    query: TicketListFilters = {},
+    query: TicketListFilters & { status?: string | string[] } = {},
   ): Promise<TicketListEnvelope> {
-    const status = parseOptionalEnum(query.status, TICKET_STATUSES, 'status');
+    const statuses = parseStatusFilters(query.status);
     const priority = parseOptionalEnum(query.priority, PRIORITIES, 'priority');
     const clientId =
       query.clientId === undefined
         ? undefined
         : requireUuid(query.clientId, 'clientId');
+    const stale = parseExactQueryFlag(
+      query.stale,
+      TICKET_LIST_STALE_QUERY,
+      'stale',
+    );
+    const assignedOpen = parseExactQueryFlag(
+      query.scope,
+      TICKET_LIST_ASSIGNED_OPEN_SCOPE,
+      'scope',
+    );
     const seesAllTickets = hasMinimumRole(user.role, 'supervisor');
-    const assignee = seesAllTickets
+    let assignee = seesAllTickets
       ? parseAssigneeFilter(query.assigneeId)
       : undefined;
+
+    let effectiveStatuses = statuses;
+    if (assignedOpen) {
+      // Assigned-open is always Open Ticket load for the current Assignee —
+      // ignore any client `status` that would widen or narrow away from Open.
+      assignee = { kind: 'user', id: user.id };
+      effectiveStatuses = [...OPEN_TICKET_STATUSES];
+    }
+
+    const staleBefore = stale ? staleTicketCutoff() : undefined;
 
     const scoped = await this.prisma.ticket.findMany({
       where: listScopeWhere(user),
       orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        priority: true,
-        updatedAt: true,
-        createdAt: true,
-        client: { select: { id: true, name: true } },
-        assignee: { select: { id: true, displayName: true } },
-        createdBy: { select: { id: true, displayName: true } },
-      },
+      select: ticketListRowSelect,
     });
 
     const tickets = scoped.filter((ticket) =>
-      matchesFilters(ticket, { status, priority, clientId, assignee }),
+      matchesFilters(ticket, {
+        statuses: effectiveStatuses,
+        priority,
+        clientId,
+        assignee,
+        staleBefore,
+      }),
     );
 
     return {
-      tickets: tickets.map((ticket) => ({
-        ...ticket,
-        updatedAt: ticket.updatedAt.toISOString(),
-        createdAt: ticket.createdAt.toISOString(),
-      })),
+      tickets: tickets.map(toTicketListRow),
       filterOptions: filterOptionsFromScope(scoped),
     };
   }

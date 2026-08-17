@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { apiFetch } from './auth/api';
 import {
   ada,
+  emptyTeamDashboard,
   emptyTickets,
+  isDashboardUrl,
   isTicketsUrl,
   jsonResponse,
   mockAuthedSession,
@@ -76,6 +78,9 @@ test('successful login shows the shell', async () => {
     if (url === '/api/auth/login') {
       return jsonResponse(200, { accessToken: 'token-abc', user: ada });
     }
+    if (isDashboardUrl(url)) {
+      return jsonResponse(200, emptyTeamDashboard);
+    }
     if (isTicketsUrl(url)) {
       return jsonResponse(200, emptyTickets);
     }
@@ -93,6 +98,9 @@ test('successful login shows the shell', async () => {
   ).toBeDefined();
   expect(screen.getByText('Ada Lovelace')).toBeDefined();
   expect(screen.getByText('Administrator')).toBeDefined();
+  expect(
+    await screen.findByRole('heading', { name: 'Operational Dashboard' }),
+  ).toBeDefined();
   expect(screen.queryByText(/API health/)).toBeNull();
   expect(localStorage.getItem('accessToken')).toBe('token-abc');
 });
@@ -145,6 +153,9 @@ test('sign out returns to login and later requests do not send Bearer', async ()
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
     }
+    if (isDashboardUrl(url)) {
+      return jsonResponse(200, emptyTeamDashboard);
+    }
     if (isTicketsUrl(url)) {
       return jsonResponse(200, emptyTickets);
     }
@@ -173,7 +184,7 @@ test('sign out returns to login and later requests do not send Bearer', async ()
   expect(new Headers(init?.headers).get('Authorization')).toBeNull();
 });
 
-test('authenticated visit to /login is sent to the shell at /', async () => {
+test('authenticated visit to /login is sent to the Dashboard at /dashboard', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession();
 
@@ -184,6 +195,9 @@ test('authenticated visit to /login is sent to the shell at /', async () => {
   expect(screen.getByText('Ada Lovelace')).toBeDefined();
   expect(
     screen.getByRole('heading', { name: 'Support Ticketing' }),
+  ).toBeDefined();
+  expect(
+    await screen.findByRole('heading', { name: 'Operational Dashboard' }),
   ).toBeDefined();
 });
 
@@ -206,6 +220,9 @@ test('mid-session 401 shows the session expired alert on login', async () => {
     if (url === '/api/auth/me') {
       meCalls += 1;
       return meCalls === 1 ? jsonResponse(200, ada) : unauthorized;
+    }
+    if (isDashboardUrl(url)) {
+      return jsonResponse(200, emptyTeamDashboard);
     }
     if (isTicketsUrl(url)) {
       return jsonResponse(200, emptyTickets);
