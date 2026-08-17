@@ -7,6 +7,7 @@ import {
   Button,
   Group,
   Menu,
+  Select,
   SimpleGrid,
   Stack,
   Text,
@@ -14,7 +15,10 @@ import {
   Title,
 } from '@mantine/core';
 import {
+  COMMENT_VISIBILITIES,
+  type CommentVisibility,
   type CreateTicketCommentBody,
+  hasMinimumRole,
   nextRecordableStatus,
   type PatchTicketStatusBody,
   type Priority,
@@ -153,13 +157,16 @@ function CommentThread({ comments }: { comments: TicketComment[] }) {
 function CommentComposer({
   disabled,
   error,
+  allowInternal,
   onSubmit,
 }: {
   disabled: boolean;
   error: boolean;
-  onSubmit: (body: string) => Promise<boolean>;
+  allowInternal: boolean;
+  onSubmit: (body: string, visibility: CommentVisibility) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState('');
+  const [visibility, setVisibility] = useState<CommentVisibility>('public');
 
   return (
     <Stack
@@ -171,11 +178,14 @@ function CommentComposer({
         if (body.length === 0 || disabled) {
           return;
         }
-        void onSubmit(body).then((ok) => {
-          if (ok) {
-            setDraft('');
-          }
-        });
+        void onSubmit(body, allowInternal ? visibility : 'public').then(
+          (ok) => {
+            if (ok) {
+              setDraft('');
+              setVisibility('public');
+            }
+          },
+        );
       }}
     >
       <Textarea
@@ -188,6 +198,26 @@ function CommentComposer({
         disabled={disabled}
         aria-label="Comment"
       />
+      {allowInternal ? (
+        <Select
+          label="Visibility"
+          value={visibility}
+          onChange={(value) => {
+            if (
+              value !== null &&
+              (COMMENT_VISIBILITIES as readonly string[]).includes(value)
+            ) {
+              setVisibility(value as CommentVisibility);
+            }
+          }}
+          data={COMMENT_VISIBILITIES.map((value) => ({
+            value,
+            label: COMMENT_VISIBILITY_LABEL[value],
+          }))}
+          allowDeselect={false}
+          disabled={disabled}
+        />
+      ) : null}
       <Group>
         <Button type="submit" loading={disabled} disabled={draft.trim() === ''}>
           Add comment
@@ -319,7 +349,10 @@ export function TicketDetail() {
     }
   }
 
-  async function createComment(bodyText: string): Promise<boolean> {
+  async function createComment(
+    bodyText: string,
+    visibility: CommentVisibility,
+  ): Promise<boolean> {
     if (!id) {
       return false;
     }
@@ -328,7 +361,7 @@ export function TicketDetail() {
     try {
       const body: CreateTicketCommentBody = {
         body: bodyText,
-        visibility: 'public',
+        visibility,
       };
       const response = await apiFetch(`/api/tickets/${id}/comments`, {
         method: 'POST',
@@ -450,6 +483,7 @@ export function TicketDetail() {
       <CommentComposer
         disabled={isCommenting}
         error={commentError}
+        allowInternal={user !== null && hasMinimumRole(user.role, 'supervisor')}
         onSubmit={createComment}
       />
     </Stack>

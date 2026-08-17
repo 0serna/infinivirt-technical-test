@@ -1188,4 +1188,154 @@ describe('Tickets create Comment (e2e)', () => {
 
     expect(created.body).toEqual(me.body);
   });
+
+  it('Agent POST internal Comment on a consultable Ticket is Authorization failure without writing', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const before = await ticketByTitle(
+      app,
+      accessToken,
+      'High: patient portal MFA reset',
+    );
+
+    const denied = await request(app.getHttpServer())
+      .post(`/tickets/${before.id}/comments`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        body: 'Agent must not post internal notes.',
+        visibility: 'internal',
+      })
+      .expect(403);
+
+    expect(denied.body).not.toHaveProperty('stack');
+    expect(JSON.stringify(denied.body)).not.toMatch(/TicketsService/);
+
+    const after = await ticketByTitle(
+      app,
+      accessToken,
+      'High: patient portal MFA reset',
+    );
+    expect(after.id).toBe(before.id);
+    expect(after.comments).toEqual(before.comments);
+    expect(after.updatedAt).toBe(before.updatedAt);
+  });
+
+  it('Supervisor POST internal Comment on an in-scope Ticket succeeds', async () => {
+    const { accessToken, userId } = await login(app, SUPERVISOR_EMAIL);
+    const ticket = await ticketByTitle(
+      app,
+      accessToken,
+      'Low: documentation typo',
+    );
+    const priorComments = ticket.comments;
+    const priorUpdatedAt = ticket.updatedAt;
+
+    const response = await request(app.getHttpServer())
+      .post(`/tickets/${ticket.id}/comments`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        body: 'Internal: check docs PR before closing.',
+        visibility: 'internal',
+      })
+      .expect(201);
+
+    expect(response.body.comments).toHaveLength(priorComments.length + 1);
+    expect(response.body.comments.slice(0, priorComments.length)).toEqual(
+      priorComments,
+    );
+    expect(response.body.comments[response.body.comments.length - 1]).toEqual({
+      id: expect.any(String),
+      body: 'Internal: check docs PR before closing.',
+      visibility: 'internal',
+      createdAt: expect.any(String),
+      author: { id: userId, displayName: 'Sam Supervisor' },
+    });
+    expect(Date.parse(response.body.updatedAt)).toBeGreaterThan(
+      Date.parse(priorUpdatedAt),
+    );
+  });
+
+  it('Administrator POST internal Comment on an in-scope Ticket succeeds', async () => {
+    const { accessToken, userId } = await login(app, ADMIN_EMAIL);
+    const ticket = await ticketByTitle(
+      app,
+      accessToken,
+      'High: warehouse scanner pairing',
+    );
+    const priorComments = ticket.comments;
+    const priorUpdatedAt = ticket.updatedAt;
+
+    const response = await request(app.getHttpServer())
+      .post(`/tickets/${ticket.id}/comments`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        body: 'Internal: warehouse firmware rollback plan.',
+        visibility: 'internal',
+      })
+      .expect(201);
+
+    expect(response.body.comments).toHaveLength(priorComments.length + 1);
+    expect(response.body.comments.slice(0, priorComments.length)).toEqual(
+      priorComments,
+    );
+    expect(response.body.comments[response.body.comments.length - 1]).toEqual({
+      id: expect.any(String),
+      body: 'Internal: warehouse firmware rollback plan.',
+      visibility: 'internal',
+      createdAt: expect.any(String),
+      author: { id: userId, displayName: 'Ada Admin' },
+    });
+    expect(Date.parse(response.body.updatedAt)).toBeGreaterThan(
+      Date.parse(priorUpdatedAt),
+    );
+  });
+
+  it('Supervisor and Administrator can still create public Comments', async () => {
+    const supervisor = await login(app, SUPERVISOR_EMAIL);
+    const admin = await login(app, ADMIN_EMAIL);
+    const supervisorTicket = await ticketByTitle(
+      app,
+      supervisor.accessToken,
+      'Critical: telematics feed down',
+    );
+    const adminTicket = await ticketByTitle(
+      app,
+      admin.accessToken,
+      'Critical: checkout outage',
+    );
+
+    const supervisorResponse = await request(app.getHttpServer())
+      .post(`/tickets/${supervisorTicket.id}/comments`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .send({
+        body: 'Supervisor public update for telematics Client.',
+        visibility: 'public',
+      })
+      .expect(201);
+    expect(
+      supervisorResponse.body.comments[
+        supervisorResponse.body.comments.length - 1
+      ],
+    ).toEqual({
+      id: expect.any(String),
+      body: 'Supervisor public update for telematics Client.',
+      visibility: 'public',
+      createdAt: expect.any(String),
+      author: { id: supervisor.userId, displayName: 'Sam Supervisor' },
+    });
+
+    const adminResponse = await request(app.getHttpServer())
+      .post(`/tickets/${adminTicket.id}/comments`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .send({ body: 'Administrator public update for checkout outage.' })
+      .expect(201);
+    expect(
+      adminResponse.body.comments[adminResponse.body.comments.length - 1],
+    ).toEqual({
+      id: expect.any(String),
+      body: 'Administrator public update for checkout outage.',
+      visibility: 'public',
+      createdAt: expect.any(String),
+      author: { id: admin.userId, displayName: 'Ada Admin' },
+    });
+  });
 });
