@@ -96,16 +96,10 @@ export function isTicketDetailUrl(url: string): boolean {
 }
 
 export const sampleTicketDetail = {
-  id: 'ticket-1',
-  title: 'High: patient portal MFA reset',
-  description: 'MFA reset emails not arriving.',
+  ...sampleTickets.tickets[0],
   status: 'open' as const,
   priority: 'high' as const,
-  client: { id: 'client-1', name: 'Contoso Health' },
-  assignee: null,
-  createdBy: { id: 'user-2', displayName: 'Alex Agent' },
-  updatedAt: '2026-08-01T12:00:00.000Z',
-  createdAt: '2026-07-31T12:00:00.000Z',
+  description: 'MFA reset emails not arriving.',
   resolvedAt: null,
   closedAt: null,
   statusHistory: [
@@ -241,6 +235,7 @@ export const sampleClosedTicketDetail = {
 export function mockAuthedSession(
   tickets: unknown = emptyTickets,
   user: typeof ada | typeof alex | typeof sam = ada,
+  detail?: unknown,
 ) {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
@@ -249,6 +244,9 @@ export function mockAuthedSession(
     }
     if (isTicketsUrl(url)) {
       return jsonResponse(200, tickets);
+    }
+    if (detail !== undefined && isTicketDetailUrl(url)) {
+      return jsonResponse(200, detail);
     }
     throw new Error(`unexpected fetch ${url}`);
   });

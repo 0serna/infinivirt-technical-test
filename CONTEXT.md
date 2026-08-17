@@ -56,7 +56,7 @@ _Avoid_: Search-by-Title as a required list dimension; Assignee as a filter that
 
 **Ticket Status**:
 Current lifecycle state of a Ticket. The only legal forward edges are the next step in `open` → `in_progress` → `resolved` → `closed`. The only reverse edge is reopen: `closed` → `open`. No Role may skip or jump (Administrator included). Close and reopen are Administrator-only; Agent and Supervisor stop at `resolved` even when Assignee.
-_Avoid_: State-machine labels outside this set; a second graph for Administrator; `resolved` → `in_progress` or other back-steps; treating the current Status as a legal `to`
+_Avoid_: State-machine labels outside this set; a second graph for Administrator; `resolved` → `in_progress` or other back-steps
 
 **Open Ticket**:
 Ticket in operational load: Status `open` or `in_progress`. Does not include `resolved` or `closed`.
@@ -72,10 +72,10 @@ _Avoid_: Severity (unless split later), custom priorities; treating Priority as 
 May consult Tickets in their List Scope, create tickets, add `public` Comments. May record forward Status Transitions through `resolved` only when Assignee. Creating the Ticket, or consulting it, is not enough. Cannot close or reopen. Unassigned Tickets are frozen for this Role.
 
 **Supervisor**:
-Everything an Agent can do, plus: list all tickets, reassign, see team metrics, review stale/overdue tickets, `internal` Comments. Same Status rules as Agent (Assignee, through `resolved` only). Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment). Unassigned Tickets are frozen for this Role too.
+Everything an Agent can do, plus: list all tickets, reassign, see team metrics, review stale/overdue tickets, `internal` Comments. Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment).
 
 **Administrator**:
-Everything a Supervisor can do, plus: update any ticket, assign to anyone, list Users and Clients, close and reopen. May record any legal Status Transition on any Ticket (including unassigned) without being Assignee. Still cannot skip or jump.
+Everything a Supervisor can do, plus: update any ticket, assign to anyone, list Users and Clients, close and reopen. May record any legal Status Transition on any Ticket (including unassigned) without being Assignee.
 
 ### Metrics views
 

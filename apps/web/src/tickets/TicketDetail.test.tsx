@@ -4,7 +4,9 @@ import {
   ada,
   alex,
   isTicketDetailUrl,
+  isTicketsUrl,
   jsonResponse,
+  mockAuthedSession,
   renderApp,
   sam,
   sampleClosedTicketDetail,
@@ -25,17 +27,43 @@ afterEach(() => {
   localStorage.clear();
 });
 
+type SessionUser = typeof ada | typeof alex | typeof sam;
+
 function mockTicketSession(
   detail: unknown = sampleTicketDetail,
-  user: typeof ada | typeof alex | typeof sam = ada,
+  user: SessionUser = ada,
 ) {
-  vi.mocked(fetch).mockImplementation(async (input) => {
+  mockAuthedSession(sampleTickets, user, detail);
+}
+
+function mockTicketPatchSession({
+  detail,
+  user = ada,
+  expectedStatus,
+  updated,
+  patchResponse,
+}: {
+  detail: unknown;
+  user?: SessionUser;
+  expectedStatus?: string;
+  updated?: unknown;
+  patchResponse?: Response;
+}) {
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
     const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
     if (url === '/api/auth/me') {
       return jsonResponse(200, user);
     }
-    if (url === '/api/tickets' || url.startsWith('/api/tickets?')) {
+    if (isTicketsUrl(url)) {
       return jsonResponse(200, sampleTickets);
+    }
+    if (isTicketDetailUrl(url) && method === 'PATCH') {
+      if (patchResponse) {
+        return patchResponse;
+      }
+      expect(init?.body).toBe(JSON.stringify({ status: expectedStatus }));
+      return jsonResponse(200, updated);
     }
     if (isTicketDetailUrl(url)) {
       return jsonResponse(200, detail);
@@ -278,23 +306,11 @@ test('Agent Assignee can record the next forward Status Transition', async () =>
       },
     ],
   };
-  vi.mocked(fetch).mockImplementation(async (input, init) => {
-    const url = String(input);
-    const method = (init?.method ?? 'GET').toUpperCase();
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, alex);
-    }
-    if (url === '/api/tickets' || url.startsWith('/api/tickets?')) {
-      return jsonResponse(200, sampleTickets);
-    }
-    if (isTicketDetailUrl(url) && method === 'PATCH') {
-      expect(init?.body).toBe(JSON.stringify({ status: 'in_progress' }));
-      return jsonResponse(200, updated);
-    }
-    if (isTicketDetailUrl(url)) {
-      return jsonResponse(200, sampleReopenedTicketDetail);
-    }
-    throw new Error(`unexpected fetch ${url}`);
+  mockTicketPatchSession({
+    detail: sampleReopenedTicketDetail,
+    user: alex,
+    expectedStatus: 'in_progress',
+    updated,
   });
 
   renderApp(['/tickets/ticket-3']);
@@ -334,20 +350,10 @@ test('Administrator can record a forward Status Transition on an unassigned Tick
       },
     ],
   };
-  vi.mocked(fetch).mockImplementation(async (input, init) => {
-    const url = String(input);
-    const method = (init?.method ?? 'GET').toUpperCase();
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isTicketDetailUrl(url) && method === 'PATCH') {
-      expect(init?.body).toBe(JSON.stringify({ status: 'in_progress' }));
-      return jsonResponse(200, updated);
-    }
-    if (isTicketDetailUrl(url)) {
-      return jsonResponse(200, sampleTicketDetail);
-    }
-    throw new Error(`unexpected fetch ${url}`);
+  mockTicketPatchSession({
+    detail: sampleTicketDetail,
+    expectedStatus: 'in_progress',
+    updated,
   });
 
   renderApp(['/tickets/ticket-1']);
@@ -393,19 +399,9 @@ test('resolved Ticket offers no Close or Reopen control', async () => {
 test('failed Status Transition shows error copy without the raw server body', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input, init) => {
-    const url = String(input);
-    const method = (init?.method ?? 'GET').toUpperCase();
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isTicketDetailUrl(url) && method === 'PATCH') {
-      return jsonResponse(409, { message: 'Illegal edge stack' });
-    }
-    if (isTicketDetailUrl(url)) {
-      return jsonResponse(200, sampleTicketDetail);
-    }
-    throw new Error(`unexpected fetch ${url}`);
+  mockTicketPatchSession({
+    detail: sampleTicketDetail,
+    patchResponse: jsonResponse(409, { message: 'Illegal edge stack' }),
   });
 
   renderApp(['/tickets/ticket-1']);
@@ -475,20 +471,10 @@ test('Administrator can close a resolved Ticket', async () => {
       },
     ],
   };
-  vi.mocked(fetch).mockImplementation(async (input, init) => {
-    const url = String(input);
-    const method = (init?.method ?? 'GET').toUpperCase();
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isTicketDetailUrl(url) && method === 'PATCH') {
-      expect(init?.body).toBe(JSON.stringify({ status: 'closed' }));
-      return jsonResponse(200, updated);
-    }
-    if (isTicketDetailUrl(url)) {
-      return jsonResponse(200, sampleResolvedTicketDetail);
-    }
-    throw new Error(`unexpected fetch ${url}`);
+  mockTicketPatchSession({
+    detail: sampleResolvedTicketDetail,
+    expectedStatus: 'closed',
+    updated,
   });
 
   renderApp(['/tickets/ticket-gift-card']);
@@ -527,20 +513,10 @@ test('Administrator can reopen a closed Ticket', async () => {
       },
     ],
   };
-  vi.mocked(fetch).mockImplementation(async (input, init) => {
-    const url = String(input);
-    const method = (init?.method ?? 'GET').toUpperCase();
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isTicketDetailUrl(url) && method === 'PATCH') {
-      expect(init?.body).toBe(JSON.stringify({ status: 'open' }));
-      return jsonResponse(200, updated);
-    }
-    if (isTicketDetailUrl(url)) {
-      return jsonResponse(200, sampleClosedTicketDetail);
-    }
-    throw new Error(`unexpected fetch ${url}`);
+  mockTicketPatchSession({
+    detail: sampleClosedTicketDetail,
+    expectedStatus: 'open',
+    updated,
   });
 
   renderApp(['/tickets/ticket-invoice']);

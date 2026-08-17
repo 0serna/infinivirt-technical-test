@@ -47,7 +47,7 @@ function ticketsUrl(
     params.set('assigneeId', filters.assigneeId);
   }
   const query = params.toString();
-  return query === '' ? '/api/tickets' : `/api/tickets?${query}`;
+  return query ? `/api/tickets?${query}` : '/api/tickets';
 }
 
 function assigneeSelectData(options: TicketListFilterOptions) {
@@ -71,6 +71,13 @@ export function TicketList() {
     useState<TicketListFilterOptions | null>(null);
   const [failed, setFailed] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+
+  function setFilter(key: keyof TicketListFilters, value: string | null) {
+    setFilters((current) => ({
+      ...current,
+      [key]: value ?? undefined,
+    }));
+  }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
   useEffect(() => {
@@ -112,12 +119,7 @@ export function TicketList() {
             label="Status"
             clearable
             value={filters.status ?? null}
-            onChange={(status) =>
-              setFilters((current) => ({
-                ...current,
-                status: status ?? undefined,
-              }))
-            }
+            onChange={(status) => setFilter('status', status)}
             data={TICKET_STATUSES.map((value) => ({
               value,
               label: STATUS_LABEL[value],
@@ -127,12 +129,7 @@ export function TicketList() {
             label="Priority"
             clearable
             value={filters.priority ?? null}
-            onChange={(priority) =>
-              setFilters((current) => ({
-                ...current,
-                priority: priority ?? undefined,
-              }))
-            }
+            onChange={(priority) => setFilter('priority', priority)}
             data={PRIORITIES.map((value) => ({
               value,
               label: PRIORITY_LABEL[value],
@@ -142,12 +139,7 @@ export function TicketList() {
             label="Client"
             clearable
             value={filters.clientId ?? null}
-            onChange={(clientId) =>
-              setFilters((current) => ({
-                ...current,
-                clientId: clientId ?? undefined,
-              }))
-            }
+            onChange={(clientId) => setFilter('clientId', clientId)}
             data={filterOptions.clients.map((client) => ({
               value: client.id,
               label: client.name,
@@ -158,12 +150,7 @@ export function TicketList() {
               label="Assignee"
               clearable
               value={filters.assigneeId ?? null}
-              onChange={(assigneeId) =>
-                setFilters((current) => ({
-                  ...current,
-                  assigneeId: assigneeId ?? undefined,
-                }))
-              }
+              onChange={(assigneeId) => setFilter('assigneeId', assigneeId)}
               data={assigneeSelectData(filterOptions)}
             />
           ) : null}

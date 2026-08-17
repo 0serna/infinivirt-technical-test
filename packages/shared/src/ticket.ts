@@ -75,7 +75,6 @@ export type PatchTicketStatusBody = {
   status: TicketStatus;
 };
 
-/** Next Status on the single graph, including reopen (`closed` → `open`). */
 export const NEXT_TICKET_STATUS: Record<TicketStatus, TicketStatus> = {
   open: 'in_progress',
   in_progress: 'resolved',
@@ -100,14 +99,12 @@ export function mayRecordStatusTransition(args: {
   if (!isLegalStatusEdge(args.from, args.to)) {
     return false;
   }
-  const closeOrReopen = args.to === 'closed' || args.from === 'closed';
-  if (closeOrReopen) {
+  if (args.to === 'closed' || args.from === 'closed') {
     return hasMinimumRole(args.role, 'admin');
   }
   return hasMinimumRole(args.role, 'admin') || args.assigneeId === args.actorId;
 }
 
-/** Next Status this User may record, including Administrator reopen. */
 export function nextRecordableStatus(args: {
   status: TicketStatus;
   role: Role;

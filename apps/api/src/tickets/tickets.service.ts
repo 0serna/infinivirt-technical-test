@@ -38,6 +38,34 @@ type ScopedTicket = Omit<TicketListRow, 'updatedAt' | 'createdAt'> & {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const ticketDetailSelect = {
+  id: true,
+  title: true,
+  status: true,
+  priority: true,
+  updatedAt: true,
+  createdAt: true,
+  description: true,
+  resolvedAt: true,
+  closedAt: true,
+  client: { select: { id: true, name: true } },
+  assignee: { select: { id: true, displayName: true } },
+  createdBy: { select: { id: true, displayName: true } },
+  statusHistory: {
+    orderBy: [{ changedAt: 'asc' as const }, { id: 'asc' as const }],
+    select: {
+      fromStatus: true,
+      toStatus: true,
+      changedAt: true,
+      changedBy: { select: { id: true, displayName: true } },
+    },
+  },
+} satisfies Prisma.TicketSelect;
+
+type TicketDetailRecord = Prisma.TicketGetPayload<{
+  select: typeof ticketDetailSelect;
+}>;
+
 function parseOptionalEnum<T extends string>(
   value: string | undefined,
   allowed: readonly T[],
@@ -57,13 +85,10 @@ function parseRequiredEnum<T extends string>(
   allowed: readonly T[],
   field: string,
 ): T {
-  if (
-    typeof value !== 'string' ||
-    !(allowed as readonly string[]).includes(value)
-  ) {
+  if (typeof value !== 'string') {
     throw new BadRequestException(`Invalid ${field}`);
   }
-  return value as T;
+  return parseOptionalEnum(value, allowed, field) as T;
 }
 
 function requireUuid(value: string, field: string): string {
@@ -146,6 +171,24 @@ function listScopeWhere(user: PublicUser): Prisma.TicketWhereInput {
   };
 }
 
+function toTicketDetail(ticket: TicketDetailRecord): TicketDetail {
+  const { updatedAt, createdAt, resolvedAt, closedAt, statusHistory, ...rest } =
+    ticket;
+  return {
+    ...rest,
+    updatedAt: updatedAt.toISOString(),
+    createdAt: createdAt.toISOString(),
+    resolvedAt: resolvedAt?.toISOString() ?? null,
+    closedAt: closedAt?.toISOString() ?? null,
+    statusHistory: statusHistory.map((row) => ({
+      from: row.fromStatus,
+      to: row.toStatus,
+      changedAt: row.changedAt.toISOString(),
+      changedBy: row.changedBy,
+    })),
+  };
+}
+
 @Injectable()
 export class TicketsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -198,38 +241,9 @@ export class TicketsService {
   }
 
   async getById(user: PublicUser, id: string): Promise<TicketDetail> {
-    const ticketId = requireUuid(id, 'id');
-    const ticket = await this.prisma.ticket.findFirst({
-      where: { id: ticketId, AND: [listScopeWhere(user)] },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        priority: true,
-        updatedAt: true,
-        createdAt: true,
-        description: true,
-        resolvedAt: true,
-        closedAt: true,
-        client: { select: { id: true, name: true } },
-        assignee: { select: { id: true, displayName: true } },
-        createdBy: { select: { id: true, displayName: true } },
-        statusHistory: {
-          orderBy: [{ changedAt: 'asc' }, { id: 'asc' }],
-          select: {
-            fromStatus: true,
-            toStatus: true,
-            changedAt: true,
-            changedBy: { select: { id: true, displayName: true } },
-          },
-        },
-      },
-    });
-    if (!ticket) {
-      throw new NotFoundException();
-    }
-
-    return toTicketDetail(ticket);
+    return toTicketDetail(
+      await this.requireScopedTicket(user, id, ticketDetailSelect),
+    );
   }
 
   async recordStatusTransition(
@@ -237,17 +251,14 @@ export class TicketsService {
     id: string,
     body: PatchTicketStatusBody,
   ): Promise<TicketDetail> {
-    const ticketId = requireUuid(id, 'id');
     const to = parseRequiredEnum(body?.status, TICKET_STATUSES, 'status');
-    const ticket = await this.prisma.ticket.findFirst({
-      where: { id: ticketId, AND: [listScopeWhere(user)] },
-      select: { id: true, status: true, assigneeId: true },
+    const ticket = await this.requireScopedTicket(user, id, {
+      id: true,
+      status: true,
+      assigneeId: true,
     });
-    if (!ticket) {
-      throw new NotFoundException();
-    }
 
-    if (ticket.status === to || !isLegalStatusEdge(ticket.status, to)) {
+    if (!isLegalStatusEdge(ticket.status, to)) {
       throw new ConflictException();
     }
 
@@ -268,11 +279,10 @@ export class TicketsService {
         where: { id: ticket.id },
         data: {
           status: to,
-          ...(to === 'resolved' ? { resolvedAt: new Date() } : {}),
-          ...(to === 'closed' ? { closedAt: new Date() } : {}),
-          ...(ticket.status === 'closed' && to === 'open'
-            ? { resolvedAt: null, closedAt: null }
-            : {}),
+          ...(to === 'resolved' && { resolvedAt: new Date() }),
+          ...(to === 'closed' && { closedAt: new Date() }),
+          ...(ticket.status === 'closed' &&
+            to === 'open' && { resolvedAt: null, closedAt: null }),
         },
       });
       await tx.ticketStatusHistory.create({
@@ -287,46 +297,19 @@ export class TicketsService {
 
     return this.getById(user, ticket.id);
   }
-}
 
-function toTicketDetail(ticket: {
-  id: string;
-  title: string;
-  status: TicketStatus;
-  priority: Priority;
-  client: TicketListClient;
-  assignee: TicketListPerson | null;
-  createdBy: TicketListPerson;
-  updatedAt: Date;
-  createdAt: Date;
-  description: string;
-  resolvedAt: Date | null;
-  closedAt: Date | null;
-  statusHistory: Array<{
-    fromStatus: TicketStatus | null;
-    toStatus: TicketStatus;
-    changedAt: Date;
-    changedBy: TicketListPerson;
-  }>;
-}): TicketDetail {
-  return {
-    id: ticket.id,
-    title: ticket.title,
-    status: ticket.status,
-    priority: ticket.priority,
-    client: ticket.client,
-    assignee: ticket.assignee,
-    createdBy: ticket.createdBy,
-    updatedAt: ticket.updatedAt.toISOString(),
-    createdAt: ticket.createdAt.toISOString(),
-    description: ticket.description,
-    resolvedAt: ticket.resolvedAt?.toISOString() ?? null,
-    closedAt: ticket.closedAt?.toISOString() ?? null,
-    statusHistory: ticket.statusHistory.map((row) => ({
-      from: row.fromStatus,
-      to: row.toStatus,
-      changedAt: row.changedAt.toISOString(),
-      changedBy: row.changedBy,
-    })),
-  };
+  private async requireScopedTicket<TSelect extends Prisma.TicketSelect>(
+    user: PublicUser,
+    id: string,
+    select: TSelect,
+  ): Promise<Prisma.TicketGetPayload<{ select: TSelect }>> {
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id: requireUuid(id, 'id'), ...listScopeWhere(user) },
+      select,
+    });
+    if (!ticket) {
+      throw new NotFoundException();
+    }
+    return ticket;
+  }
 }

@@ -27,6 +27,77 @@ function titles(body: { tickets?: Array<{ title?: string }> }): string[] {
   return (body.tickets ?? []).map((ticket) => ticket.title ?? '');
 }
 
+type TicketDetailBody = {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  assignee: { id: string; displayName: string } | null;
+  statusHistory: Array<{
+    from: string | null;
+    to: string;
+    changedAt: string;
+    changedBy: { id: string; displayName: string };
+  }>;
+};
+
+async function ticketByTitle(
+  app: INestApplication,
+  accessToken: string,
+  title: string,
+): Promise<TicketDetailBody> {
+  const list = await request(app.getHttpServer())
+    .get('/tickets')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .expect(200);
+  const listed = (
+    list.body.tickets as Array<{ id: string; title: string }>
+  ).find((ticket) => ticket.title === title);
+  expect(listed).toBeDefined();
+  const detail = await request(app.getHttpServer())
+    .get(`/tickets/${listed?.id}`)
+    .set('Authorization', `Bearer ${accessToken}`)
+    .expect(200);
+  return detail.body;
+}
+
+function expectLatestTransition(
+  body: TicketDetailBody,
+  expected: {
+    from: string | null;
+    to: string;
+    changedBy: { id: string; displayName: string };
+  },
+): void {
+  expect(body.statusHistory[body.statusHistory.length - 1]).toEqual({
+    ...expected,
+    changedAt: expect.any(String),
+  });
+}
+
+async function expectPatchForbiddenUnchanged(
+  app: INestApplication,
+  accessToken: string,
+  title: string,
+  status: string,
+  extras?: (before: TicketDetailBody, after: TicketDetailBody) => void,
+): Promise<void> {
+  const before = await ticketByTitle(app, accessToken, title);
+  await request(app.getHttpServer())
+    .patch(`/tickets/${before.id}`)
+    .set('Authorization', `Bearer ${accessToken}`)
+    .send({ status })
+    .expect(403);
+  const after = await ticketByTitle(app, accessToken, title);
+  expect(after.status).toBe(before.status);
+  expect(after.updatedAt).toBe(before.updatedAt);
+  expect(after.statusHistory).toEqual(before.statusHistory);
+  extras?.(before, after);
+}
+
 describe('Tickets list (e2e)', () => {
   let app: INestApplication;
 
@@ -384,22 +455,14 @@ describe('Tickets get by id (e2e)', () => {
 
   it('Agent GET of a Ticket they created (unassigned) returns current fields and Status Transition history', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
-    const list = await request(app.getHttpServer())
-      .get('/tickets')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-    const listed = (
-      list.body.tickets as Array<{ id: string; title: string }>
-    ).find((ticket) => ticket.title === 'High: patient portal MFA reset');
-    expect(listed).toBeDefined();
+    const body = await ticketByTitle(
+      app,
+      accessToken,
+      'High: patient portal MFA reset',
+    );
 
-    const response = await request(app.getHttpServer())
-      .get(`/tickets/${listed?.id}`)
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-
-    expect(response.body).toEqual({
-      id: listed?.id,
+    expect(body).toEqual({
+      id: body.id,
       title: 'High: patient portal MFA reset',
       description: 'MFA reset emails not arriving.',
       status: 'open',
@@ -420,76 +483,56 @@ describe('Tickets get by id (e2e)', () => {
         },
       ],
     });
-    expect(response.body).not.toHaveProperty('comments');
-    expect(response.body).not.toHaveProperty('assignments');
+    expect(body).not.toHaveProperty('comments');
+    expect(body).not.toHaveProperty('assignments');
   });
 
   it('Agent GET of a Ticket where they are Assignee includes full Status Transition history oldest first', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
-    const list = await request(app.getHttpServer())
-      .get('/tickets')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-    const listed = (
-      list.body.tickets as Array<{ id: string; title: string }>
-    ).find((ticket) => ticket.title === 'Reopened: returns portal blank page');
-    expect(listed).toBeDefined();
+    const body = await ticketByTitle(
+      app,
+      accessToken,
+      'Reopened: returns portal blank page',
+    );
 
-    const response = await request(app.getHttpServer())
-      .get(`/tickets/${listed?.id}`)
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-
-    expect(response.body.title).toBe('Reopened: returns portal blank page');
-    expect(response.body.status).toBe('open');
-    expect(response.body.assignee).toEqual({
+    expect(body.title).toBe('Reopened: returns portal blank page');
+    expect(body.status).toBe('open');
+    expect(body.assignee).toEqual({
       id: expect.any(String),
       displayName: 'Alex Agent',
     });
-    expect(response.body.resolvedAt).toBeNull();
-    expect(response.body.closedAt).toBeNull();
-    expect(
-      response.body.statusHistory.map(
-        (row: { from: string | null; to: string }) => [row.from, row.to],
-      ),
-    ).toEqual([
+    expect(body.resolvedAt).toBeNull();
+    expect(body.closedAt).toBeNull();
+    expect(body.statusHistory.map((row) => [row.from, row.to])).toEqual([
       [null, 'open'],
       ['open', 'in_progress'],
       ['in_progress', 'resolved'],
       ['resolved', 'closed'],
       ['closed', 'open'],
     ]);
-    const changedAt = response.body.statusHistory.map(
-      (row: { changedAt: string }) => Date.parse(row.changedAt),
+    const changedAt = body.statusHistory.map((row) =>
+      Date.parse(row.changedAt),
     );
     for (let index = 1; index < changedAt.length; index += 1) {
       expect(changedAt[index]).toBeGreaterThanOrEqual(changedAt[index - 1]);
     }
-    expect(response.body).not.toHaveProperty('comments');
-    expect(response.body).not.toHaveProperty('assignments');
+    expect(body).not.toHaveProperty('comments');
+    expect(body).not.toHaveProperty('assignments');
   });
 
   it('Agent GET of a Ticket they created that is assigned to another User includes resolvedAt', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
-    const list = await request(app.getHttpServer())
-      .get('/tickets')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-    const listed = (
-      list.body.tickets as Array<{ id: string; title: string }>
-    ).find((ticket) => ticket.title === 'Resolved: SSO redirect loop');
-    expect(listed).toBeDefined();
+    const body = await ticketByTitle(
+      app,
+      accessToken,
+      'Resolved: SSO redirect loop',
+    );
 
-    const response = await request(app.getHttpServer())
-      .get(`/tickets/${listed?.id}`)
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-
-    expect(response.body.title).toBe('Resolved: SSO redirect loop');
-    expect(response.body.status).toBe('resolved');
-    expect(response.body.resolvedAt).toEqual(expect.any(String));
-    expect(response.body.closedAt).toBeNull();
-    expect(response.body.assignee).toEqual({
+    expect(body.title).toBe('Resolved: SSO redirect loop');
+    expect(body.status).toBe('resolved');
+    expect(body.resolvedAt).toEqual(expect.any(String));
+    expect(body.closedAt).toBeNull();
+    expect(body.assignee).toEqual({
       id: expect.any(String),
       displayName: 'Sam Supervisor',
     });
@@ -498,14 +541,11 @@ describe('Tickets get by id (e2e)', () => {
   it('Agent cannot distinguish a well-formed unknown id from a Ticket outside List Scope', async () => {
     const agent = await login(app, AGENT_EMAIL);
     const supervisor = await login(app, SUPERVISOR_EMAIL);
-    const supervisorList = await request(app.getHttpServer())
-      .get('/tickets')
-      .set('Authorization', `Bearer ${supervisor.accessToken}`)
-      .expect(200);
-    const outOfScope = (
-      supervisorList.body.tickets as Array<{ id: string; title: string }>
-    ).find((ticket) => ticket.title === 'High: warehouse scanner pairing');
-    expect(outOfScope).toBeDefined();
+    const outOfScope = await ticketByTitle(
+      app,
+      supervisor.accessToken,
+      'High: warehouse scanner pairing',
+    );
 
     const unknownId = '00000000-0000-4000-8000-000000000099';
     const unknown = await request(app.getHttpServer())
@@ -513,7 +553,7 @@ describe('Tickets get by id (e2e)', () => {
       .set('Authorization', `Bearer ${agent.accessToken}`)
       .expect(404);
     const hidden = await request(app.getHttpServer())
-      .get(`/tickets/${outOfScope?.id}`)
+      .get(`/tickets/${outOfScope.id}`)
       .set('Authorization', `Bearer ${agent.accessToken}`)
       .expect(404);
 
@@ -526,26 +566,23 @@ describe('Tickets get by id (e2e)', () => {
     const agent = await login(app, AGENT_EMAIL);
     const supervisor = await login(app, SUPERVISOR_EMAIL);
     const admin = await login(app, ADMIN_EMAIL);
-    const supervisorList = await request(app.getHttpServer())
-      .get('/tickets')
-      .set('Authorization', `Bearer ${supervisor.accessToken}`)
-      .expect(200);
-    const warehouse = (
-      supervisorList.body.tickets as Array<{ id: string; title: string }>
-    ).find((ticket) => ticket.title === 'High: warehouse scanner pairing');
-    expect(warehouse).toBeDefined();
+    const warehouse = await ticketByTitle(
+      app,
+      supervisor.accessToken,
+      'High: warehouse scanner pairing',
+    );
 
     await request(app.getHttpServer())
-      .get(`/tickets/${warehouse?.id}`)
+      .get(`/tickets/${warehouse.id}`)
       .set('Authorization', `Bearer ${agent.accessToken}`)
       .expect(404);
 
     const asSupervisor = await request(app.getHttpServer())
-      .get(`/tickets/${warehouse?.id}`)
+      .get(`/tickets/${warehouse.id}`)
       .set('Authorization', `Bearer ${supervisor.accessToken}`)
       .expect(200);
     const asAdmin = await request(app.getHttpServer())
-      .get(`/tickets/${warehouse?.id}`)
+      .get(`/tickets/${warehouse.id}`)
       .set('Authorization', `Bearer ${admin.accessToken}`)
       .expect(200);
 
@@ -555,18 +592,17 @@ describe('Tickets get by id (e2e)', () => {
       'New scanners fail Bluetooth pairing.',
     );
 
-    const closed = (
-      supervisorList.body.tickets as Array<{ id: string; title: string }>
-    ).find(
-      (ticket) => ticket.title === 'Closed (older): dealer SSO onboarding',
+    const closed = await ticketByTitle(
+      app,
+      supervisor.accessToken,
+      'Closed (older): dealer SSO onboarding',
     );
-    expect(closed).toBeDefined();
     await request(app.getHttpServer())
-      .get(`/tickets/${closed?.id}`)
+      .get(`/tickets/${closed.id}`)
       .set('Authorization', `Bearer ${agent.accessToken}`)
       .expect(404);
     const closedBody = await request(app.getHttpServer())
-      .get(`/tickets/${closed?.id}`)
+      .get(`/tickets/${closed.id}`)
       .set('Authorization', `Bearer ${admin.accessToken}`)
       .expect(200);
     expect(closedBody.body.closedAt).toEqual(expect.any(String));
@@ -596,38 +632,6 @@ describe('Tickets status transition (e2e)', () => {
     await app.close();
   });
 
-  async function ticketByTitle(
-    accessToken: string,
-    title: string,
-  ): Promise<{
-    id: string;
-    status: string;
-    updatedAt: string;
-    resolvedAt: string | null;
-    closedAt: string | null;
-    assignee: { id: string; displayName: string } | null;
-    statusHistory: Array<{
-      from: string | null;
-      to: string;
-      changedAt: string;
-      changedBy: { id: string; displayName: string };
-    }>;
-  }> {
-    const list = await request(app.getHttpServer())
-      .get('/tickets')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-    const listed = (
-      list.body.tickets as Array<{ id: string; title: string }>
-    ).find((ticket) => ticket.title === title);
-    expect(listed).toBeDefined();
-    const detail = await request(app.getHttpServer())
-      .get(`/tickets/${listed?.id}`)
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-    return detail.body;
-  }
-
   it('PATCH /tickets/:id without a token returns the same opaque 401 as GET /auth/me', async () => {
     const me = await request(app.getHttpServer()).get('/auth/me').expect(401);
     const patched = await request(app.getHttpServer())
@@ -654,6 +658,7 @@ describe('Tickets status transition (e2e)', () => {
     const agent = await login(app, AGENT_EMAIL);
     const supervisor = await login(app, SUPERVISOR_EMAIL);
     const warehouse = await ticketByTitle(
+      app,
       supervisor.accessToken,
       'High: warehouse scanner pairing',
     );
@@ -682,6 +687,7 @@ describe('Tickets status transition (e2e)', () => {
   it('Agent creator of an unassigned Ticket cannot record a Status Transition', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
     const ticket = await ticketByTitle(
+      app,
       accessToken,
       'High: patient portal MFA reset',
     );
@@ -696,6 +702,7 @@ describe('Tickets status transition (e2e)', () => {
 
     expect(response.body).not.toHaveProperty('stack');
     const after = await ticketByTitle(
+      app,
       accessToken,
       'High: patient portal MFA reset',
     );
@@ -706,53 +713,30 @@ describe('Tickets status transition (e2e)', () => {
 
   it('Supervisor who is not Assignee cannot record a forward Status Transition', async () => {
     const supervisor = await login(app, SUPERVISOR_EMAIL);
-    const ticket = await ticketByTitle(
+    await expectPatchForbiddenUnchanged(
+      app,
       supervisor.accessToken,
       'High: warehouse scanner pairing',
+      'in_progress',
+      (before) => expect(before.status).toBe('open'),
     );
-    expect(ticket.status).toBe('open');
-
-    await request(app.getHttpServer())
-      .patch(`/tickets/${ticket.id}`)
-      .set('Authorization', `Bearer ${supervisor.accessToken}`)
-      .send({ status: 'in_progress' })
-      .expect(403);
-
-    const after = await ticketByTitle(
-      supervisor.accessToken,
-      'High: warehouse scanner pairing',
-    );
-    expect(after.status).toBe('open');
-    expect(after.updatedAt).toBe(ticket.updatedAt);
-    expect(after.statusHistory).toEqual(ticket.statusHistory);
   });
 
   it('Agent who created a Ticket assigned to another User cannot transition it', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
-    const ticket = await ticketByTitle(
+    await expectPatchForbiddenUnchanged(
+      app,
       accessToken,
       'Resolved: SSO redirect loop',
+      'closed',
+      (before) => expect(before.status).toBe('resolved'),
     );
-    expect(ticket.status).toBe('resolved');
-
-    await request(app.getHttpServer())
-      .patch(`/tickets/${ticket.id}`)
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({ status: 'closed' })
-      .expect(403);
-
-    const after = await ticketByTitle(
-      accessToken,
-      'Resolved: SSO redirect loop',
-    );
-    expect(after.status).toBe('resolved');
-    expect(after.updatedAt).toBe(ticket.updatedAt);
-    expect(after.statusHistory).toEqual(ticket.statusHistory);
   });
 
   it('skip and same Status return 409 with no write, including for Administrator', async () => {
     const admin = await login(app, ADMIN_EMAIL);
     const ticket = await ticketByTitle(
+      app,
       admin.accessToken,
       'High: patient portal MFA reset',
     );
@@ -779,6 +763,7 @@ describe('Tickets status transition (e2e)', () => {
     }
 
     const after = await ticketByTitle(
+      app,
       admin.accessToken,
       'High: patient portal MFA reset',
     );
@@ -790,6 +775,7 @@ describe('Tickets status transition (e2e)', () => {
   it('Agent Assignee can record open → in_progress', async () => {
     const { accessToken, userId } = await login(app, AGENT_EMAIL);
     const ticket = await ticketByTitle(
+      app,
       accessToken,
       'Stale open: billing portal timeout',
     );
@@ -808,12 +794,9 @@ describe('Tickets status transition (e2e)', () => {
       Date.parse(ticket.updatedAt),
     );
     expect(response.body.statusHistory).toHaveLength(historyLength + 1);
-    expect(
-      response.body.statusHistory[response.body.statusHistory.length - 1],
-    ).toEqual({
+    expectLatestTransition(response.body, {
       from: 'open',
       to: 'in_progress',
-      changedAt: expect.any(String),
       changedBy: { id: userId, displayName: 'Alex Agent' },
     });
   });
@@ -821,6 +804,7 @@ describe('Tickets status transition (e2e)', () => {
   it('Agent Assignee can record in_progress → resolved and sets resolvedAt', async () => {
     const { accessToken, userId } = await login(app, AGENT_EMAIL);
     const ticket = await ticketByTitle(
+      app,
       accessToken,
       'In progress: shipment tracking API',
     );
@@ -840,12 +824,9 @@ describe('Tickets status transition (e2e)', () => {
       Date.parse(ticket.updatedAt),
     );
     expect(response.body.statusHistory).toHaveLength(historyLength + 1);
-    expect(
-      response.body.statusHistory[response.body.statusHistory.length - 1],
-    ).toEqual({
+    expectLatestTransition(response.body, {
       from: 'in_progress',
       to: 'resolved',
-      changedAt: expect.any(String),
       changedBy: { id: userId, displayName: 'Alex Agent' },
     });
   });
@@ -853,6 +834,7 @@ describe('Tickets status transition (e2e)', () => {
   it('Administrator can record open → in_progress on an unassigned Ticket they are not Assignee of', async () => {
     const admin = await login(app, ADMIN_EMAIL);
     const ticket = await ticketByTitle(
+      app,
       admin.accessToken,
       'High: warehouse scanner pairing',
     );
@@ -868,12 +850,9 @@ describe('Tickets status transition (e2e)', () => {
     expect(response.body.status).toBe('in_progress');
     expect(response.body.assignee).toBeNull();
     expect(response.body.statusHistory).toHaveLength(historyLength + 1);
-    expect(
-      response.body.statusHistory[response.body.statusHistory.length - 1],
-    ).toEqual({
+    expectLatestTransition(response.body, {
       from: 'open',
       to: 'in_progress',
-      changedAt: expect.any(String),
       changedBy: { id: admin.userId, displayName: 'Ada Admin' },
     });
   });
@@ -882,86 +861,51 @@ describe('Tickets status transition (e2e)', () => {
     const agent = await login(app, AGENT_EMAIL);
     const supervisor = await login(app, SUPERVISOR_EMAIL);
 
-    const giftCard = await ticketByTitle(
+    await expectPatchForbiddenUnchanged(
+      app,
       agent.accessToken,
       'Resolved: gift-card balance mismatch',
+      'closed',
+      (before, after) => {
+        expect(before.status).toBe('resolved');
+        expect(after.closedAt).toBeNull();
+      },
     );
-    expect(giftCard.status).toBe('resolved');
-    await request(app.getHttpServer())
-      .patch(`/tickets/${giftCard.id}`)
-      .set('Authorization', `Bearer ${agent.accessToken}`)
-      .send({ status: 'closed' })
-      .expect(403);
-    const giftCardAfter = await ticketByTitle(
-      agent.accessToken,
-      'Resolved: gift-card balance mismatch',
-    );
-    expect(giftCardAfter.status).toBe('resolved');
-    expect(giftCardAfter.updatedAt).toBe(giftCard.updatedAt);
-    expect(giftCardAfter.statusHistory).toEqual(giftCard.statusHistory);
-    expect(giftCardAfter.closedAt).toBeNull();
 
-    const invoice = await ticketByTitle(
+    await expectPatchForbiddenUnchanged(
+      app,
       agent.accessToken,
       'Closed: invoice PDF encoding',
+      'open',
+      (before, after) => {
+        expect(before.status).toBe('closed');
+        expect(after.resolvedAt).toBe(before.resolvedAt);
+        expect(after.closedAt).toBe(before.closedAt);
+      },
     );
-    expect(invoice.status).toBe('closed');
-    await request(app.getHttpServer())
-      .patch(`/tickets/${invoice.id}`)
-      .set('Authorization', `Bearer ${agent.accessToken}`)
-      .send({ status: 'open' })
-      .expect(403);
-    const invoiceAfter = await ticketByTitle(
-      agent.accessToken,
-      'Closed: invoice PDF encoding',
-    );
-    expect(invoiceAfter.status).toBe('closed');
-    expect(invoiceAfter.updatedAt).toBe(invoice.updatedAt);
-    expect(invoiceAfter.statusHistory).toEqual(invoice.statusHistory);
-    expect(invoiceAfter.resolvedAt).toBe(invoice.resolvedAt);
-    expect(invoiceAfter.closedAt).toBe(invoice.closedAt);
 
-    const sso = await ticketByTitle(
+    await expectPatchForbiddenUnchanged(
+      app,
       supervisor.accessToken,
       'Resolved: SSO redirect loop',
+      'closed',
+      (before) => expect(before.status).toBe('resolved'),
     );
-    expect(sso.status).toBe('resolved');
-    await request(app.getHttpServer())
-      .patch(`/tickets/${sso.id}`)
-      .set('Authorization', `Bearer ${supervisor.accessToken}`)
-      .send({ status: 'closed' })
-      .expect(403);
-    const ssoAfter = await ticketByTitle(
-      supervisor.accessToken,
-      'Resolved: SSO redirect loop',
-    );
-    expect(ssoAfter.status).toBe('resolved');
-    expect(ssoAfter.updatedAt).toBe(sso.updatedAt);
-    expect(ssoAfter.statusHistory).toEqual(sso.statusHistory);
 
-    const dealer = await ticketByTitle(
+    await expectPatchForbiddenUnchanged(
+      app,
       supervisor.accessToken,
       'Closed (older): dealer SSO onboarding',
+      'open',
+      (before) => expect(before.status).toBe('closed'),
     );
-    expect(dealer.status).toBe('closed');
-    await request(app.getHttpServer())
-      .patch(`/tickets/${dealer.id}`)
-      .set('Authorization', `Bearer ${supervisor.accessToken}`)
-      .send({ status: 'open' })
-      .expect(403);
-    const dealerAfter = await ticketByTitle(
-      supervisor.accessToken,
-      'Closed (older): dealer SSO onboarding',
-    );
-    expect(dealerAfter.status).toBe('closed');
-    expect(dealerAfter.updatedAt).toBe(dealer.updatedAt);
-    expect(dealerAfter.statusHistory).toEqual(dealer.statusHistory);
   });
 
   it('Agent close or reopen of a Ticket outside List Scope is 404', async () => {
     const agent = await login(app, AGENT_EMAIL);
     const supervisor = await login(app, SUPERVISOR_EMAIL);
     const dealer = await ticketByTitle(
+      app,
       supervisor.accessToken,
       'Closed (older): dealer SSO onboarding',
     );
@@ -981,6 +925,7 @@ describe('Tickets status transition (e2e)', () => {
     expect(JSON.stringify(patchReopen.body)).not.toMatch(/dealer SSO/);
 
     const after = await ticketByTitle(
+      app,
       supervisor.accessToken,
       'Closed (older): dealer SSO onboarding',
     );
@@ -991,6 +936,7 @@ describe('Tickets status transition (e2e)', () => {
   it('Administrator can close a resolved Ticket they are not Assignee of', async () => {
     const admin = await login(app, ADMIN_EMAIL);
     const ticket = await ticketByTitle(
+      app,
       admin.accessToken,
       'Resolved: gift-card balance mismatch',
     );
@@ -1013,12 +959,9 @@ describe('Tickets status transition (e2e)', () => {
     expect(response.body.resolvedAt).toEqual(expect.any(String));
     expect(response.body.assignee).toEqual(ticket.assignee);
     expect(response.body.statusHistory).toHaveLength(historyLength + 1);
-    expect(
-      response.body.statusHistory[response.body.statusHistory.length - 1],
-    ).toEqual({
+    expectLatestTransition(response.body, {
       from: 'resolved',
       to: 'closed',
-      changedAt: expect.any(String),
       changedBy: { id: admin.userId, displayName: 'Ada Admin' },
     });
   });
@@ -1026,6 +969,7 @@ describe('Tickets status transition (e2e)', () => {
   it('Administrator can reopen a closed Ticket without changing Assignee and clears timestamps', async () => {
     const admin = await login(app, ADMIN_EMAIL);
     const ticket = await ticketByTitle(
+      app,
       admin.accessToken,
       'Closed: invoice PDF encoding',
     );
@@ -1044,21 +988,17 @@ describe('Tickets status transition (e2e)', () => {
     expect(response.body.status).toBe('open');
     expect(response.body.resolvedAt).toBeNull();
     expect(response.body.closedAt).toBeNull();
-    expect(response.body.assignee).toEqual(assignee);
     expect(response.body.assignee).toEqual({
-      id: expect.any(String),
+      id: assignee?.id,
       displayName: 'Alex Agent',
     });
     expect(response.body.statusHistory).toHaveLength(priorHistory.length + 1);
     expect(response.body.statusHistory.slice(0, priorHistory.length)).toEqual(
       priorHistory,
     );
-    expect(
-      response.body.statusHistory[response.body.statusHistory.length - 1],
-    ).toEqual({
+    expectLatestTransition(response.body, {
       from: 'closed',
       to: 'open',
-      changedAt: expect.any(String),
       changedBy: { id: admin.userId, displayName: 'Ada Admin' },
     });
   });
