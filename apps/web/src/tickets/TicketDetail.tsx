@@ -3,8 +3,10 @@ import {
   Anchor,
   Badge,
   Box,
+  Breadcrumbs,
   Button,
   Group,
+  Menu,
   SimpleGrid,
   Stack,
   Text,
@@ -42,7 +44,7 @@ const PRIORITY_COLOR: Record<Priority, string> = {
   critical: 'red',
 };
 
-function transitionButtonLabel(from: TicketStatus, to: TicketStatus): string {
+function transitionMenuLabel(from: TicketStatus, to: TicketStatus): string {
   if (to === 'closed') {
     return 'Close';
   }
@@ -191,9 +193,7 @@ export function TicketDetail() {
       })
     : null;
   const transitionLabel =
-    nextStatus != null
-      ? transitionButtonLabel(ticket.status, nextStatus)
-      : null;
+    nextStatus != null ? transitionMenuLabel(ticket.status, nextStatus) : null;
 
   async function recordTransition(to: TicketStatus) {
     if (!id) {
@@ -225,10 +225,15 @@ export function TicketDetail() {
 
   return (
     <Stack gap="lg">
-      <Anchor component={Link} to="/" size="sm" c="dimmed">
-        ← Tickets
-      </Anchor>
-      <Group justify="space-between" align="flex-start" wrap="wrap">
+      <Breadcrumbs separator="›" separatorMargin="xs">
+        <Anchor component={Link} to="/" size="sm" c="dimmed">
+          Tickets
+        </Anchor>
+        <Text size="sm" lineClamp={1} maw={420}>
+          {ticket.title}
+        </Text>
+      </Breadcrumbs>
+      <Group justify="space-between" align="flex-start" wrap="wrap" gap="md">
         <Stack gap="xs" style={{ flex: 1, minWidth: 0 }}>
           <Group gap="sm">
             <Badge
@@ -250,15 +255,37 @@ export function TicketDetail() {
           <Text c="dimmed">{ticket.description}</Text>
         </Stack>
         {nextStatus && transitionLabel ? (
-          <Button
-            type="button"
-            loading={isTransitioning}
-            onClick={() => {
-              void recordTransition(nextStatus);
-            }}
-          >
-            {transitionLabel}
-          </Button>
+          <Menu shadow="md" width={280} withinPortal={false}>
+            <Menu.Target>
+              <Button
+                type="button"
+                variant="light"
+                loading={isTransitioning}
+                rightSection="▾"
+                aria-label="Change status"
+                style={{ flexShrink: 0 }}
+              >
+                Change status
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>From {STATUS_LABEL[ticket.status]}</Menu.Label>
+              <Menu.Item
+                onClick={() => {
+                  void recordTransition(nextStatus);
+                }}
+              >
+                <Stack gap={0}>
+                  <Text size="sm" fw={600}>
+                    {transitionLabel}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {STATUS_LABEL[ticket.status]} → {STATUS_LABEL[nextStatus]}
+                  </Text>
+                </Stack>
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         ) : null}
       </Group>
       {transitionError ? (
