@@ -1,10 +1,14 @@
 import {
   Alert,
   Anchor,
+  Avatar,
   Badge,
-  Box,
   Breadcrumbs,
   Button,
+  Card,
+  Center,
+  Divider,
+  Grid,
   Group,
   Menu,
   Select,
@@ -12,10 +16,10 @@ import {
   Switch,
   Text,
   Textarea,
-  TextInput,
+  ThemeIcon,
+  Timeline,
   Title,
 } from '@mantine/core';
-import { useMediaQuery } from '@mantine/hooks';
 import {
   type CommentVisibility,
   type CreateTicketCommentBody,
@@ -26,8 +30,6 @@ import {
   type PatchTicketAssigneeBody,
   type PatchTicketFieldsBody,
   type PatchTicketStatusBody,
-  PRIORITIES,
-  type Priority,
   type TicketAssignmentHistoryRow,
   type TicketComment,
   type TicketDetail as TicketDetailBody,
@@ -35,36 +37,39 @@ import {
   type TicketStatusHistoryRow,
   type UserCatalogRow,
 } from '@support-ticketing/shared';
+import {
+  type Icon,
+  IconAlertCircle,
+  IconArchive,
+  IconArrowLeft,
+  IconChevronDown,
+  IconCircleCheck,
+  IconCircleDot,
+  IconMessage,
+  IconPencil,
+  IconProgress,
+  IconRotate,
+  IconSend,
+  IconUserCheck,
+  IconUserMinus,
+} from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
+import { LoadErrorAlert } from '../components/LoadErrorAlert';
+import { LoadingState } from '../components/LoadingState';
+import { TicketEditModal } from './TicketEditModal';
 import {
+  COMMENT_VISIBILITY_COLOR,
   COMMENT_VISIBILITY_LABEL,
   assigneeLabel,
   formatTicketInstant,
+  PRIORITY_COLOR,
   PRIORITY_LABEL,
+  STATUS_COLOR,
   STATUS_LABEL,
 } from './ticketLabels';
-
-const STATUS_COLOR: Record<TicketStatus, string> = {
-  open: 'blue',
-  in_progress: 'yellow',
-  resolved: 'teal',
-  closed: 'gray',
-};
-
-const PRIORITY_COLOR: Record<Priority, string> = {
-  low: 'gray',
-  medium: 'blue',
-  high: 'orange',
-  critical: 'red',
-};
-
-const COMMENT_VISIBILITY_COLOR: Record<CommentVisibility, string> = {
-  public: 'blue',
-  internal: 'orange',
-};
 
 function transitionMenuLabel(from: TicketStatus, to: TicketStatus): string {
   if (to === 'closed') {
@@ -74,6 +79,19 @@ function transitionMenuLabel(from: TicketStatus, to: TicketStatus): string {
     return 'Reopen';
   }
   return `Mark as ${STATUS_LABEL[to].toLowerCase()}`;
+}
+
+function transitionMenuIcon(from: TicketStatus, to: TicketStatus): Icon {
+  if (from === 'closed' && to === 'open') {
+    return IconRotate;
+  }
+  const icons: Record<TicketStatus, Icon> = {
+    open: IconCircleDot,
+    in_progress: IconProgress,
+    resolved: IconCircleCheck,
+    closed: IconArchive,
+  };
+  return icons[to];
 }
 
 function MetaItem({ label, children }: { label: string; children: string }) {
@@ -101,57 +119,29 @@ function PersonInstant({
   );
 }
 
-function TimelineRow({
-  label,
-  person,
-  at,
-  latest,
-}: {
-  label: string;
-  person: { id: string; displayName: string };
-  at: string;
-  latest: boolean;
-}) {
-  return (
-    <Group align="flex-start" gap="sm" wrap="nowrap">
-      <Box
-        style={{
-          width: 10,
-          height: 10,
-          borderRadius: 999,
-          marginTop: 6,
-          background: latest
-            ? 'var(--mantine-color-blue-6)'
-            : 'var(--mantine-color-gray-4)',
-          flexShrink: 0,
-        }}
-      />
-      <Stack gap={2}>
-        <Text size="sm" fw={600}>
-          {label}
-        </Text>
-        <PersonInstant person={person} at={at} />
-      </Stack>
-    </Group>
-  );
-}
-
 function StatusTimeline({ history }: { history: TicketStatusHistoryRow[] }) {
   return (
-    <Stack gap="sm" aria-label="Status history">
-      <Text fw={600} size="sm">
-        Status history
-      </Text>
-      {history.map((row, index) => (
-        <TimelineRow
-          key={`${row.changedAt}-${row.to}-${row.changedBy.id}`}
-          label={`${row.from ? STATUS_LABEL[row.from] : 'Created'} → ${STATUS_LABEL[row.to]}`}
-          person={row.changedBy}
-          at={row.changedAt}
-          latest={index === history.length - 1}
-        />
-      ))}
-    </Stack>
+    <Card withBorder radius="md">
+      <Stack gap="sm" aria-label="Status history">
+        <Text fw={600} size="sm">
+          Status history
+        </Text>
+        <Timeline active={history.length - 1} bulletSize={14} lineWidth={2}>
+          {history.map((row) => (
+            <Timeline.Item
+              key={`${row.changedAt}-${row.to}-${row.changedBy.id}`}
+              title={
+                <Text size="sm" fw={600} lh={1}>
+                  {`${row.from ? STATUS_LABEL[row.from] : 'Created'} → ${STATUS_LABEL[row.to]}`}
+                </Text>
+              }
+            >
+              <PersonInstant person={row.changedBy} at={row.changedAt} />
+            </Timeline.Item>
+          ))}
+        </Timeline>
+      </Stack>
+    </Card>
   );
 }
 
@@ -161,26 +151,33 @@ function AssignmentTimeline({
   history: TicketAssignmentHistoryRow[];
 }) {
   return (
-    <Stack gap="sm" aria-label="Assignment history">
-      <Text fw={600} size="sm">
-        Assignment history
-      </Text>
-      {history.length === 0 ? (
-        <Text size="sm" c="dimmed">
-          No assignments yet.
+    <Card withBorder radius="md">
+      <Stack gap="sm" aria-label="Assignment history">
+        <Text fw={600} size="sm">
+          Assignment history
         </Text>
-      ) : (
-        history.map((row, index) => (
-          <TimelineRow
-            key={`${row.changedAt}-${row.from?.id ?? 'none'}-${row.to?.id ?? 'none'}-${row.changedBy.id}`}
-            label={`${assigneeLabel(row.from)} → ${assigneeLabel(row.to)}`}
-            person={row.changedBy}
-            at={row.changedAt}
-            latest={index === history.length - 1}
-          />
-        ))
-      )}
-    </Stack>
+        {history.length === 0 ? (
+          <Text size="sm" c="dimmed">
+            No assignments yet.
+          </Text>
+        ) : (
+          <Timeline active={history.length - 1} bulletSize={14} lineWidth={2}>
+            {history.map((row) => (
+              <Timeline.Item
+                key={`${row.changedAt}-${row.from?.id ?? 'none'}-${row.to?.id ?? 'none'}-${row.changedBy.id}`}
+                title={
+                  <Text size="sm" fw={600} lh={1}>
+                    {`${assigneeLabel(row.from)} → ${assigneeLabel(row.to)}`}
+                  </Text>
+                }
+              >
+                <PersonInstant person={row.changedBy} at={row.changedAt} />
+              </Timeline.Item>
+            ))}
+          </Timeline>
+        )}
+      </Stack>
+    </Card>
   );
 }
 
@@ -194,28 +191,52 @@ type AssigneeControls = {
 
 function CommentThread({ comments }: { comments: TicketComment[] }) {
   return (
-    <Stack gap="sm" aria-label="Comments">
+    <Stack gap="md" aria-label="Comments">
       <Text fw={600} size="sm">
         Comments
       </Text>
       {comments.length === 0 ? (
-        <Text size="sm" c="dimmed">
-          No comments yet.
-        </Text>
+        <Center py="md">
+          <Stack align="center" gap="sm">
+            <ThemeIcon size={40} radius="xl" variant="light" color="gray">
+              <IconMessage size={20} stroke={1.5} />
+            </ThemeIcon>
+            <Text size="sm" c="dimmed">
+              No comments yet.
+            </Text>
+          </Stack>
+        </Center>
       ) : (
-        comments.map((comment) => (
-          <Stack key={comment.id} gap={6}>
-            <Group gap="sm" wrap="wrap">
-              <Badge
-                color={COMMENT_VISIBILITY_COLOR[comment.visibility]}
-                variant="light"
-                aria-label={`Visibility: ${COMMENT_VISIBILITY_LABEL[comment.visibility]}`}
-              >
-                {COMMENT_VISIBILITY_LABEL[comment.visibility]}
-              </Badge>
-              <PersonInstant person={comment.author} at={comment.createdAt} />
+        comments.map((comment, index) => (
+          <Stack key={comment.id} gap="md">
+            {index > 0 ? <Divider /> : null}
+            <Group gap="sm" align="flex-start" wrap="nowrap">
+              <Avatar
+                name={comment.author.displayName}
+                color="indigo"
+                radius="xl"
+                size={30}
+              />
+              <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
+                <Group gap="xs" wrap="wrap">
+                  <Badge
+                    color={COMMENT_VISIBILITY_COLOR[comment.visibility]}
+                    variant="light"
+                    radius="sm"
+                    aria-label={`Visibility: ${COMMENT_VISIBILITY_LABEL[comment.visibility]}`}
+                  >
+                    {COMMENT_VISIBILITY_LABEL[comment.visibility]}
+                  </Badge>
+                  <PersonInstant
+                    person={comment.author}
+                    at={comment.createdAt}
+                  />
+                </Group>
+                <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
+                  {comment.body}
+                </Text>
+              </Stack>
             </Group>
-            <Text size="sm">{comment.body}</Text>
           </Stack>
         ))
       )}
@@ -261,6 +282,7 @@ function CommentComposer({
     >
       <Textarea
         label="Comment"
+        placeholder="Write an update…"
         value={draft}
         onChange={(event) => {
           setDraft(event.currentTarget.value);
@@ -268,30 +290,41 @@ function CommentComposer({
         minRows={3}
         disabled={busy}
       />
-      {allowInternal ? (
-        <Switch
-          label={COMMENT_VISIBILITY_LABEL[visibility]}
-          checked={visibility === 'internal'}
-          onChange={(event) => {
-            setVisibility(event.currentTarget.checked ? 'internal' : 'public');
-          }}
-          disabled={busy}
-          aria-label="Visibility"
-        />
-      ) : null}
-      <Button type="submit" loading={busy} disabled={draft.trim() === ''}>
-        Add comment
-      </Button>
       {error ? (
-        <Text c="red" size="sm">
+        <Alert color="red" icon={<IconAlertCircle size={16} />}>
           Couldn't add this comment.
-        </Text>
+        </Alert>
       ) : null}
+      <Group justify="space-between" wrap="wrap">
+        {allowInternal ? (
+          <Switch
+            label={COMMENT_VISIBILITY_LABEL[visibility]}
+            checked={visibility === 'internal'}
+            onChange={(event) => {
+              setVisibility(
+                event.currentTarget.checked ? 'internal' : 'public',
+              );
+            }}
+            disabled={busy}
+            aria-label="Visibility"
+          />
+        ) : (
+          <span />
+        )}
+        <Button
+          type="submit"
+          loading={busy}
+          disabled={draft.trim() === ''}
+          leftSection={<IconSend size={14} stroke={1.8} />}
+        >
+          Add comment
+        </Button>
+      </Group>
     </Stack>
   );
 }
 
-function PropertiesColumn({
+function PropertiesCard({
   ticket,
   assigneeControls,
 }: {
@@ -312,84 +345,90 @@ function PropertiesColumn({
     draftAssigneeId !== null && draftAssigneeId !== currentId && !busy;
 
   return (
-    <Stack gap="md" aria-label="Ticket properties">
-      <Text fw={600} size="sm">
-        Properties
-      </Text>
-      <MetaItem label="Client">{ticket.client.name}</MetaItem>
-      {assigneeControls ? (
-        <Stack gap="sm" aria-label="Assignee controls">
-          <Select
-            label="Assignee"
-            placeholder={
-              assigneeControls.usersLoading
-                ? 'Loading users…'
-                : assigneeLabel(null)
-            }
-            data={assigneeControls.users.map((row) => ({
-              value: row.id,
-              label: `${row.displayName} (${row.role})`,
-            }))}
-            value={draftAssigneeId}
-            onChange={setDraftAssigneeId}
-            disabled={busy || assigneeControls.usersLoading}
-            clearable={false}
-            searchable
-          />
-          <Group gap="sm">
-            <Button
-              type="button"
-              variant="light"
-              loading={busy}
-              disabled={!canSave}
-              onClick={() => {
-                if (draftAssigneeId) {
-                  void assigneeControls.onRecordReassignment(draftAssigneeId);
-                }
-              }}
-            >
-              {currentId === null ? 'Assign' : 'Change assignee'}
-            </Button>
-            {currentId !== null ? (
+    <Card withBorder radius="md">
+      <Stack gap="md" aria-label="Ticket properties">
+        <Text fw={600} size="sm">
+          Properties
+        </Text>
+        <MetaItem label="Client">{ticket.client.name}</MetaItem>
+        {assigneeControls ? (
+          <Stack gap="sm" aria-label="Assignee controls">
+            <Select
+              label="Assignee"
+              placeholder={
+                assigneeControls.usersLoading
+                  ? 'Loading users…'
+                  : assigneeLabel(null)
+              }
+              data={assigneeControls.users.map((row) => ({
+                value: row.id,
+                label: `${row.displayName} (${row.role})`,
+              }))}
+              value={draftAssigneeId}
+              onChange={setDraftAssigneeId}
+              disabled={busy || assigneeControls.usersLoading}
+              clearable={false}
+              searchable
+            />
+            <Group gap="sm">
               <Button
                 type="button"
-                variant="default"
+                variant="light"
+                size="xs"
                 loading={busy}
+                disabled={!canSave}
+                leftSection={<IconUserCheck size={14} stroke={1.8} />}
                 onClick={() => {
-                  void assigneeControls.onRecordReassignment(null);
+                  if (draftAssigneeId) {
+                    void assigneeControls.onRecordReassignment(draftAssigneeId);
+                  }
                 }}
               >
-                Clear assignee
+                {currentId === null ? 'Assign' : 'Change assignee'}
               </Button>
+              {currentId !== null ? (
+                <Button
+                  type="button"
+                  variant="default"
+                  size="xs"
+                  loading={busy}
+                  leftSection={<IconUserMinus size={14} stroke={1.8} />}
+                  onClick={() => {
+                    void assigneeControls.onRecordReassignment(null);
+                  }}
+                >
+                  Clear assignee
+                </Button>
+              ) : null}
+            </Group>
+            {assigneeControls.error ? (
+              <Alert color="red" icon={<IconAlertCircle size={16} />}>
+                Couldn't update this ticket's assignee.
+              </Alert>
             ) : null}
-          </Group>
-          {assigneeControls.error ? (
-            <Text c="red" size="sm">
-              Couldn't update this ticket's assignee.
-            </Text>
-          ) : null}
-        </Stack>
-      ) : (
-        <MetaItem label="Assignee">{assigneeLabel(ticket.assignee)}</MetaItem>
-      )}
-      <MetaItem label="Created by">{ticket.createdBy.displayName}</MetaItem>
-      <MetaItem label="Created">
-        {formatTicketInstant(ticket.createdAt)}
-      </MetaItem>
-      <MetaItem label="Updated">
-        {formatTicketInstant(ticket.updatedAt)}
-      </MetaItem>
-      {ticket.resolvedAt ? (
-        <MetaItem label="Resolved">
-          {formatTicketInstant(ticket.resolvedAt)}
+          </Stack>
+        ) : (
+          <MetaItem label="Assignee">{assigneeLabel(ticket.assignee)}</MetaItem>
+        )}
+        <MetaItem label="Created by">{ticket.createdBy.displayName}</MetaItem>
+        <MetaItem label="Created">
+          {formatTicketInstant(ticket.createdAt)}
         </MetaItem>
-      ) : null}
-      {ticket.closedAt ? (
-        <MetaItem label="Closed">
-          {formatTicketInstant(ticket.closedAt)}
+        <MetaItem label="Updated">
+          {formatTicketInstant(ticket.updatedAt)}
         </MetaItem>
-      ) : null}
-    </Stack>
+        {ticket.resolvedAt ? (
+          <MetaItem label="Resolved">
+            {formatTicketInstant(ticket.resolvedAt)}
+          </MetaItem>
+        ) : null}
+        {ticket.closedAt ? (
+          <MetaItem label="Closed">
+            {formatTicketInstant(ticket.closedAt)}
+          </MetaItem>
+        ) : null}
+      </Stack>
+    </Card>
   );
 }
 
@@ -402,7 +441,6 @@ type LoadState =
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
-  const isWide = useMediaQuery('(min-width: 62em)');
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [reloadToken, setReloadToken] = useState(0);
   const [transitionError, setTransitionError] = useState(false);
@@ -415,10 +453,7 @@ export function TicketDetail() {
   const [usersLoading, setUsersLoading] = useState(false);
   const canReassign = user !== null && mayRecordReassignment(user.role);
   const canEditFields = user !== null && mayRecordFieldEdit(user.role);
-  const [isEditingFields, setIsEditingFields] = useState(false);
-  const [fieldTitle, setFieldTitle] = useState('');
-  const [fieldDescription, setFieldDescription] = useState('');
-  const [fieldPriority, setFieldPriority] = useState<Priority>('medium');
+  const [editOpened, setEditOpened] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [isSavingFields, setIsSavingFields] = useState(false);
 
@@ -433,7 +468,7 @@ export function TicketDetail() {
     setTransitionError(false);
     setCommentError(false);
     setAssigneeError(false);
-    setIsEditingFields(false);
+    setEditOpened(false);
     setFieldError(null);
 
     void apiFetch(`/api/tickets/${id}`)
@@ -499,27 +534,36 @@ export function TicketDetail() {
   }, [canReassign]);
 
   if (state.kind === 'loading') {
-    return <Text>Loading ticket…</Text>;
+    return <LoadingState label="Loading ticket…" />;
   }
   if (state.kind === 'missing') {
-    return <Alert>Ticket not found.</Alert>;
+    return (
+      <Alert color="red" icon={<IconAlertCircle size={16} />}>
+        <Stack gap="sm">
+          <Text>Ticket not found.</Text>
+          <Group>
+            <Button
+              component={Link}
+              to="/tickets"
+              variant="default"
+              leftSection={<IconArrowLeft size={14} stroke={1.8} />}
+            >
+              Back to tickets
+            </Button>
+          </Group>
+        </Stack>
+      </Alert>
+    );
   }
   if (state.kind === 'error') {
     return (
-      <Alert>
-        <Stack gap="sm">
-          <Text>Couldn't load this ticket.</Text>
-          <Button
-            type="button"
-            variant="default"
-            onClick={() => {
-              setReloadToken((token) => token + 1);
-            }}
-          >
-            Try again
-          </Button>
-        </Stack>
-      </Alert>
+      <LoadErrorAlert
+        onRetry={() => {
+          setReloadToken((token) => token + 1);
+        }}
+      >
+        Couldn't load this ticket.
+      </LoadErrorAlert>
     );
   }
 
@@ -602,27 +646,7 @@ export function TicketDetail() {
     );
   }
 
-  function startFieldEdit() {
-    setFieldTitle(ticket.title);
-    setFieldDescription(ticket.description);
-    setFieldPriority(ticket.priority);
-    setFieldError(null);
-    setIsEditingFields(true);
-  }
-
-  async function saveFieldEdit() {
-    const trimmedTitle = fieldTitle.trim();
-    const trimmedDescription = fieldDescription.trim();
-    if (trimmedTitle === '' || trimmedDescription === '') {
-      setFieldError('Title and description are required.');
-      return;
-    }
-
-    const body: PatchTicketFieldsBody = {
-      title: trimmedTitle,
-      description: trimmedDescription,
-      priority: fieldPriority,
-    };
+  async function saveFieldEdit(body: PatchTicketFieldsBody) {
     const saved = await mutateTicket(
       `/api/tickets/${id}/fields`,
       { method: 'PATCH', body: JSON.stringify(body) },
@@ -632,10 +656,14 @@ export function TicketDetail() {
       },
     );
     if (saved) {
-      setIsEditingFields(false);
+      setEditOpened(false);
       setFieldError(null);
     }
   }
+
+  const TransitionIcon = nextStatus
+    ? transitionMenuIcon(ticket.status, nextStatus)
+    : null;
 
   return (
     <Stack gap="lg">
@@ -653,102 +681,48 @@ export function TicketDetail() {
             <Badge
               color={STATUS_COLOR[ticket.status]}
               variant="light"
+              radius="sm"
               aria-label={`Status: ${STATUS_LABEL[ticket.status]}`}
             >
               {STATUS_LABEL[ticket.status]}
             </Badge>
-            {!isEditingFields && (
-              <Badge
-                color={PRIORITY_COLOR[ticket.priority]}
-                variant="outline"
-                aria-label={`Priority: ${PRIORITY_LABEL[ticket.priority]}`}
-              >
-                {PRIORITY_LABEL[ticket.priority]}
-              </Badge>
-            )}
+            <Badge
+              color={PRIORITY_COLOR[ticket.priority]}
+              variant="outline"
+              radius="sm"
+              aria-label={`Priority: ${PRIORITY_LABEL[ticket.priority]}`}
+            >
+              {PRIORITY_LABEL[ticket.priority]}
+            </Badge>
           </Group>
-          {isEditingFields ? (
-            <Stack gap="sm">
-              <TextInput
-                label="Title"
-                value={fieldTitle}
-                onChange={(event) => setFieldTitle(event.currentTarget.value)}
-                disabled={isSavingFields}
-              />
-              <Textarea
-                label="Description"
-                value={fieldDescription}
-                onChange={(event) =>
-                  setFieldDescription(event.currentTarget.value)
-                }
-                minRows={4}
-                disabled={isSavingFields}
-              />
-              <Select
-                label="Priority"
-                value={fieldPriority}
-                onChange={(value) => {
-                  if (value != null) {
-                    setFieldPriority(value as Priority);
-                  }
-                }}
-                data={PRIORITIES.map((value) => ({
-                  value,
-                  label: PRIORITY_LABEL[value],
-                }))}
-                disabled={isSavingFields}
-              />
-            </Stack>
-          ) : (
-            <>
-              <Title order={2}>{ticket.title}</Title>
-              <Text c="dimmed">{ticket.description}</Text>
-            </>
-          )}
+          <Title order={2}>{ticket.title}</Title>
+          <Text c="dimmed" style={{ whiteSpace: 'pre-wrap' }}>
+            {ticket.description}
+          </Text>
         </Stack>
         <Group gap="sm" style={{ flexShrink: 0 }}>
-          {canEditFields && !isEditingFields ? (
+          {canEditFields ? (
             <Button
               type="button"
               variant="default"
-              onClick={startFieldEdit}
+              leftSection={<IconPencil size={14} stroke={1.8} />}
+              onClick={() => {
+                setFieldError(null);
+                setEditOpened(true);
+              }}
               aria-label="Edit ticket fields"
             >
               Edit
             </Button>
           ) : null}
-          {isEditingFields ? (
-            <>
-              <Button
-                type="button"
-                variant="default"
-                onClick={() => {
-                  setIsEditingFields(false);
-                  setFieldError(null);
-                }}
-                disabled={isSavingFields}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                loading={isSavingFields}
-                onClick={() => {
-                  void saveFieldEdit();
-                }}
-              >
-                Save
-              </Button>
-            </>
-          ) : null}
-          {nextStatus && !isEditingFields ? (
+          {nextStatus && TransitionIcon ? (
             <Menu shadow="md" width={280} withinPortal={false}>
               <Menu.Target>
                 <Button
                   type="button"
                   variant="light"
                   loading={isTransitioning}
-                  rightSection="▾"
+                  rightSection={<IconChevronDown size={14} stroke={1.8} />}
                   aria-label="Change status"
                 >
                   Change status
@@ -757,6 +731,7 @@ export function TicketDetail() {
               <Menu.Dropdown>
                 <Menu.Label>From {STATUS_LABEL[ticket.status]}</Menu.Label>
                 <Menu.Item
+                  leftSection={<TransitionIcon size={14} stroke={1.8} />}
                   onClick={() => {
                     void recordTransition(nextStatus);
                   }}
@@ -775,56 +750,62 @@ export function TicketDetail() {
           ) : null}
         </Group>
       </Group>
-      {fieldError ? (
-        <Text c="red" size="sm">
-          {fieldError}
-        </Text>
-      ) : null}
       {transitionError ? (
-        <Text c="red" size="sm">
+        <Alert color="red" icon={<IconAlertCircle size={16} />}>
           Couldn't update this ticket's status.
-        </Text>
+        </Alert>
       ) : null}
-      <Box
-        style={{
-          display: 'grid',
-          gap: 24,
-          alignItems: 'start',
-          gridTemplateColumns: isWide
-            ? 'minmax(160px, 0.9fr) minmax(0, 2fr) minmax(180px, 1fr)'
-            : '1fr',
-        }}
-      >
-        <PropertiesColumn
-          ticket={ticket}
-          assigneeControls={
-            canReassign
-              ? {
-                  users,
-                  usersLoading,
-                  busy: isReassigning,
-                  error: assigneeError,
-                  onRecordReassignment: recordReassignment,
+      <Grid gap="lg" align="flex-start">
+        <Grid.Col span={{ base: 12, lg: 8 }}>
+          <Card withBorder radius="md">
+            <Stack gap="lg">
+              <CommentThread comments={ticket.comments} />
+              <Divider />
+              <CommentComposer
+                busy={isCommenting}
+                error={commentError}
+                allowInternal={
+                  user !== null && hasMinimumRole(user.role, 'supervisor')
                 }
-              : null
-          }
-        />
-        <Stack gap="md">
-          <CommentThread comments={ticket.comments} />
-          <CommentComposer
-            busy={isCommenting}
-            error={commentError}
-            allowInternal={
-              user !== null && hasMinimumRole(user.role, 'supervisor')
-            }
-            onSubmit={createComment}
-          />
-        </Stack>
-        <Stack gap="md">
-          <StatusTimeline history={ticket.statusHistory} />
-          <AssignmentTimeline history={ticket.assignments} />
-        </Stack>
-      </Box>
+                onSubmit={createComment}
+              />
+            </Stack>
+          </Card>
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, lg: 4 }}>
+          <Stack gap="md">
+            <PropertiesCard
+              ticket={ticket}
+              assigneeControls={
+                canReassign
+                  ? {
+                      users,
+                      usersLoading,
+                      busy: isReassigning,
+                      error: assigneeError,
+                      onRecordReassignment: recordReassignment,
+                    }
+                  : null
+              }
+            />
+            <StatusTimeline history={ticket.statusHistory} />
+            <AssignmentTimeline history={ticket.assignments} />
+          </Stack>
+        </Grid.Col>
+      </Grid>
+      <TicketEditModal
+        opened={editOpened}
+        ticket={ticket}
+        saving={isSavingFields}
+        serverError={fieldError}
+        onClose={() => {
+          setEditOpened(false);
+          setFieldError(null);
+        }}
+        onSave={(body) => {
+          void saveFieldEdit(body);
+        }}
+      />
     </Stack>
   );
 }

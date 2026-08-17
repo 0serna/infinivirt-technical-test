@@ -1,13 +1,18 @@
 import {
   Alert,
+  Badge,
   Button,
+  Card,
+  Center,
   Group,
+  Modal,
   PasswordInput,
   Select,
   Stack,
   Table,
   Text,
   TextInput,
+  ThemeIcon,
   Title,
 } from '@mantine/core';
 import {
@@ -18,10 +23,23 @@ import {
   type Role,
   type UpdateUserBody,
 } from '@support-ticketing/shared';
+import {
+  IconAlertCircle,
+  IconKey,
+  IconPencil,
+  IconPlus,
+  IconRestore,
+  IconTrash,
+  IconUsers,
+} from '@tabler/icons-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { apiFetch } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
+import { LoadingState } from '../components/LoadingState';
+import { LoadErrorAlert } from '../components/LoadErrorAlert';
+import { PersonCell } from '../components/PersonCell';
+import { ROLE_COLOR, ROLE_LABEL } from '../users/roleLabels';
 
 type ListState =
   | { kind: 'loading' }
@@ -29,12 +47,6 @@ type ListState =
   | { kind: 'ready'; users: AdminUserRow[] };
 
 type RowAction = 'soft-delete' | 'restore';
-
-const ROLE_LABEL = {
-  agent: 'Agent',
-  supervisor: 'Supervisor',
-  admin: 'Administrator',
-} as const;
 
 const ROLE_OPTIONS = ROLES.map((value) => ({
   value,
@@ -45,16 +57,17 @@ export function AdminUsersPage() {
   const { user } = useAuth();
   const [list, setList] = useState<ListState>({ kind: 'loading' });
   const [reloadToken, setReloadToken] = useState(0);
+  const [createOpened, setCreateOpened] = useState(false);
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [role, setRole] = useState<Role | null>('agent');
   const [password, setPassword] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<AdminUserRow | null>(null);
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editRole, setEditRole] = useState<Role | null>(null);
-  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [resetting, setResetting] = useState<AdminUserRow | null>(null);
   const [resetPassword, setResetPassword] = useState('');
   const [rowError, setRowError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -109,6 +122,46 @@ export function AdminUsersPage() {
     });
   }
 
+  function openCreate() {
+    setFormError(null);
+    setEmail('');
+    setDisplayName('');
+    setRole('agent');
+    setPassword('');
+    setCreateOpened(true);
+  }
+
+  function openEdit(target: AdminUserRow) {
+    setRowError(null);
+    setResetting(null);
+    setResetPassword('');
+    setEditing(target);
+    setEditDisplayName(target.displayName);
+    setEditRole(target.role);
+  }
+
+  function closeEdit() {
+    setEditing(null);
+    setEditDisplayName('');
+    setEditRole(null);
+    setRowError(null);
+  }
+
+  function openReset(target: AdminUserRow) {
+    setRowError(null);
+    setEditing(null);
+    setEditDisplayName('');
+    setEditRole(null);
+    setResetting(target);
+    setResetPassword('');
+  }
+
+  function closeReset() {
+    setResetting(null);
+    setResetPassword('');
+    setRowError(null);
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedEmail = email.trim();
@@ -159,10 +212,7 @@ export function AdminUsersPage() {
         return;
       }
       const created = (await response.json()) as AdminUserRow;
-      setEmail('');
-      setDisplayName('');
-      setRole('agent');
-      setPassword('');
+      setCreateOpened(false);
       upsertUser(created);
     } catch {
       setFormError("Couldn't create this User.");
@@ -171,7 +221,10 @@ export function AdminUsersPage() {
     }
   }
 
-  async function saveEdit(target: AdminUserRow) {
+  async function saveEdit() {
+    if (editing === null) {
+      return;
+    }
     const trimmedDisplayName = editDisplayName.trim();
     if (trimmedDisplayName === '') {
       setRowError('Display name is required.');
@@ -183,7 +236,7 @@ export function AdminUsersPage() {
     }
 
     setRowError(null);
-    setBusyId(target.id);
+    setBusyId(editing.id);
 
     const body: UpdateUserBody = {
       displayName: trimmedDisplayName,
@@ -191,7 +244,7 @@ export function AdminUsersPage() {
     };
 
     try {
-      const response = await apiFetch(`/api/users/${target.id}`, {
+      const response = await apiFetch(`/api/users/${editing.id}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       });
@@ -200,7 +253,7 @@ export function AdminUsersPage() {
       }
       if (response.status === 409) {
         setRowError(
-          target.role === 'admin' && editRole !== 'admin'
+          editing.role === 'admin' && editRole !== 'admin'
             ? 'Cannot demote the last Administrator.'
             : "Couldn't update this User.",
         );
@@ -212,9 +265,7 @@ export function AdminUsersPage() {
       }
       const updated = (await response.json()) as AdminUserRow;
       upsertUser(updated);
-      setEditingId(null);
-      setEditDisplayName('');
-      setEditRole(null);
+      closeEdit();
     } catch {
       setRowError("Couldn't update this User.");
     } finally {
@@ -222,7 +273,10 @@ export function AdminUsersPage() {
     }
   }
 
-  async function savePasswordReset(target: AdminUserRow) {
+  async function savePasswordReset() {
+    if (resetting === null) {
+      return;
+    }
     const trimmedPassword = resetPassword.trim();
     if (trimmedPassword === '') {
       setRowError('Password is required.');
@@ -230,12 +284,12 @@ export function AdminUsersPage() {
     }
 
     setRowError(null);
-    setBusyId(target.id);
+    setBusyId(resetting.id);
 
     const body: ResetPasswordBody = { password: trimmedPassword };
 
     try {
-      const response = await apiFetch(`/api/users/${target.id}/password`, {
+      const response = await apiFetch(`/api/users/${resetting.id}/password`, {
         method: 'PATCH',
         body: JSON.stringify(body),
       });
@@ -246,8 +300,7 @@ export function AdminUsersPage() {
         setRowError("Couldn't reset this password.");
         return;
       }
-      setResettingId(null);
-      setResetPassword('');
+      closeReset();
     } catch {
       setRowError("Couldn't reset this password.");
     } finally {
@@ -258,8 +311,8 @@ export function AdminUsersPage() {
   async function runRowAction(target: AdminUserRow, action: RowAction) {
     setRowError(null);
     setBusyId(target.id);
-    setEditingId(null);
-    setResettingId(null);
+    setEditing(null);
+    setResetting(null);
     setResetPassword('');
 
     try {
@@ -296,23 +349,176 @@ export function AdminUsersPage() {
   }
 
   return (
-    <Stack>
-      <Title order={2}>Users</Title>
-      <form onSubmit={handleSubmit}>
-        <Stack gap="sm">
-          <Group align="flex-end" grow>
+    <Stack gap="lg">
+      <Group justify="space-between" align="center">
+        <Title order={2} size="h3">
+          Users
+        </Title>
+        <Button
+          leftSection={<IconPlus size={16} stroke={1.8} />}
+          onClick={openCreate}
+        >
+          New User
+        </Button>
+      </Group>
+      {rowError !== null && editing === null && resetting === null ? (
+        <Alert color="red" icon={<IconAlertCircle size={16} />}>
+          {rowError}
+        </Alert>
+      ) : null}
+      {list.kind === 'error' ? (
+        <LoadErrorAlert
+          onRetry={() => {
+            setList({ kind: 'loading' });
+            setReloadToken((token) => token + 1);
+          }}
+        >
+          Couldn't load Users.
+        </LoadErrorAlert>
+      ) : list.kind === 'loading' ? (
+        <LoadingState label="Loading Users…" />
+      ) : list.users.length === 0 ? (
+        <Card withBorder radius="md">
+          <Center py="xl">
+            <Stack align="center" gap="sm">
+              <ThemeIcon size={48} radius="xl" variant="light" color="gray">
+                <IconUsers size={24} stroke={1.5} />
+              </ThemeIcon>
+              <Text c="dimmed">No Users to show.</Text>
+            </Stack>
+          </Center>
+        </Card>
+      ) : (
+        <Card withBorder radius="md" p={0}>
+          <Table.ScrollContainer minWidth={720}>
+            <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Email</Table.Th>
+                  <Table.Th>Display name</Table.Th>
+                  <Table.Th>Role</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th ta="right">Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {list.users.map((row) => {
+                  const isDeleted = row.deletedAt !== null;
+                  const isSelf = user?.id === row.id;
+                  const busy = busyId === row.id;
+                  return (
+                    <Table.Tr key={row.id}>
+                      <Table.Td>
+                        <Text size="sm">{row.email}</Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <PersonCell name={row.displayName} />
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge
+                          color={ROLE_COLOR[row.role]}
+                          variant="light"
+                          radius="sm"
+                        >
+                          {ROLE_LABEL[row.role]}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge
+                          color={isDeleted ? 'gray' : 'teal'}
+                          variant="light"
+                          radius="sm"
+                        >
+                          {isDeleted ? 'Soft-deleted' : 'Current'}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap="xs" wrap="nowrap" justify="flex-end">
+                          {isDeleted ? (
+                            <Button
+                              type="button"
+                              variant="default"
+                              size="xs"
+                              loading={busy}
+                              leftSection={
+                                <IconRestore size={14} stroke={1.8} />
+                              }
+                              onClick={() => void runRowAction(row, 'restore')}
+                            >
+                              Restore
+                            </Button>
+                          ) : (
+                            <>
+                              <Button
+                                type="button"
+                                variant="default"
+                                size="xs"
+                                disabled={busy}
+                                leftSection={
+                                  <IconPencil size={14} stroke={1.8} />
+                                }
+                                onClick={() => openEdit(row)}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="default"
+                                size="xs"
+                                disabled={busy}
+                                leftSection={<IconKey size={14} stroke={1.8} />}
+                                onClick={() => openReset(row)}
+                              >
+                                Reset password
+                              </Button>
+                              {!isSelf ? (
+                                <Button
+                                  type="button"
+                                  color="red"
+                                  variant="light"
+                                  size="xs"
+                                  loading={busy}
+                                  leftSection={
+                                    <IconTrash size={14} stroke={1.8} />
+                                  }
+                                  onClick={() =>
+                                    void runRowAction(row, 'soft-delete')
+                                  }
+                                >
+                                  Soft-delete
+                                </Button>
+                              ) : null}
+                            </>
+                          )}
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Card>
+      )}
+      <Modal
+        opened={createOpened}
+        onClose={() => setCreateOpened(false)}
+        title="New User"
+        centered
+      >
+        <form onSubmit={handleSubmit}>
+          <Stack gap="sm">
             <TextInput
               label="Email"
               value={email}
               onChange={(event) => setEmail(event.currentTarget.value)}
+              data-autofocus
             />
             <TextInput
               label="Display name"
               value={displayName}
               onChange={(event) => setDisplayName(event.currentTarget.value)}
             />
-          </Group>
-          <Group align="flex-end" grow>
             <Select
               label="Role"
               data={ROLE_OPTIONS}
@@ -324,211 +530,115 @@ export function AdminUsersPage() {
               value={password}
               onChange={(event) => setPassword(event.currentTarget.value)}
             />
-            <Button type="submit" loading={submitting}>
-              Create User
-            </Button>
-          </Group>
-        </Stack>
-      </form>
-      {formError ? <Alert color="red">{formError}</Alert> : null}
-      {rowError ? <Alert color="red">{rowError}</Alert> : null}
-      {list.kind === 'error' ? (
-        <Alert>
-          <Stack gap="sm">
-            <Text>Couldn't load Users.</Text>
-            <Button
-              type="button"
-              variant="default"
-              onClick={() => {
-                setList({ kind: 'loading' });
-                setReloadToken((token) => token + 1);
-              }}
-            >
-              Try again
-            </Button>
+            {formError !== null ? (
+              <Alert color="red" icon={<IconAlertCircle size={16} />}>
+                {formError}
+              </Alert>
+            ) : null}
+            <Group justify="flex-end">
+              <Button
+                type="button"
+                variant="default"
+                onClick={() => setCreateOpened(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" loading={submitting}>
+                Create User
+              </Button>
+            </Group>
           </Stack>
-        </Alert>
-      ) : list.kind === 'loading' ? (
-        <Text>Loading Users…</Text>
-      ) : (
-        <Table>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Email</Table.Th>
-              <Table.Th>Display name</Table.Th>
-              <Table.Th>Role</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Actions</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {list.users.map((row) => {
-              const isDeleted = row.deletedAt !== null;
-              const isSelf = user?.id === row.id;
-              const isEditing = editingId === row.id;
-              const isResetting = resettingId === row.id;
-              const busy = busyId === row.id;
-              return (
-                <Table.Tr key={row.id}>
-                  <Table.Td>{row.email}</Table.Td>
-                  <Table.Td>
-                    {isEditing ? (
-                      <TextInput
-                        aria-label={`Edit display name ${row.displayName}`}
-                        value={editDisplayName}
-                        onChange={(event) =>
-                          setEditDisplayName(event.currentTarget.value)
-                        }
-                      />
-                    ) : (
-                      row.displayName
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    {isEditing ? (
-                      <Select
-                        aria-label={`Edit role ${row.displayName}`}
-                        data={ROLE_OPTIONS}
-                        value={editRole}
-                        onChange={(value) => setEditRole(value as Role | null)}
-                      />
-                    ) : (
-                      ROLE_LABEL[row.role]
-                    )}
-                  </Table.Td>
-                  <Table.Td>{isDeleted ? 'Soft-deleted' : 'Current'}</Table.Td>
-                  <Table.Td>
-                    <Stack gap="xs">
-                      {isDeleted ? (
-                        <Button
-                          type="button"
-                          variant="default"
-                          size="xs"
-                          loading={busy}
-                          onClick={() => void runRowAction(row, 'restore')}
-                        >
-                          Restore
-                        </Button>
-                      ) : (
-                        <>
-                          <Group gap="xs" wrap="nowrap">
-                            {isEditing ? (
-                              <>
-                                <Button
-                                  type="button"
-                                  size="xs"
-                                  loading={busy}
-                                  onClick={() => void saveEdit(row)}
-                                >
-                                  Save
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="default"
-                                  size="xs"
-                                  disabled={busy}
-                                  onClick={() => {
-                                    setEditingId(null);
-                                    setEditDisplayName('');
-                                    setEditRole(null);
-                                  }}
-                                >
-                                  Cancel
-                                </Button>
-                              </>
-                            ) : (
-                              <Button
-                                type="button"
-                                variant="default"
-                                size="xs"
-                                disabled={busy || isResetting}
-                                onClick={() => {
-                                  setRowError(null);
-                                  setResettingId(null);
-                                  setResetPassword('');
-                                  setEditingId(row.id);
-                                  setEditDisplayName(row.displayName);
-                                  setEditRole(row.role);
-                                }}
-                              >
-                                Edit
-                              </Button>
-                            )}
-                            {!isEditing && !isResetting ? (
-                              <Button
-                                type="button"
-                                variant="light"
-                                size="xs"
-                                disabled={busy}
-                                onClick={() => {
-                                  setRowError(null);
-                                  setEditingId(null);
-                                  setEditDisplayName('');
-                                  setEditRole(null);
-                                  setResettingId(row.id);
-                                  setResetPassword('');
-                                }}
-                              >
-                                Reset password
-                              </Button>
-                            ) : null}
-                            {!isEditing && !isResetting && !isSelf ? (
-                              <Button
-                                type="button"
-                                color="red"
-                                variant="light"
-                                size="xs"
-                                loading={busy}
-                                onClick={() =>
-                                  void runRowAction(row, 'soft-delete')
-                                }
-                              >
-                                Soft-delete
-                              </Button>
-                            ) : null}
-                          </Group>
-                          {isResetting ? (
-                            <Group gap="xs" wrap="nowrap" align="flex-end">
-                              <PasswordInput
-                                aria-label={`New password ${row.displayName}`}
-                                value={resetPassword}
-                                onChange={(event) =>
-                                  setResetPassword(event.currentTarget.value)
-                                }
-                                style={{ flex: 1 }}
-                              />
-                              <Button
-                                type="button"
-                                size="xs"
-                                loading={busy}
-                                onClick={() => void savePasswordReset(row)}
-                              >
-                                Save password
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="default"
-                                size="xs"
-                                disabled={busy}
-                                onClick={() => {
-                                  setResettingId(null);
-                                  setResetPassword('');
-                                }}
-                              >
-                                Cancel
-                              </Button>
-                            </Group>
-                          ) : null}
-                        </>
-                      )}
-                    </Stack>
-                  </Table.Td>
-                </Table.Tr>
-              );
-            })}
-          </Table.Tbody>
-        </Table>
-      )}
+        </form>
+      </Modal>
+      <Modal
+        opened={editing !== null}
+        onClose={closeEdit}
+        title="Edit User"
+        centered
+      >
+        {editing !== null ? (
+          <Stack gap="sm">
+            <TextInput
+              label="Display name"
+              aria-label={`Edit display name ${editing.displayName}`}
+              value={editDisplayName}
+              onChange={(event) =>
+                setEditDisplayName(event.currentTarget.value)
+              }
+              data-autofocus
+            />
+            <Select
+              label="Role"
+              aria-label={`Edit role ${editing.displayName}`}
+              data={ROLE_OPTIONS}
+              value={editRole}
+              onChange={(value) => setEditRole(value as Role | null)}
+            />
+            {rowError !== null ? (
+              <Alert color="red" icon={<IconAlertCircle size={16} />}>
+                {rowError}
+              </Alert>
+            ) : null}
+            <Group justify="flex-end">
+              <Button
+                type="button"
+                variant="default"
+                disabled={busyId === editing.id}
+                onClick={closeEdit}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                loading={busyId === editing.id}
+                onClick={() => void saveEdit()}
+              >
+                Save
+              </Button>
+            </Group>
+          </Stack>
+        ) : null}
+      </Modal>
+      <Modal
+        opened={resetting !== null}
+        onClose={closeReset}
+        title="Reset Password"
+        centered
+      >
+        {resetting !== null ? (
+          <Stack gap="sm">
+            <PasswordInput
+              label="New password"
+              aria-label={`New password ${resetting.displayName}`}
+              value={resetPassword}
+              onChange={(event) => setResetPassword(event.currentTarget.value)}
+              data-autofocus
+            />
+            {rowError !== null ? (
+              <Alert color="red" icon={<IconAlertCircle size={16} />}>
+                {rowError}
+              </Alert>
+            ) : null}
+            <Group justify="flex-end">
+              <Button
+                type="button"
+                variant="default"
+                disabled={busyId === resetting.id}
+                onClick={closeReset}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                loading={busyId === resetting.id}
+                onClick={() => void savePasswordReset()}
+              >
+                Save password
+              </Button>
+            </Group>
+          </Stack>
+        ) : null}
+      </Modal>
     </Stack>
   );
 }

@@ -67,7 +67,7 @@ describe('Users catalog (e2e)', () => {
       );
       expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
       expect(names).toEqual(
-        expect.arrayContaining(['Ada Admin', 'Alex Agent', 'Sam Supervisor']),
+        expect.arrayContaining(['Ada Lovelace', 'Alex Turing', 'Sam Hopper']),
       );
       expect(
         (response.body as UserCatalogRow[]).map((row) => row.email),

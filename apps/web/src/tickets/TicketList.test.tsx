@@ -62,8 +62,8 @@ test('Ticket List rows render Title, Status, Priority, Client, Assignee, creator
   expect(within(table).getByText('Resolved')).toBeDefined();
   expect(within(table).getByText('Low')).toBeDefined();
   expect(within(table).getByText('Initech Soft')).toBeDefined();
-  expect(within(table).getByText('Sam Supervisor')).toBeDefined();
-  expect(within(table).getAllByText('Alex Agent').length).toBeGreaterThan(0);
+  expect(within(table).getByText('Sam Hopper')).toBeDefined();
+  expect(within(table).getAllByText('Alex Turing').length).toBeGreaterThan(0);
   expect(screen.getByText('1 Aug 2026, 12:00')).toBeDefined();
   expect(screen.getByText('30 Jul 2026, 09:15')).toBeDefined();
   expect(screen.getByRole('columnheader', { name: 'Title' })).toBeDefined();
@@ -232,7 +232,7 @@ test('Supervisor Ticket List has an Assignee filter including unassigned from fi
 
   await user.click(await screen.findByRole('combobox', { name: 'Assignee' }));
   expect(filterOption('Unassigned')).toBeDefined();
-  expect(filterOption('Sam Supervisor')).toBeDefined();
+  expect(filterOption('Sam Hopper')).toBeDefined();
 });
 
 test('Administrator Ticket List has an Assignee filter including unassigned from filterOptions', async () => {
@@ -244,7 +244,7 @@ test('Administrator Ticket List has an Assignee filter including unassigned from
 
   await user.click(await screen.findByRole('combobox', { name: 'Assignee' }));
   expect(filterOption('Unassigned')).toBeDefined();
-  expect(filterOption('Sam Supervisor')).toBeDefined();
+  expect(filterOption('Sam Hopper')).toBeDefined();
 });
 
 test('Ticket List filter choices come from filterOptions and do not list Client or User catalogs', async () => {
@@ -281,16 +281,7 @@ test('Ticket List filter choices come from filterOptions and do not list Client 
 test('choosing Status and Client refetches tickets with those query params', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
+  mockAuthedSession(sampleTickets);
 
   renderApp(['/tickets']);
 
@@ -325,16 +316,7 @@ test('Ticket List Titles link to the Ticket consult route', async () => {
 
 test('opening /tickets with filter search params applies them in the UI and list request', async () => {
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
+  mockAuthedSession(sampleTickets);
 
   renderApp([
     '/tickets?status=open&priority=high&clientId=client-1&assigneeId=user-3',
@@ -345,7 +327,7 @@ test('opening /tickets with filter search params applies them in the UI and list
   ).toHaveProperty('value', 'Open');
   expect(filterControl('Priority')).toHaveProperty('value', 'High');
   expect(filterControl('Client')).toHaveProperty('value', 'Contoso Health');
-  expect(filterControl('Assignee')).toHaveProperty('value', 'Sam Supervisor');
+  expect(filterControl('Assignee')).toHaveProperty('value', 'Sam Hopper');
 
   const ticketUrls = vi
     .mocked(fetch)
@@ -359,16 +341,7 @@ test('opening /tickets with filter search params applies them in the UI and list
 test('changing Ticket List filters updates the URL search params', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
+  mockAuthedSession(sampleTickets);
 
   renderApp(['/tickets'], { probeLocation: true });
 
@@ -379,7 +352,7 @@ test('changing Ticket List filters updates the URL search params', async () => {
   await user.click(filterControl('Client'));
   await user.click(filterOption('Contoso Health'));
   await user.click(filterControl('Assignee'));
-  await user.click(filterOption('Sam Supervisor'));
+  await user.click(filterOption('Sam Hopper'));
 
   expect(await screen.findByTestId('location-path')).toHaveProperty(
     'textContent',
@@ -387,24 +360,15 @@ test('changing Ticket List filters updates the URL search params', async () => {
   );
 });
 
-test('opening /tickets with Open Ticket load, Stale, and assigned-open params drives the list request', async () => {
+test('opening /tickets with Active Tickets, Stale, and assigned-open params drives the list request', async () => {
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, alex);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
+  mockAuthedSession(sampleTickets, alex);
 
   renderApp(['/tickets?status=open%2Cin_progress&stale=1&scope=assignedOpen']);
 
   expect(
     await screen.findByRole('combobox', { name: 'Status' }),
-  ).toHaveProperty('value', 'Open Ticket load');
+  ).toHaveProperty('value', 'Active Tickets');
   expect(screen.queryByRole('combobox', { name: 'Stale' })).toBeNull();
   expect(screen.queryByRole('combobox', { name: 'Scope' })).toBeNull();
 
@@ -417,24 +381,15 @@ test('opening /tickets with Open Ticket load, Stale, and assigned-open params dr
   );
 });
 
-test('choosing Open Ticket load updates the URL and list request', async () => {
+test('choosing Active Tickets updates the URL and list request', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, alex);
-    }
-    if (isTicketsUrl(url)) {
-      return jsonResponse(200, sampleTickets);
-    }
-    throw new Error(`unexpected fetch ${url}`);
-  });
+  mockAuthedSession(sampleTickets, alex);
 
   renderApp(['/tickets'], { probeLocation: true });
 
   await user.click(await screen.findByRole('combobox', { name: 'Status' }));
-  await user.click(filterOption('Open Ticket load'));
+  await user.click(filterOption('Active Tickets'));
 
   expect(await screen.findByTestId('location-path')).toHaveProperty(
     'textContent',

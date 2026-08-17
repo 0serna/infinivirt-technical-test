@@ -1,13 +1,14 @@
-import { MantineProvider, Text } from '@mantine/core';
+import { MantineProvider } from '@mantine/core';
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AdminClientsPage } from './admin/AdminClientsPage';
 import { AdminUsersPage } from './admin/AdminUsersPage';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
+import { LoadingState } from './components/LoadingState';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { StaffShell } from './shell/StaffShell';
-import { TicketCreate } from './tickets/TicketCreate';
+import { theme } from './theme';
 import { TicketDetail } from './tickets/TicketDetail';
 import { TicketList } from './tickets/TicketList';
 
@@ -20,7 +21,7 @@ function AuthGate({
 }) {
   const { user, isReady } = useAuth();
   if (!isReady) {
-    return <Text p="md">Loading…</Text>;
+    return <LoadingState label="Loading…" mih="100vh" />;
   }
   if (allow === 'guest') {
     return user ? <Navigate to="/dashboard" replace /> : children;
@@ -30,7 +31,11 @@ function AuthGate({
 
 export function App() {
   return (
-    <MantineProvider defaultColorScheme="light">
+    <MantineProvider
+      theme={theme}
+      defaultColorScheme="light"
+      env={import.meta.env.MODE === 'test' ? 'test' : undefined}
+    >
       <AuthProvider>
         <Routes>
           <Route
@@ -52,7 +57,6 @@ export function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="tickets" element={<TicketList />} />
-            <Route path="tickets/new" element={<TicketCreate />} />
             <Route path="tickets/:id" element={<TicketDetail />} />
             <Route path="admin/clients" element={<AdminClientsPage />} />
             <Route path="admin/users" element={<AdminUsersPage />} />

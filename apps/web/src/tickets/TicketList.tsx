@@ -1,18 +1,21 @@
 import {
-  Alert,
+  Anchor,
+  Badge,
   Button,
+  Card,
+  Center,
   Group,
   Select,
   Stack,
   Table,
   Text,
+  ThemeIcon,
   Title,
 } from '@mantine/core';
 import {
   EMPTY_TICKET_LIST_FILTER_OPTIONS,
   hasMinimumRole,
   OPEN_TICKET_LOAD_STATUS_QUERY,
-  PRIORITIES,
   TICKET_STATUSES,
   type TicketListEnvelope,
   type TicketListFilterOptions,
@@ -20,13 +23,29 @@ import {
   type TicketListRow,
   UNASSIGNED_ASSIGNEE_QUERY,
 } from '@support-ticketing/shared';
+import {
+  IconBuildings,
+  IconFilterOff,
+  IconFlag,
+  IconPlus,
+  IconProgress,
+  IconTicket,
+  IconUser,
+} from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
+import { LoadErrorAlert } from '../components/LoadErrorAlert';
+import { LoadingState } from '../components/LoadingState';
+import { PersonCell } from '../components/PersonCell';
+import { TicketCreateModal } from './TicketCreateModal';
 import {
   formatTicketInstant,
+  PRIORITY_COLOR,
   PRIORITY_LABEL,
+  PRIORITY_SELECT_DATA,
+  STATUS_COLOR,
   STATUS_LABEL,
   assigneeLabel,
 } from './ticketLabels';
@@ -36,33 +55,40 @@ const STATUS_FILTER_DATA = [
     value,
     label: STATUS_LABEL[value],
   })),
-  { value: OPEN_TICKET_LOAD_STATUS_QUERY, label: 'Open Ticket load' },
+  { value: OPEN_TICKET_LOAD_STATUS_QUERY, label: 'Active Tickets' },
 ];
 
+const TICKET_LIST_QUERY_KEYS = [
+  'status',
+  'priority',
+  'clientId',
+  'assigneeId',
+  'stale',
+  'scope',
+] as const satisfies readonly (keyof TicketListFilters)[];
+
+function ticketListParams(
+  searchParams: URLSearchParams,
+  includeAssignee: boolean,
+): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const key of TICKET_LIST_QUERY_KEYS) {
+    if (key === 'assigneeId' && !includeAssignee) {
+      continue;
+    }
+    const value = searchParams.get(key);
+    if (value) {
+      params.set(key, value);
+    }
+  }
+  return params;
+}
+
 function ticketsUrl(
-  filters: TicketListFilters,
+  searchParams: URLSearchParams,
   includeAssignee: boolean,
 ): string {
-  const params = new URLSearchParams();
-  if (filters.status) {
-    params.set('status', filters.status);
-  }
-  if (filters.priority) {
-    params.set('priority', filters.priority);
-  }
-  if (filters.clientId) {
-    params.set('clientId', filters.clientId);
-  }
-  if (includeAssignee && filters.assigneeId) {
-    params.set('assigneeId', filters.assigneeId);
-  }
-  if (filters.stale) {
-    params.set('stale', filters.stale);
-  }
-  if (filters.scope) {
-    params.set('scope', filters.scope);
-  }
-  const query = params.toString();
+  const query = ticketListParams(searchParams, includeAssignee).toString();
   return query ? `/api/tickets?${query}` : '/api/tickets';
 }
 
@@ -70,32 +96,9 @@ function filtersFromSearchParams(
   searchParams: URLSearchParams,
   includeAssignee: boolean,
 ): TicketListFilters {
-  const filters: TicketListFilters = {};
-  const status = searchParams.get('status');
-  const priority = searchParams.get('priority');
-  const clientId = searchParams.get('clientId');
-  const assigneeId = searchParams.get('assigneeId');
-  const stale = searchParams.get('stale');
-  const scope = searchParams.get('scope');
-  if (status) {
-    filters.status = status;
-  }
-  if (priority) {
-    filters.priority = priority;
-  }
-  if (clientId) {
-    filters.clientId = clientId;
-  }
-  if (includeAssignee && assigneeId) {
-    filters.assigneeId = assigneeId;
-  }
-  if (stale) {
-    filters.stale = stale;
-  }
-  if (scope) {
-    filters.scope = scope;
-  }
-  return filters;
+  return Object.fromEntries(
+    ticketListParams(searchParams, includeAssignee),
+  ) as TicketListFilters;
 }
 
 function assigneeSelectData(options: TicketListFilterOptions) {
@@ -117,13 +120,16 @@ export function TicketList() {
   const includeAssignee =
     user != null && hasMinimumRole(user.role, 'supervisor');
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const filters = filtersFromSearchParams(searchParams, includeAssignee);
   const filterQuery = searchParams.toString();
+  const hasActiveFilters = filterQuery.length > 0;
   const [tickets, setTickets] = useState<TicketListRow[] | null>(null);
   const [filterOptions, setFilterOptions] =
     useState<TicketListFilterOptions | null>(null);
   const [failed, setFailed] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [createOpened, setCreateOpened] = useState(false);
 
   function setFilter(key: keyof TicketListFilters, value: string | null) {
     setSearchParams(
@@ -140,15 +146,14 @@ export function TicketList() {
     );
   }
 
+  function clearFilters() {
+    setSearchParams(new URLSearchParams(), { replace: true });
+  }
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again; filterQuery tracks URL filters
   useEffect(() => {
     let cancelled = false;
-    const listFilters = filtersFromSearchParams(
-      new URLSearchParams(filterQuery),
-      includeAssignee,
-    );
-
-    void apiFetch(ticketsUrl(listFilters, includeAssignee))
+    void apiFetch(ticketsUrl(new URLSearchParams(filterQuery), includeAssignee))
       .then(async (response) => {
         if (cancelled || response.status === 401) {
           return;
@@ -176,18 +181,24 @@ export function TicketList() {
   }, [filterQuery, includeAssignee, reloadToken]);
 
   return (
-    <Stack>
+    <Stack gap="lg">
       <Group justify="space-between" align="center">
-        <Title order={2}>Tickets</Title>
-        <Button component={Link} to="/tickets/new" variant="filled">
+        <Title order={2} size="h3">
+          Tickets
+        </Title>
+        <Button
+          leftSection={<IconPlus size={16} stroke={1.8} />}
+          onClick={() => setCreateOpened(true)}
+        >
           New ticket
         </Button>
       </Group>
       {filterOptions ? (
-        <Group>
+        <Group gap="sm" align="flex-end">
           <Select
             label="Status"
             clearable
+            leftSection={<IconProgress size={16} stroke={1.6} />}
             value={filters.status ?? null}
             onChange={(status) => setFilter('status', status)}
             data={STATUS_FILTER_DATA}
@@ -195,16 +206,15 @@ export function TicketList() {
           <Select
             label="Priority"
             clearable
+            leftSection={<IconFlag size={16} stroke={1.6} />}
             value={filters.priority ?? null}
             onChange={(priority) => setFilter('priority', priority)}
-            data={PRIORITIES.map((value) => ({
-              value,
-              label: PRIORITY_LABEL[value],
-            }))}
+            data={PRIORITY_SELECT_DATA}
           />
           <Select
             label="Client"
             clearable
+            leftSection={<IconBuildings size={16} stroke={1.6} />}
             value={filters.clientId ?? null}
             onChange={(clientId) => setFilter('clientId', clientId)}
             data={filterOptions.clients.map((client) => ({
@@ -216,64 +226,132 @@ export function TicketList() {
             <Select
               label="Assignee"
               clearable
+              leftSection={<IconUser size={16} stroke={1.6} />}
               value={filters.assigneeId ?? null}
               onChange={(assigneeId) => setFilter('assigneeId', assigneeId)}
               data={assigneeSelectData(filterOptions)}
             />
           ) : null}
+          {hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="subtle"
+              color="gray"
+              leftSection={<IconFilterOff size={16} stroke={1.6} />}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </Button>
+          ) : null}
         </Group>
       ) : null}
       {failed ? (
-        <Alert>
-          <Stack gap="sm">
-            <Text>Couldn't load tickets.</Text>
-            <Button
-              type="button"
-              variant="default"
-              onClick={() => {
-                setFailed(false);
-                setTickets(null);
-                setReloadToken((token) => token + 1);
-              }}
-            >
-              Try again
-            </Button>
-          </Stack>
-        </Alert>
+        <LoadErrorAlert
+          onRetry={() => {
+            setFailed(false);
+            setTickets(null);
+            setReloadToken((token) => token + 1);
+          }}
+        >
+          Couldn't load tickets.
+        </LoadErrorAlert>
       ) : tickets === null ? (
-        <Text>Loading tickets…</Text>
+        <LoadingState label="Loading tickets…" />
       ) : tickets.length === 0 ? (
-        <Text>No tickets to show.</Text>
+        <Center py="xl">
+          <Stack align="center" gap="sm">
+            <ThemeIcon size={48} radius="xl" variant="light" color="gray">
+              <IconTicket size={24} stroke={1.5} />
+            </ThemeIcon>
+            <Text c="dimmed">No tickets to show.</Text>
+          </Stack>
+        </Center>
       ) : (
-        <Table>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Title</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Priority</Table.Th>
-              <Table.Th>Client</Table.Th>
-              <Table.Th>Assignee</Table.Th>
-              <Table.Th>Created by</Table.Th>
-              <Table.Th>Updated</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {tickets.map((ticket) => (
-              <Table.Tr key={ticket.id}>
-                <Table.Td>
-                  <Link to={`/tickets/${ticket.id}`}>{ticket.title}</Link>
-                </Table.Td>
-                <Table.Td>{STATUS_LABEL[ticket.status]}</Table.Td>
-                <Table.Td>{PRIORITY_LABEL[ticket.priority]}</Table.Td>
-                <Table.Td>{ticket.client.name}</Table.Td>
-                <Table.Td>{assigneeLabel(ticket.assignee)}</Table.Td>
-                <Table.Td>{ticket.createdBy.displayName}</Table.Td>
-                <Table.Td>{formatTicketInstant(ticket.updatedAt)}</Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+        <Card withBorder radius="md" p={0}>
+          <Table.ScrollContainer minWidth={760}>
+            <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Title</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th>Priority</Table.Th>
+                  <Table.Th>Client</Table.Th>
+                  <Table.Th>Assignee</Table.Th>
+                  <Table.Th>Created by</Table.Th>
+                  <Table.Th>Updated</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {tickets.map((ticket) => (
+                  <Table.Tr
+                    key={ticket.id}
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest('a')) {
+                        return;
+                      }
+                      navigate(`/tickets/${ticket.id}`);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <Table.Td>
+                      <Anchor
+                        component={Link}
+                        to={`/tickets/${ticket.id}`}
+                        size="sm"
+                        fw={500}
+                      >
+                        {ticket.title}
+                      </Anchor>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge
+                        color={STATUS_COLOR[ticket.status]}
+                        variant="light"
+                        radius="sm"
+                      >
+                        {STATUS_LABEL[ticket.status]}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge
+                        color={PRIORITY_COLOR[ticket.priority]}
+                        variant="outline"
+                        radius="sm"
+                      >
+                        {PRIORITY_LABEL[ticket.priority]}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm">{ticket.client.name}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      {ticket.assignee ? (
+                        <PersonCell name={ticket.assignee.displayName} />
+                      ) : (
+                        <Text size="sm" c="dimmed">
+                          Unassigned
+                        </Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <PersonCell name={ticket.createdBy.displayName} />
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" c="dimmed">
+                        {formatTicketInstant(ticket.updatedAt)}
+                      </Text>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Card>
       )}
+      <TicketCreateModal
+        opened={createOpened}
+        onClose={() => setCreateOpened(false)}
+      />
     </Stack>
   );
 }

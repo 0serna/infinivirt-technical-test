@@ -223,7 +223,7 @@ test('Ticket consult shows current fields and Status Transition history oldest f
   expect(within(history).getByText('Resolved → Closed')).toBeDefined();
   expect(within(history).getByText('Closed → Open')).toBeDefined();
   expect(within(history).getAllByText(/Ada Lovelace ·/).length).toBe(2);
-  expect(within(history).getByText(/Alex Agent · 22 Jul 2026/)).toBeDefined();
+  expect(within(history).getByText(/Alex Turing · 22 Jul 2026/)).toBeDefined();
 });
 
 test('Ticket consult shows Reassignment history oldest first from detail payload', async () => {
@@ -231,31 +231,31 @@ test('Ticket consult shows Reassignment history oldest first from detail payload
     ...sampleReopenedTicketDetail,
     id: 'ticket-reassigned',
     title: 'Reassigned often: customs form mapping',
-    assignee: { id: 'user-2', displayName: 'Alex Agent' },
+    assignee: { id: 'user-2', displayName: 'Alex Turing' },
     assignments: [
       {
         from: null,
-        to: { id: 'user-2', displayName: 'Alex Agent' },
+        to: { id: 'user-2', displayName: 'Alex Turing' },
         changedAt: '2026-08-09T12:00:00.000Z',
-        changedBy: { id: 'user-3', displayName: 'Sam Supervisor' },
+        changedBy: { id: 'user-3', displayName: 'Sam Hopper' },
       },
       {
-        from: { id: 'user-2', displayName: 'Alex Agent' },
-        to: { id: 'user-3', displayName: 'Sam Supervisor' },
+        from: { id: 'user-2', displayName: 'Alex Turing' },
+        to: { id: 'user-3', displayName: 'Sam Hopper' },
         changedAt: '2026-08-10T12:00:00.000Z',
         changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
       },
       {
-        from: { id: 'user-3', displayName: 'Sam Supervisor' },
+        from: { id: 'user-3', displayName: 'Sam Hopper' },
         to: null,
         changedAt: '2026-08-11T12:00:00.000Z',
         changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
       },
       {
         from: null,
-        to: { id: 'user-2', displayName: 'Alex Agent' },
+        to: { id: 'user-2', displayName: 'Alex Turing' },
         changedAt: '2026-08-12T12:00:00.000Z',
-        changedBy: { id: 'user-3', displayName: 'Sam Supervisor' },
+        changedBy: { id: 'user-3', displayName: 'Sam Hopper' },
       },
     ],
   };
@@ -271,18 +271,12 @@ test('Ticket consult shows Reassignment history oldest first from detail payload
 
   const history = screen.getByLabelText('Assignment history');
   expect(within(history).getByText('Assignment history')).toBeDefined();
-  expect(
-    within(history).getByText('Alex Agent → Sam Supervisor'),
-  ).toBeDefined();
-  expect(
-    within(history).getByText('Sam Supervisor → Unassigned'),
-  ).toBeDefined();
-  expect(within(history).getAllByText(/Unassigned → Alex Agent/).length).toBe(
+  expect(within(history).getByText('Alex Turing → Sam Hopper')).toBeDefined();
+  expect(within(history).getByText('Sam Hopper → Unassigned')).toBeDefined();
+  expect(within(history).getAllByText(/Unassigned → Alex Turing/).length).toBe(
     2,
   );
-  expect(
-    within(history).getByText(/Sam Supervisor · 9 Aug 2026/),
-  ).toBeDefined();
+  expect(within(history).getByText(/Sam Hopper · 9 Aug 2026/)).toBeDefined();
   expect(within(history).getByText(/Ada Lovelace · 11 Aug 2026/)).toBeDefined();
   expect(screen.queryByRole('button', { name: /assign/i })).toBeNull();
 });
@@ -313,7 +307,7 @@ test('Ticket consult shows Comment thread oldest first with visibility, author, 
   expect(within(thread).getByLabelText('Visibility: Internal')).toBeDefined();
   expect(within(thread).getByLabelText('Visibility: Public')).toBeDefined();
   expect(within(thread).getByText(/Ada Lovelace · 16 Aug 2026/)).toBeDefined();
-  expect(within(thread).getByText(/Alex Agent · 16 Aug 2026/)).toBeDefined();
+  expect(within(thread).getByText(/Alex Turing · 16 Aug 2026/)).toBeDefined();
   expect(screen.getByRole('textbox', { name: 'Comment' })).toBeDefined();
   expect(screen.getByRole('button', { name: 'Add comment' })).toBeDefined();
   expect(screen.queryByRole('combobox')).toBeNull();
@@ -485,7 +479,7 @@ test('Agent can submit a public Comment and the thread updates without a visibil
         body: 'Client confirmed MFA emails still missing.',
         visibility: 'public' as const,
         createdAt: '2026-08-16T14:00:00.000Z',
-        author: { id: 'user-2', displayName: 'Alex Agent' },
+        author: { id: 'user-2', displayName: 'Alex Turing' },
       },
     ],
   };
@@ -567,7 +561,7 @@ test('Supervisor Comment composer defaults to internal and can post public', asy
         body: 'Internal: escalate if firmware lag persists.',
         visibility: 'internal' as const,
         createdAt: '2026-08-16T14:05:00.000Z',
-        author: { id: 'user-3', displayName: 'Sam Supervisor' },
+        author: { id: 'user-3', displayName: 'Sam Hopper' },
       },
     ],
   };
@@ -581,7 +575,7 @@ test('Supervisor Comment composer defaults to internal and can post public', asy
         body: 'Public update for the Client.',
         visibility: 'public' as const,
         createdAt: '2026-08-16T14:06:00.000Z',
-        author: { id: 'user-3', displayName: 'Sam Supervisor' },
+        author: { id: 'user-3', displayName: 'Sam Hopper' },
       },
     ],
   };
@@ -720,7 +714,7 @@ test('Agent Assignee can record the next forward Status Transition', async () =>
         from: 'open' as const,
         to: 'in_progress' as const,
         changedAt: '2026-08-16T13:00:00.000Z',
-        changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+        changedBy: { id: 'user-2', displayName: 'Alex Turing' },
       },
     ],
   };
@@ -788,7 +782,7 @@ test('resolved Ticket offers no Close or Reopen control', async () => {
       id: 'ticket-2',
       title: 'Resolved: SSO redirect loop',
       status: 'resolved' as const,
-      assignee: { id: 'user-3', displayName: 'Sam Supervisor' },
+      assignee: { id: 'user-3', displayName: 'Sam Hopper' },
       resolvedAt: '2026-07-30T09:15:00.000Z',
     },
     alex,
@@ -968,7 +962,7 @@ test('Supervisor loads User catalog for Assignee picker and can first-assign', a
         from: null,
         to: { id: 'user-4', displayName: 'Jamie Agent' },
         changedAt: '2026-08-16T15:00:00.000Z',
-        changedBy: { id: 'user-3', displayName: 'Sam Supervisor' },
+        changedBy: { id: 'user-3', displayName: 'Sam Hopper' },
       },
     ],
   };
@@ -1003,7 +997,7 @@ test('Supervisor loads User catalog for Assignee picker and can first-assign', a
     screen.getByRole('option', { name: 'Jamie Agent (agent)', hidden: true }),
   ).toBeDefined();
   expect(
-    screen.queryByRole('option', { name: 'Sam Supervisor', hidden: true }),
+    screen.queryByRole('option', { name: 'Sam Hopper', hidden: true }),
   ).toBeNull();
   await user.click(
     screen.getByRole('option', { name: 'Jamie Agent (agent)', hidden: true }),
@@ -1031,7 +1025,7 @@ test('Administrator can clear Assignee and refreshes detail from response', asyn
     assignments: [
       ...detail.assignments,
       {
-        from: { id: 'user-2', displayName: 'Alex Agent' },
+        from: { id: 'user-2', displayName: 'Alex Turing' },
         to: null,
         changedAt: '2026-08-16T16:00:00.000Z',
         changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
@@ -1059,7 +1053,7 @@ test('Administrator can clear Assignee and refreshes detail from response', asyn
 
   expect(await screen.findByRole('button', { name: 'Assign' })).toBeDefined();
   const history = screen.getByLabelText('Assignment history');
-  expect(within(history).getByText('Alex Agent → Unassigned')).toBeDefined();
+  expect(within(history).getByText('Alex Turing → Unassigned')).toBeDefined();
 });
 
 test('Supervisor can change Assignee from one User to another', async () => {
@@ -1075,10 +1069,10 @@ test('Supervisor can change Assignee from one User to another', async () => {
     assignments: [
       ...detail.assignments,
       {
-        from: { id: 'user-2', displayName: 'Alex Agent' },
+        from: { id: 'user-2', displayName: 'Alex Turing' },
         to: { id: 'user-4', displayName: 'Jamie Agent' },
         changedAt: '2026-08-16T16:30:00.000Z',
-        changedBy: { id: 'user-3', displayName: 'Sam Supervisor' },
+        changedBy: { id: 'user-3', displayName: 'Sam Hopper' },
       },
     ],
   };
@@ -1109,7 +1103,7 @@ test('Supervisor can change Assignee from one User to another', async () => {
 
   expect(
     await within(screen.getByLabelText('Assignment history')).findByText(
-      'Alex Agent → Jamie Agent',
+      'Alex Turing → Jamie Agent',
     ),
   ).toBeDefined();
   expect(screen.getByRole('button', { name: 'Change assignee' })).toBeDefined();
@@ -1124,14 +1118,14 @@ test('in-flight Reassignment disables Assignee controls until the response arriv
   });
   const updated = {
     ...sampleTicketDetail,
-    assignee: { id: 'user-2', displayName: 'Alex Agent' },
+    assignee: { id: 'user-2', displayName: 'Alex Turing' },
     updatedAt: '2026-08-16T17:00:00.000Z',
     assignments: [
       {
         from: null,
-        to: { id: 'user-2', displayName: 'Alex Agent' },
+        to: { id: 'user-2', displayName: 'Alex Turing' },
         changedAt: '2026-08-16T17:00:00.000Z',
-        changedBy: { id: 'user-3', displayName: 'Sam Supervisor' },
+        changedBy: { id: 'user-3', displayName: 'Sam Hopper' },
       },
     ],
   };
@@ -1150,7 +1144,7 @@ test('in-flight Reassignment disables Assignee controls until the response arriv
   ).toBeDefined();
   await user.click(screen.getByRole('combobox', { name: 'Assignee' }));
   await user.click(
-    screen.getByRole('option', { name: 'Alex Agent (agent)', hidden: true }),
+    screen.getByRole('option', { name: 'Alex Turing (agent)', hidden: true }),
   );
   await user.click(screen.getByRole('button', { name: 'Assign' }));
 
@@ -1194,7 +1188,7 @@ test('failed Reassignment shows English error without the raw server body', asyn
   ).toBeDefined();
   await user.click(screen.getByRole('combobox', { name: 'Assignee' }));
   await user.click(
-    screen.getByRole('option', { name: 'Alex Agent (agent)', hidden: true }),
+    screen.getByRole('option', { name: 'Alex Turing (agent)', hidden: true }),
   );
   await user.click(screen.getByRole('button', { name: 'Assign' }));
 
