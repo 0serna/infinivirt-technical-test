@@ -59,6 +59,16 @@ const ticketDetailSelect = {
       changedBy: { select: { id: true, displayName: true } },
     },
   },
+  comments: {
+    orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+    select: {
+      id: true,
+      body: true,
+      visibility: true,
+      createdAt: true,
+      author: { select: { id: true, displayName: true } },
+    },
+  },
 } satisfies Prisma.TicketSelect;
 
 type TicketDetailRecord = Prisma.TicketGetPayload<{
@@ -171,8 +181,15 @@ function listScopeWhere(user: PublicUser): Prisma.TicketWhereInput {
 }
 
 function toTicketDetail(ticket: TicketDetailRecord): TicketDetail {
-  const { updatedAt, createdAt, resolvedAt, closedAt, statusHistory, ...rest } =
-    ticket;
+  const {
+    updatedAt,
+    createdAt,
+    resolvedAt,
+    closedAt,
+    statusHistory,
+    comments,
+    ...rest
+  } = ticket;
   return {
     ...rest,
     updatedAt: updatedAt.toISOString(),
@@ -184,6 +201,13 @@ function toTicketDetail(ticket: TicketDetailRecord): TicketDetail {
       to: row.toStatus,
       changedAt: row.changedAt.toISOString(),
       changedBy: row.changedBy,
+    })),
+    comments: comments.map((row) => ({
+      id: row.id,
+      body: row.body,
+      visibility: row.visibility,
+      createdAt: row.createdAt.toISOString(),
+      author: row.author,
     })),
   };
 }

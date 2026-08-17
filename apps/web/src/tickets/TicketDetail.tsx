@@ -16,6 +16,7 @@ import {
   nextRecordableStatus,
   type PatchTicketStatusBody,
   type Priority,
+  type TicketComment,
   type TicketDetail as TicketDetailBody,
   type TicketStatus,
   type TicketStatusHistoryRow,
@@ -25,6 +26,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
 import {
+  COMMENT_VISIBILITY_LABEL,
   formatTicketInstant,
   PRIORITY_LABEL,
   STATUS_LABEL,
@@ -42,6 +44,11 @@ const PRIORITY_COLOR: Record<Priority, string> = {
   medium: 'blue',
   high: 'orange',
   critical: 'red',
+};
+
+const COMMENT_VISIBILITY_COLOR: Record<TicketComment['visibility'], string> = {
+  public: 'blue',
+  internal: 'orange',
 };
 
 function transitionMenuLabel(from: TicketStatus, to: TicketStatus): string {
@@ -103,6 +110,40 @@ function StatusTimeline({ history }: { history: TicketStatusHistoryRow[] }) {
           </Stack>
         </Group>
       ))}
+    </Stack>
+  );
+}
+
+function CommentThread({ comments }: { comments: TicketComment[] }) {
+  return (
+    <Stack gap="sm" aria-label="Comments">
+      <Text fw={600} size="sm">
+        Comments
+      </Text>
+      {comments.length === 0 ? (
+        <Text size="sm" c="dimmed">
+          No comments yet.
+        </Text>
+      ) : (
+        comments.map((comment) => (
+          <Stack key={comment.id} gap={6}>
+            <Group gap="sm" wrap="wrap">
+              <Badge
+                color={COMMENT_VISIBILITY_COLOR[comment.visibility]}
+                variant="light"
+                aria-label={`Visibility: ${COMMENT_VISIBILITY_LABEL[comment.visibility]}`}
+              >
+                {COMMENT_VISIBILITY_LABEL[comment.visibility]}
+              </Badge>
+              <Text size="xs" c="dimmed" title={comment.author.id}>
+                {comment.author.displayName} ({comment.author.id}) ·{' '}
+                {formatTicketInstant(comment.createdAt)}
+              </Text>
+            </Group>
+            <Text size="sm">{comment.body}</Text>
+          </Stack>
+        ))
+      )}
     </Stack>
   );
 }
@@ -315,6 +356,7 @@ export function TicketDetail() {
         ) : null}
       </SimpleGrid>
       <StatusTimeline history={ticket.statusHistory} />
+      <CommentThread comments={ticket.comments} />
     </Stack>
   );
 }

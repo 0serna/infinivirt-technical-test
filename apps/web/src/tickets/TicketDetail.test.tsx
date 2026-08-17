@@ -148,6 +148,58 @@ test('Ticket consult shows current fields and Status Transition history oldest f
   ).toBeDefined();
 });
 
+test('Ticket consult shows Comment thread oldest first with visibility, author, and timestamp', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockTicketSession(sampleReopenedTicketDetail);
+
+  renderApp(['/tickets/ticket-3']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Reopened: returns portal blank page',
+    }),
+  ).toBeDefined();
+
+  const thread = screen.getByLabelText('Comments');
+  expect(within(thread).getByText('Comments')).toBeDefined();
+  expect(
+    within(thread).getByText(
+      'Reopened after regression report; prior closed cycle kept in history.',
+    ),
+  ).toBeDefined();
+  expect(
+    within(thread).getByText(
+      'Investigating blank page on returns portal again.',
+    ),
+  ).toBeDefined();
+  expect(within(thread).getByLabelText('Visibility: Internal')).toBeDefined();
+  expect(within(thread).getByLabelText('Visibility: Public')).toBeDefined();
+  expect(
+    within(thread).getByText(/Ada Lovelace \(user-1\) · 16 Aug 2026/),
+  ).toBeDefined();
+  expect(
+    within(thread).getByText(/Alex Agent \(user-2\) · 16 Aug 2026/),
+  ).toBeDefined();
+  expect(screen.queryByRole('textbox')).toBeNull();
+  expect(screen.queryByRole('button', { name: /add comment/i })).toBeNull();
+});
+
+test('Ticket consult with no Comments shows an empty thread state', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockTicketSession(sampleClosedTicketDetail);
+
+  renderApp(['/tickets/ticket-invoice']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Closed: invoice PDF encoding',
+    }),
+  ).toBeDefined();
+  const thread = screen.getByLabelText('Comments');
+  expect(within(thread).getByText('No comments yet.')).toBeDefined();
+  expect(within(thread).queryByLabelText(/Visibility:/)).toBeNull();
+});
+
 test('in-flight Ticket consult shows loading before fields', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   let resolveDetail!: (value: Response) => void;

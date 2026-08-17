@@ -63,11 +63,24 @@ export type TicketStatusHistoryRow = {
   changedBy: TicketListPerson;
 };
 
+export const COMMENT_VISIBILITIES = ['public', 'internal'] as const;
+
+export type CommentVisibility = (typeof COMMENT_VISIBILITIES)[number];
+
+export type TicketComment = {
+  id: string;
+  body: string;
+  visibility: CommentVisibility;
+  createdAt: string;
+  author: TicketListPerson;
+};
+
 export type TicketDetail = TicketListRow & {
   description: string;
   resolvedAt: string | null;
   closedAt: string | null;
   statusHistory: TicketStatusHistoryRow[];
+  comments: TicketComment[];
 };
 
 /** Actor names only `to`. `from` is always the current Status. */

@@ -1,4 +1,8 @@
-import type { Priority, TicketStatus } from '@support-ticketing/shared';
+import type {
+  CommentVisibility,
+  Priority,
+  TicketStatus,
+} from '@support-ticketing/shared';
 
 export const STATUS_LABEL: Record<TicketStatus, string> = {
   open: 'Open',
@@ -12,6 +16,11 @@ export const PRIORITY_LABEL: Record<Priority, string> = {
   medium: 'Medium',
   high: 'High',
   critical: 'Critical',
+};
+
+export const COMMENT_VISIBILITY_LABEL: Record<CommentVisibility, string> = {
+  public: 'Public',
+  internal: 'Internal',
 };
 
 export function formatTicketInstant(value: string): string {

@@ -42,6 +42,13 @@ type TicketDetailBody = {
     changedAt: string;
     changedBy: { id: string; displayName: string };
   }>;
+  comments: Array<{
+    id: string;
+    body: string;
+    visibility: string;
+    createdAt: string;
+    author: { id: string; displayName: string };
+  }>;
 };
 
 async function ticketByTitle(
@@ -443,7 +450,7 @@ describe('Tickets get by id (e2e)', () => {
     expect(ticket.body).toEqual(me.body);
   });
 
-  it('Agent GET of a Ticket they created (unassigned) returns current fields and Status Transition history', async () => {
+  it('Agent GET of a Ticket they created (unassigned) returns current fields, Comments, and Status Transition history', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
     const body = await ticketByTitle(
       app,
@@ -472,8 +479,16 @@ describe('Tickets get by id (e2e)', () => {
           changedBy: { id: expect.any(String), displayName: 'Alex Agent' },
         },
       ],
+      comments: [
+        {
+          id: expect.any(String),
+          body: 'Created; needs assignment.',
+          visibility: 'public',
+          createdAt: expect.any(String),
+          author: { id: expect.any(String), displayName: 'Alex Agent' },
+        },
+      ],
     });
-    expect(body).not.toHaveProperty('comments');
     expect(body).not.toHaveProperty('assignments');
   });
 
@@ -506,8 +521,65 @@ describe('Tickets get by id (e2e)', () => {
     for (let index = 1; index < changedAt.length; index += 1) {
       expect(changedAt[index]).toBeGreaterThanOrEqual(changedAt[index - 1]);
     }
-    expect(body).not.toHaveProperty('comments');
+    expect(body.comments).toEqual([
+      {
+        id: expect.any(String),
+        body: 'Reopened after regression report; prior closed cycle kept in history.',
+        visibility: 'internal',
+        createdAt: expect.any(String),
+        author: { id: expect.any(String), displayName: 'Ada Admin' },
+      },
+      {
+        id: expect.any(String),
+        body: 'Investigating blank page on returns portal again.',
+        visibility: 'public',
+        createdAt: expect.any(String),
+        author: { id: expect.any(String), displayName: 'Alex Agent' },
+      },
+    ]);
     expect(body).not.toHaveProperty('assignments');
+  });
+
+  it('Agent GET includes public and internal Comments oldest first on an in-scope Ticket', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const body = await ticketByTitle(
+      app,
+      accessToken,
+      'In progress: shipment tracking API',
+    );
+
+    expect(body.comments.map((row) => [row.visibility, row.body])).toEqual([
+      ['public', 'Reproduced against staging; checking gateway logs.'],
+      ['internal', 'Escalate to platform if still failing after deploy.'],
+    ]);
+    expect(body.comments.map((row) => row.author.displayName)).toEqual([
+      'Alex Agent',
+      'Sam Supervisor',
+    ]);
+    const createdAt = body.comments.map((row) => Date.parse(row.createdAt));
+    for (let index = 1; index < createdAt.length; index += 1) {
+      expect(createdAt[index]).toBeGreaterThanOrEqual(createdAt[index - 1]);
+    }
+    for (const comment of body.comments) {
+      expect(comment).toEqual({
+        id: expect.any(String),
+        body: expect.any(String),
+        visibility: expect.any(String),
+        createdAt: expect.any(String),
+        author: { id: expect.any(String), displayName: expect.any(String) },
+      });
+    }
+  });
+
+  it('Agent GET of an in-scope Ticket with no Comments returns an empty thread', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const body = await ticketByTitle(
+      app,
+      accessToken,
+      'High: appointment sync lag',
+    );
+
+    expect(body.comments).toEqual([]);
   });
 
   it('Agent GET of a Ticket they created that is assigned to another User includes resolvedAt', async () => {
