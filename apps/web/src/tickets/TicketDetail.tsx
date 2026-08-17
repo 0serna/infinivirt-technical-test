@@ -39,6 +39,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
+import { LoadingState } from '../components/LoadingState';
 import {
   COMMENT_VISIBILITY_COLOR,
   COMMENT_VISIBILITY_LABEL,
@@ -483,7 +484,7 @@ export function TicketDetail() {
   }, [canReassign]);
 
   if (state.kind === 'loading') {
-    return <Text>Loading ticket…</Text>;
+    return <LoadingState label="Loading ticket…" />;
   }
   if (state.kind === 'missing') {
     return <Alert>Ticket not found.</Alert>;

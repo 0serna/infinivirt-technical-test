@@ -1,11 +1,16 @@
 import {
   Alert,
   Anchor,
+  Badge,
   Button,
+  Card,
+  Center,
   Group,
+  SimpleGrid,
   Stack,
   Table,
   Text,
+  ThemeIcon,
   Title,
 } from '@mantine/core';
 import {
@@ -19,14 +24,29 @@ import {
   type TeamDashboard,
   type TicketListRow,
 } from '@support-ticketing/shared';
+import {
+  type Icon,
+  IconAlertCircle,
+  IconCircleDot,
+  IconClockExclamation,
+  IconProgress,
+  IconRefresh,
+  IconInbox,
+  IconTicket,
+  IconUserCheck,
+} from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../auth/api';
+import { LoadingState } from '../components/LoadingState';
 import {
   formatTicketInstant,
+  PRIORITY_COLOR,
   PRIORITY_LABEL,
+  STATUS_COLOR,
   STATUS_LABEL,
 } from '../tickets/ticketLabels';
+import classes from './DashboardPage.module.css';
 
 function ShortTicketTable({
   tickets,
@@ -35,106 +55,199 @@ function ShortTicketTable({
   tickets: TicketListRow[];
   emptyLabel: string;
 }) {
+  const navigate = useNavigate();
+
   if (tickets.length === 0) {
-    return <Text>{emptyLabel}</Text>;
+    return (
+      <Card withBorder radius="md">
+        <Center py="xl">
+          <Stack align="center" gap="sm">
+            <ThemeIcon size={48} radius="xl" variant="light" color="gray">
+              <IconTicket size={24} stroke={1.5} />
+            </ThemeIcon>
+            <Text c="dimmed">{emptyLabel}</Text>
+          </Stack>
+        </Center>
+      </Card>
+    );
   }
 
   return (
-    <Table>
-      <Table.Thead>
-        <Table.Tr>
-          <Table.Th>Title</Table.Th>
-          <Table.Th>Status</Table.Th>
-          <Table.Th>Priority</Table.Th>
-          <Table.Th>Client</Table.Th>
-          <Table.Th>Updated</Table.Th>
-        </Table.Tr>
-      </Table.Thead>
-      <Table.Tbody>
-        {tickets.map((ticket) => (
-          <Table.Tr key={ticket.id}>
-            <Table.Td>
-              <Link to={`/tickets/${ticket.id}`}>{ticket.title}</Link>
-            </Table.Td>
-            <Table.Td>{STATUS_LABEL[ticket.status]}</Table.Td>
-            <Table.Td>{PRIORITY_LABEL[ticket.priority]}</Table.Td>
-            <Table.Td>{ticket.client.name}</Table.Td>
-            <Table.Td>{formatTicketInstant(ticket.updatedAt)}</Table.Td>
-          </Table.Tr>
-        ))}
-      </Table.Tbody>
-    </Table>
+    <Card withBorder radius="md" p={0}>
+      <Table.ScrollContainer minWidth={640}>
+        <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Title</Table.Th>
+              <Table.Th>Status</Table.Th>
+              <Table.Th>Priority</Table.Th>
+              <Table.Th>Client</Table.Th>
+              <Table.Th>Updated</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {tickets.map((ticket) => (
+              <Table.Tr
+                key={ticket.id}
+                onClick={(event) => {
+                  if ((event.target as HTMLElement).closest('a')) {
+                    return;
+                  }
+                  navigate(`/tickets/${ticket.id}`);
+                }}
+                style={{ cursor: 'pointer' }}
+              >
+                <Table.Td>
+                  <Anchor
+                    component={Link}
+                    to={`/tickets/${ticket.id}`}
+                    size="sm"
+                    fw={500}
+                  >
+                    {ticket.title}
+                  </Anchor>
+                </Table.Td>
+                <Table.Td>
+                  <Badge
+                    color={STATUS_COLOR[ticket.status]}
+                    variant="light"
+                    radius="sm"
+                  >
+                    {STATUS_LABEL[ticket.status]}
+                  </Badge>
+                </Table.Td>
+                <Table.Td>
+                  <Badge
+                    color={PRIORITY_COLOR[ticket.priority]}
+                    variant="outline"
+                    radius="sm"
+                  >
+                    {PRIORITY_LABEL[ticket.priority]}
+                  </Badge>
+                </Table.Td>
+                <Table.Td>
+                  <Text size="sm">{ticket.client.name}</Text>
+                </Table.Td>
+                <Table.Td>
+                  <Text size="sm" c="dimmed">
+                    {formatTicketInstant(ticket.updatedAt)}
+                  </Text>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
+    </Card>
   );
 }
 
-function KpiLink({
+function KpiCard({
   label,
   count,
   to,
+  icon: KpiIcon,
+  color,
 }: {
   label: string;
   count: number;
   to: string;
+  icon: Icon;
+  color: string;
 }) {
   return (
-    <Stack gap={4}>
-      <Text size="sm" c="dimmed">
-        {label}
-      </Text>
-      <Anchor component={Link} to={to} size="xl" fw={700}>
-        {count}
-      </Anchor>
-    </Stack>
+    <Card
+      withBorder
+      radius="md"
+      p="md"
+      component={Link}
+      to={to}
+      className={classes.kpiCard}
+    >
+      <Group justify="space-between" align="center" wrap="nowrap">
+        <Stack gap={4}>
+          <Text size="sm" c="dimmed">
+            {label}
+          </Text>
+          <Text fz={28} fw={700} lh={1.1} c="indigo">
+            {count}
+          </Text>
+        </Stack>
+        <ThemeIcon size={38} radius="md" variant="light" color={color}>
+          <KpiIcon size={20} stroke={1.6} />
+        </ThemeIcon>
+      </Group>
+    </Card>
   );
 }
 
 function AgentDashboardView({ dashboard }: { dashboard: AgentDashboard }) {
   return (
-    <Stack>
-      <KpiLink
-        label="Open Tickets (Assignee)"
-        count={dashboard.openCount}
-        to={DASHBOARD_ASSIGNED_OPEN_LIST_PATH}
-      />
-      <Title order={3}>Open Tickets assigned to you</Title>
-      <ShortTicketTable
-        tickets={dashboard.openTickets}
-        emptyLabel="No Open Tickets assigned to you."
-      />
+    <Stack gap="lg">
+      <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }} spacing="md">
+        <KpiCard
+          label="Active Tickets (Assignee)"
+          count={dashboard.openCount}
+          to={DASHBOARD_ASSIGNED_OPEN_LIST_PATH}
+          icon={IconUserCheck}
+          color="indigo"
+        />
+      </SimpleGrid>
+      <Stack gap="sm">
+        <Title order={3} size="h4">
+          Active Tickets assigned to you
+        </Title>
+        <ShortTicketTable
+          tickets={dashboard.openTickets}
+          emptyLabel="No Active Tickets assigned to you."
+        />
+      </Stack>
     </Stack>
   );
 }
 
 function TeamDashboardView({ dashboard }: { dashboard: TeamDashboard }) {
   return (
-    <Stack>
-      <Group gap="xl">
-        <KpiLink
-          label="Open Tickets"
+    <Stack gap="lg">
+      <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }} spacing="md">
+        <KpiCard
+          label="Active Tickets"
           count={dashboard.openTotal}
           to={DASHBOARD_OPEN_LOAD_LIST_PATH}
+          icon={IconInbox}
+          color="indigo"
         />
-        <KpiLink
+        <KpiCard
           label="Open"
           count={dashboard.openByStatus.open}
           to={DASHBOARD_OPEN_STATUS_LIST_PATH}
+          icon={IconCircleDot}
+          color="blue"
         />
-        <KpiLink
+        <KpiCard
           label="In progress"
           count={dashboard.openByStatus.in_progress}
           to={DASHBOARD_IN_PROGRESS_STATUS_LIST_PATH}
+          icon={IconProgress}
+          color="yellow"
         />
-        <KpiLink
-          label="Stale Tickets"
+        <KpiCard
+          label="Stale"
           count={dashboard.staleCount}
           to={DASHBOARD_STALE_LIST_PATH}
+          icon={IconClockExclamation}
+          color="orange"
         />
-      </Group>
-      <Title order={3}>Stale Tickets</Title>
-      <ShortTicketTable
-        tickets={dashboard.stale}
-        emptyLabel="No Stale Tickets to show."
-      />
+      </SimpleGrid>
+      <Stack gap="sm">
+        <Title order={3} size="h4">
+          Stale Tickets
+        </Title>
+        <ShortTicketTable
+          tickets={dashboard.stale}
+          emptyLabel="No Stale Tickets to show."
+        />
+      </Stack>
     </Stack>
   );
 }
@@ -177,27 +290,32 @@ export function DashboardPage() {
   }, [reloadToken]);
 
   return (
-    <Stack>
-      <Title order={2}>Operational Dashboard</Title>
+    <Stack gap="lg">
+      <Title order={2} size="h3">
+        Operational Dashboard
+      </Title>
       {failed ? (
-        <Alert>
+        <Alert color="red" icon={<IconAlertCircle size={16} />}>
           <Stack gap="sm">
             <Text>Couldn't load the Operational Dashboard.</Text>
-            <Button
-              type="button"
-              variant="default"
-              onClick={() => {
-                setFailed(false);
-                setDashboard(null);
-                setReloadToken((token) => token + 1);
-              }}
-            >
-              Try again
-            </Button>
+            <Group>
+              <Button
+                type="button"
+                variant="default"
+                leftSection={<IconRefresh size={14} stroke={1.8} />}
+                onClick={() => {
+                  setFailed(false);
+                  setDashboard(null);
+                  setReloadToken((token) => token + 1);
+                }}
+              >
+                Try again
+              </Button>
+            </Group>
           </Stack>
         </Alert>
       ) : dashboard === null ? (
-        <Text>Loading Operational Dashboard…</Text>
+        <LoadingState label="Loading Operational Dashboard…" />
       ) : dashboard.kind === 'agent' ? (
         <AgentDashboardView dashboard={dashboard} />
       ) : (

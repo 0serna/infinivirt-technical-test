@@ -1,9 +1,10 @@
-import { MantineProvider, Text } from '@mantine/core';
+import { MantineProvider } from '@mantine/core';
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AdminClientsPage } from './admin/AdminClientsPage';
 import { AdminUsersPage } from './admin/AdminUsersPage';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
+import { LoadingState } from './components/LoadingState';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { StaffShell } from './shell/StaffShell';
@@ -21,7 +22,7 @@ function AuthGate({
 }) {
   const { user, isReady } = useAuth();
   if (!isReady) {
-    return <Text p="md">Loading…</Text>;
+    return <LoadingState label="Loading…" mih="100vh" />;
   }
   if (allow === 'guest') {
     return user ? <Navigate to="/dashboard" replace /> : children;

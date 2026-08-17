@@ -17,6 +17,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { apiFetch } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
+import { LoadingState } from '../components/LoadingState';
 
 type ListState =
   | { kind: 'loading' }
@@ -221,7 +222,7 @@ export function AdminClientsPage() {
           </Stack>
         </Alert>
       ) : list.kind === 'loading' ? (
-        <Text>Loading Clients…</Text>
+        <LoadingState label="Loading Clients…" />
       ) : (
         <Table>
           <Table.Thead>

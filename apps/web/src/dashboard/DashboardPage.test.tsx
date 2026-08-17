@@ -44,9 +44,11 @@ test('Agent dashboard shows Open Ticket Assignee KPI deep-link and short table r
   expect(
     await screen.findByRole('heading', { name: 'Operational Dashboard' }),
   ).toBeDefined();
-  expect(await screen.findByText('Open Tickets (Assignee)')).toBeDefined();
+  expect(await screen.findByText('Active Tickets (Assignee)')).toBeDefined();
 
-  const countLink = screen.getByRole('link', { name: '2' });
+  const countLink = screen.getByRole('link', {
+    name: 'Active Tickets (Assignee) 2',
+  });
   expect(countLink.getAttribute('href')).toBe('/tickets?scope=assignedOpen');
 
   const table = screen.getByRole('table');
@@ -129,8 +131,10 @@ test('dashboard Try again refetches after a failure', async () => {
   ).toBeDefined();
   await user.click(screen.getByRole('button', { name: 'Try again' }));
 
-  expect(await screen.findByText('Open Tickets (Assignee)')).toBeDefined();
-  expect(screen.getByRole('link', { name: '2' })).toBeDefined();
+  expect(await screen.findByText('Active Tickets (Assignee)')).toBeDefined();
+  expect(
+    screen.getByRole('link', { name: 'Active Tickets (Assignee) 2' }),
+  ).toBeDefined();
 });
 
 test('team dashboard shows KPI strip deep-links and Stale short table', async () => {
@@ -143,21 +147,21 @@ test('team dashboard shows KPI strip deep-links and Stale short table', async ()
     await screen.findByRole('heading', { name: 'Operational Dashboard' }),
   ).toBeDefined();
   expect(screen.queryByText(/Team metrics are not available/i)).toBeNull();
-  expect(screen.queryByText('Open Tickets (Assignee)')).toBeNull();
+  expect(screen.queryByText('Active Tickets (Assignee)')).toBeNull();
 
-  expect(await screen.findByText('Open Tickets')).toBeDefined();
-  expect(screen.getByRole('link', { name: '5' }).getAttribute('href')).toBe(
-    '/tickets?status=open,in_progress',
-  );
-  expect(screen.getByRole('link', { name: '3' }).getAttribute('href')).toBe(
-    '/tickets?status=open',
-  );
-  expect(screen.getByRole('link', { name: '2' }).getAttribute('href')).toBe(
-    '/tickets?status=in_progress',
-  );
-  expect(screen.getByRole('link', { name: '4' }).getAttribute('href')).toBe(
-    '/tickets?stale=1',
-  );
+  expect(await screen.findByText('Active Tickets')).toBeDefined();
+  expect(
+    screen.getByRole('link', { name: 'Active Tickets 5' }).getAttribute('href'),
+  ).toBe('/tickets?status=open,in_progress');
+  expect(
+    screen.getByRole('link', { name: 'Open 3' }).getAttribute('href'),
+  ).toBe('/tickets?status=open');
+  expect(
+    screen.getByRole('link', { name: 'In progress 2' }).getAttribute('href'),
+  ).toBe('/tickets?status=in_progress');
+  expect(
+    screen.getByRole('link', { name: 'Stale 4' }).getAttribute('href'),
+  ).toBe('/tickets?stale=1');
 
   expect(screen.getByRole('heading', { name: 'Stale Tickets' })).toBeDefined();
 

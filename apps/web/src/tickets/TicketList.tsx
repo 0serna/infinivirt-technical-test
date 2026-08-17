@@ -7,7 +7,6 @@ import {
   Card,
   Center,
   Group,
-  Loader,
   Select,
   Stack,
   Table,
@@ -42,6 +41,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
+import { LoadingState } from '../components/LoadingState';
 import {
   formatTicketInstant,
   PRIORITY_COLOR,
@@ -56,7 +56,7 @@ const STATUS_FILTER_DATA = [
     value,
     label: STATUS_LABEL[value],
   })),
-  { value: OPEN_TICKET_LOAD_STATUS_QUERY, label: 'Open Ticket load' },
+  { value: OPEN_TICKET_LOAD_STATUS_QUERY, label: 'Active Tickets' },
 ];
 
 function ticketsUrl(
@@ -300,12 +300,7 @@ export function TicketList() {
           </Stack>
         </Alert>
       ) : tickets === null ? (
-        <Center py="xl">
-          <Group gap="sm">
-            <Loader size="sm" />
-            <Text c="dimmed">Loading tickets…</Text>
-          </Group>
-        </Center>
+        <LoadingState label="Loading tickets…" />
       ) : tickets.length === 0 ? (
         <Center py="xl">
           <Stack align="center" gap="sm">

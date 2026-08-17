@@ -387,7 +387,7 @@ test('changing Ticket List filters updates the URL search params', async () => {
   );
 });
 
-test('opening /tickets with Open Ticket load, Stale, and assigned-open params drives the list request', async () => {
+test('opening /tickets with Active Tickets, Stale, and assigned-open params drives the list request', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
@@ -404,7 +404,7 @@ test('opening /tickets with Open Ticket load, Stale, and assigned-open params dr
 
   expect(
     await screen.findByRole('combobox', { name: 'Status' }),
-  ).toHaveProperty('value', 'Open Ticket load');
+  ).toHaveProperty('value', 'Active Tickets');
   expect(screen.queryByRole('combobox', { name: 'Stale' })).toBeNull();
   expect(screen.queryByRole('combobox', { name: 'Scope' })).toBeNull();
 
@@ -417,7 +417,7 @@ test('opening /tickets with Open Ticket load, Stale, and assigned-open params dr
   );
 });
 
-test('choosing Open Ticket load updates the URL and list request', async () => {
+test('choosing Active Tickets updates the URL and list request', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
   vi.mocked(fetch).mockImplementation(async (input) => {
@@ -434,7 +434,7 @@ test('choosing Open Ticket load updates the URL and list request', async () => {
   renderApp(['/tickets'], { probeLocation: true });
 
   await user.click(await screen.findByRole('combobox', { name: 'Status' }));
-  await user.click(filterOption('Open Ticket load'));
+  await user.click(filterOption('Active Tickets'));
 
   expect(await screen.findByTestId('location-path')).toHaveProperty(
     'textContent',

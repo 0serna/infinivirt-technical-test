@@ -22,6 +22,7 @@ import {
 import { type FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../auth/api';
+import { LoadingState } from '../components/LoadingState';
 import { PRIORITY_LABEL } from './ticketLabels';
 
 type CatalogState =
@@ -122,7 +123,7 @@ export function TicketCreate() {
           </Breadcrumbs>
           <Title order={2}>New ticket</Title>
           {catalog.kind === 'loading' ? (
-            <Text>Loading clients…</Text>
+            <LoadingState label="Loading clients…" />
           ) : catalog.kind === 'error' ? (
             <Alert>
               <Stack gap="sm">

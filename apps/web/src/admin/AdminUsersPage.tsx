@@ -22,6 +22,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { apiFetch } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
+import { LoadingState } from '../components/LoadingState';
 import { ROLE_LABEL } from '../users/roleLabels';
 
 type ListState =
@@ -344,7 +345,7 @@ export function AdminUsersPage() {
           </Stack>
         </Alert>
       ) : list.kind === 'loading' ? (
-        <Text>Loading Users…</Text>
+        <LoadingState label="Loading Users…" />
       ) : (
         <Table>
           <Table.Thead>
