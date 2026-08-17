@@ -26,6 +26,12 @@ export type TicketListClient = {
   name: string;
 };
 
+/** Read-only Client catalog row for Ticket create (ADR 0010). Not List Scope filters. */
+export type ClientCatalogRow = {
+  id: string;
+  name: string;
+};
+
 export type TicketListRow = {
   id: string;
   title: string;
@@ -92,6 +98,14 @@ export type PatchTicketStatusBody = {
 export type CreateTicketCommentBody = {
   body: string;
   visibility?: CommentVisibility;
+};
+
+/** Priority omitted defaults to `medium`. Title and description must be non-empty after trim. */
+export type CreateTicketBody = {
+  clientId: string;
+  title: string;
+  description: string;
+  priority?: Priority;
 };
 
 export const NEXT_TICKET_STATUS: Record<TicketStatus, TicketStatus> = {

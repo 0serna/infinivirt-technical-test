@@ -112,7 +112,12 @@ export function TicketList() {
 
   return (
     <Stack>
-      <Title order={2}>Tickets</Title>
+      <Group justify="space-between" align="center">
+        <Title order={2}>Tickets</Title>
+        <Button component={Link} to="/tickets/new" variant="filled">
+          New ticket
+        </Button>
+      </Group>
       {filterOptions ? (
         <Group>
           <Select

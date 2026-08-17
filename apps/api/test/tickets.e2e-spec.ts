@@ -1,27 +1,11 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
+import type { ClientCatalogRow } from '@support-ticketing/shared';
 import request from 'supertest';
+import { PrismaService } from '../src/prisma/prisma.service';
 import { createTestApp } from './create-test-app';
-import {
-  ADMIN_EMAIL,
-  AGENT_EMAIL,
-  DEMO_PASSWORD,
-  SUPERVISOR_EMAIL,
-} from './demo-credentials';
-
-async function login(
-  app: INestApplication,
-  email: string,
-): Promise<{ accessToken: string; userId: string }> {
-  const response = await request(app.getHttpServer())
-    .post('/auth/login')
-    .send({ email, password: DEMO_PASSWORD })
-    .expect(200);
-  return {
-    accessToken: response.body.accessToken as string,
-    userId: response.body.user.id as string,
-  };
-}
+import { ADMIN_EMAIL, AGENT_EMAIL, SUPERVISOR_EMAIL } from './demo-credentials';
+import { login } from './login';
 
 function titles(body: { tickets?: Array<{ title?: string }> }): string[] {
   return (body.tickets ?? []).map((ticket) => ticket.title ?? '');
@@ -106,9 +90,11 @@ async function expectPatchForbiddenUnchanged(
 }
 
 let app: INestApplication;
+let prisma: PrismaService;
 
 beforeAll(async () => {
   app = await createTestApp();
+  prisma = app.get(PrismaService);
 });
 
 afterAll(async () => {
@@ -1293,4 +1279,281 @@ describe('Tickets create Comment (e2e)', () => {
       );
     },
   );
+});
+
+async function seededClientId(
+  app: INestApplication,
+  accessToken: string,
+  clientName = 'Contoso Health',
+): Promise<string> {
+  const catalog = await request(app.getHttpServer())
+    .get('/clients')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .expect(200);
+  const client = (catalog.body as ClientCatalogRow[]).find(
+    (row) => row.name === clientName,
+  );
+  expect(client).toBeDefined();
+  return client?.id as string;
+}
+
+async function listedTicketCount(
+  app: INestApplication,
+  accessToken: string,
+): Promise<number> {
+  const list = await request(app.getHttpServer())
+    .get('/tickets')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .expect(200);
+  return (list.body.tickets as unknown[]).length;
+}
+
+describe('Tickets create (e2e)', () => {
+  it('Agent POST /tickets births an open unassigned Ticket with default Priority and Status Transition birth row', async () => {
+    const { accessToken, userId } = await login(app, AGENT_EMAIL);
+    const clientId = await seededClientId(app, accessToken);
+    const title = `Create e2e: Agent birth Contoso ${Date.now()}`;
+    const description = 'Client needs portal access restored.';
+
+    const response = await request(app.getHttpServer())
+      .post('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ clientId, title, description })
+      .expect(201);
+
+    expect(response.body).toEqual({
+      id: expect.any(String),
+      title,
+      description,
+      status: 'open',
+      priority: 'medium',
+      client: { id: clientId, name: 'Contoso Health' },
+      assignee: null,
+      createdBy: { id: userId, displayName: 'Alex Agent' },
+      updatedAt: expect.any(String),
+      createdAt: expect.any(String),
+      resolvedAt: null,
+      closedAt: null,
+      statusHistory: [
+        {
+          from: null,
+          to: 'open',
+          changedAt: expect.any(String),
+          changedBy: { id: userId, displayName: 'Alex Agent' },
+        },
+      ],
+      comments: [],
+    });
+    expect(response.body).not.toHaveProperty('assignments');
+    expect(
+      await prisma.ticketAssignment.count({
+        where: { ticketId: response.body.id as string },
+      }),
+    ).toBe(0);
+
+    const listed = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(titles(listed.body)).toContain(title);
+
+    const detail = await request(app.getHttpServer())
+      .get(`/tickets/${response.body.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(detail.body).toEqual(response.body);
+  });
+
+  it('GET /clients catalog includes Clients outside Agent List Scope filterOptions.clients', async () => {
+    const orphanName = `Catalog-only Client ${Date.now()}`;
+    const orphan = await prisma.client.create({
+      data: { name: orphanName },
+    });
+
+    try {
+      const { accessToken } = await login(app, AGENT_EMAIL);
+
+      const catalog = await request(app.getHttpServer())
+        .get('/clients')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+      const list = await request(app.getHttpServer())
+        .get('/tickets')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      const catalogIds = new Set(
+        (catalog.body as ClientCatalogRow[]).map((row) => row.id),
+      );
+      const filterClientIds = new Set(
+        (list.body.filterOptions.clients as ClientCatalogRow[]).map(
+          (row) => row.id,
+        ),
+      );
+
+      expect(catalogIds.has(orphan.id)).toBe(true);
+      expect(filterClientIds.has(orphan.id)).toBe(false);
+      expect(catalogIds.size).toBeGreaterThan(filterClientIds.size);
+      expect([...catalogIds].sort()).not.toEqual([...filterClientIds].sort());
+    } finally {
+      await prisma.client.delete({ where: { id: orphan.id } });
+    }
+  });
+
+  it.each([
+    {
+      roleLabel: 'Supervisor',
+      email: SUPERVISOR_EMAIL,
+      displayName: 'Sam Supervisor',
+      priority: 'high' as const,
+    },
+    {
+      roleLabel: 'Administrator',
+      email: ADMIN_EMAIL,
+      displayName: 'Ada Admin',
+      priority: 'critical' as const,
+    },
+  ] as const)(
+    '$roleLabel POST /tickets with explicit Priority returns detail suitable for consult',
+    async ({ email, displayName, priority }) => {
+      const { accessToken, userId } = await login(app, email);
+      const clientId = await seededClientId(app, accessToken, 'Acme Logistics');
+      const title = `Create e2e: ${displayName} birth ${Date.now()}`;
+
+      const response = await request(app.getHttpServer())
+        .post('/tickets')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          clientId,
+          title,
+          description: 'Opened from create e2e harness.',
+          priority,
+        })
+        .expect(201);
+
+      expect(response.body.status).toBe('open');
+      expect(response.body.priority).toBe(priority);
+      expect(response.body.assignee).toBeNull();
+      expect(response.body.createdBy).toEqual({ id: userId, displayName });
+      expect(response.body.client).toEqual({
+        id: clientId,
+        name: 'Acme Logistics',
+      });
+      expect(response.body.statusHistory).toEqual([
+        {
+          from: null,
+          to: 'open',
+          changedAt: expect.any(String),
+          changedBy: { id: userId, displayName },
+        },
+      ]);
+      expect(response.body).not.toHaveProperty('assignments');
+
+      const listed = await request(app.getHttpServer())
+        .get('/tickets')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+      expect(titles(listed.body)).toContain(title);
+    },
+  );
+
+  it('POST /tickets without a token returns the same opaque 401 as GET /tickets', async () => {
+    const tickets = await request(app.getHttpServer())
+      .get('/tickets')
+      .expect(401);
+    const create = await request(app.getHttpServer())
+      .post('/tickets')
+      .send({
+        clientId: '00000000-0000-4000-8000-000000000001',
+        title: 'Should not land',
+        description: 'Unauthenticated create must fail.',
+      })
+      .expect(401);
+
+    expect(create.body).toEqual(tickets.body);
+  });
+
+  it('POST /tickets with empty or whitespace-only Title or description returns HTTP 400 without writing', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const clientId = await seededClientId(app, accessToken);
+    const beforeCount = await listedTicketCount(app, accessToken);
+
+    const blankTitle = await request(app.getHttpServer())
+      .post('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        clientId,
+        title: '   ',
+        description: 'Valid description body.',
+      })
+      .expect(400);
+    const blankDescription = await request(app.getHttpServer())
+      .post('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        clientId,
+        title: 'Valid title for create e2e',
+        description: '\t\n',
+      })
+      .expect(400);
+    const missingFields = await request(app.getHttpServer())
+      .post('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ clientId })
+      .expect(400);
+
+    for (const response of [blankTitle, blankDescription, missingFields]) {
+      expect(response.body).not.toHaveProperty('stack');
+      expect(JSON.stringify(response.body)).not.toMatch(/TicketsService/);
+    }
+
+    expect(await listedTicketCount(app, accessToken)).toBe(beforeCount);
+  });
+
+  it('POST /tickets with unknown Client id matches Ticket non-existence without writing', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const unknownClientId = '00000000-0000-4000-8000-000000000099';
+    const beforeCount = await listedTicketCount(app, accessToken);
+
+    const getUnknownTicket = await request(app.getHttpServer())
+      .get(`/tickets/${unknownClientId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(404);
+    const create = await request(app.getHttpServer())
+      .post('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        clientId: unknownClientId,
+        title: `Create e2e: unknown client ${Date.now()}`,
+        description: 'Must not persist.',
+      })
+      .expect(404);
+
+    expect(create.body).toEqual(getUnknownTicket.body);
+    expect(create.body).not.toHaveProperty('stack');
+
+    expect(await listedTicketCount(app, accessToken)).toBe(beforeCount);
+  });
+
+  it('POST /tickets with invalid Priority returns HTTP 400 without writing', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const clientId = await seededClientId(app, accessToken);
+    const beforeCount = await listedTicketCount(app, accessToken);
+
+    const response = await request(app.getHttpServer())
+      .post('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        clientId,
+        title: `Create e2e: invalid priority ${Date.now()}`,
+        description: 'Must not persist.',
+        priority: 'urgent',
+      })
+      .expect(400);
+
+    expect(response.body).not.toHaveProperty('stack');
+    expect(JSON.stringify(response.body)).not.toMatch(/TicketsService/);
+
+    expect(await listedTicketCount(app, accessToken)).toBe(beforeCount);
+  });
 });
