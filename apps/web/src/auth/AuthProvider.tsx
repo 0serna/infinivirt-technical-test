@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
 
-    void apiFetch('/api/auth/me')
+    void apiFetch('/api/auth/me', { signal: AbortSignal.timeout(4000) })
       .then(async (response) => {
         if (cancelled) {
           return;
@@ -65,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (!cancelled) {
+          clearAccessToken();
           setIsReady(true);
         }
       });

@@ -1,4 +1,4 @@
-import { MantineProvider } from '@mantine/core';
+import { MantineProvider, Text } from '@mantine/core';
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
@@ -17,7 +17,7 @@ function AuthGate({
 }) {
   const { user, isReady } = useAuth();
   if (!isReady) {
-    return null;
+    return <Text p="md">Loading…</Text>;
   }
   if (allow === 'guest') {
     return user ? <Navigate to="/" replace /> : children;
