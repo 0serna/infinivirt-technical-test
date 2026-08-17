@@ -26,6 +26,12 @@ export type TicketListClient = {
   name: string;
 };
 
+/** Read-only Client catalog row for Ticket create (ADR 0010). Not List Scope filters. */
+export type ClientCatalogRow = {
+  id: string;
+  name: string;
+};
+
 export type TicketListRow = {
   id: string;
   title: string;
