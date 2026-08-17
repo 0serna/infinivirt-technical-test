@@ -76,11 +76,7 @@ _Avoid_: Severity (unless split later), custom priorities; treating Priority as 
 May consult Tickets in their List Scope, create tickets, add `public` Comments. To create, may consult the full Client catalog read-only (`id`, name) — not Client administration and not List Scope filter options. May record forward Status Transitions through `resolved` only when Assignee. Creating the Ticket, or consulting it, is not enough. Cannot close or reopen. Cannot record a Reassignment (even on Tickets they created or are Assignee of). Unassigned Tickets are frozen for this Role.
 
 **Supervisor**:
-<<<<<<< HEAD
-Everything an Agent can do, plus: list all tickets, reassign, see team metrics, review Stale Tickets, and `internal` Comments (in addition to `public`). Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment).
-=======
-Everything an Agent can do, plus: list all tickets, Reassignment (first assign, reassign, and unassign), consult a read-only list of Users to choose an Assignee, see team metrics, review stale/overdue tickets, and `internal` Comments (in addition to `public`). Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment). Does not administer Users or Clients.
->>>>>>> origin/main
+Everything an Agent can do, plus: list all tickets, Reassignment (first assign, reassign, and unassign), consult a read-only list of Users to choose an Assignee, see team metrics, review Stale Tickets, and `internal` Comments (in addition to `public`). Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment). Does not administer Users or Clients.
 
 **Administrator**:
 Everything a Supervisor can do, plus: update any ticket, administer Users and Clients (full catalog management), close and reopen. May record any legal Status Transition on any Ticket (including unassigned) without being Assignee. Reassignment power matches Supervisor (any User as Assignee); “assign to anyone” is that shared power, not a separate Admin-only operation.
