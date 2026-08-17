@@ -28,6 +28,7 @@ import {
   formatTicketInstant,
   PRIORITY_LABEL,
   STATUS_LABEL,
+  assigneeLabel,
 } from './ticketLabels';
 
 const STATUS_FILTER_DATA = [
@@ -103,7 +104,10 @@ function assigneeSelectData(options: TicketListFilterOptions) {
     label: assignee.displayName,
   }));
   if (options.includeUnassigned) {
-    people.push({ value: UNASSIGNED_ASSIGNEE_QUERY, label: 'Unassigned' });
+    people.push({
+      value: UNASSIGNED_ASSIGNEE_QUERY,
+      label: assigneeLabel(null),
+    });
   }
   return people;
 }
@@ -262,9 +266,7 @@ export function TicketList() {
                 <Table.Td>{STATUS_LABEL[ticket.status]}</Table.Td>
                 <Table.Td>{PRIORITY_LABEL[ticket.priority]}</Table.Td>
                 <Table.Td>{ticket.client.name}</Table.Td>
-                <Table.Td>
-                  {ticket.assignee?.displayName ?? 'Unassigned'}
-                </Table.Td>
+                <Table.Td>{assigneeLabel(ticket.assignee)}</Table.Td>
                 <Table.Td>{ticket.createdBy.displayName}</Table.Td>
                 <Table.Td>{formatTicketInstant(ticket.updatedAt)}</Table.Td>
               </Table.Tr>

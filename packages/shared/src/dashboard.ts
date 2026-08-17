@@ -1,6 +1,5 @@
 import {
   OPEN_TICKET_LOAD_STATUS_QUERY,
-  OPEN_TICKET_STATUSES,
   TICKET_LIST_ASSIGNED_OPEN_SCOPE,
   TICKET_LIST_STALE_QUERY,
   type TicketListRow,
@@ -57,5 +56,3 @@ export type TeamDashboard = {
 };
 
 export type DashboardEnvelope = AgentDashboard | TeamDashboard;
-
-export { OPEN_TICKET_STATUSES as DASHBOARD_OPEN_STATUSES };

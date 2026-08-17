@@ -29,6 +29,11 @@ export const TICKET_LIST_ASSIGNED_OPEN_SCOPE = 'assignedOpen';
 /** Stale Ticket age threshold (ADR 0011). */
 export const STALE_TICKET_MAX_AGE_HOURS = 48;
 
+/** Instant before which `updated_at` counts as Stale. */
+export function staleTicketCutoff(nowMs = Date.now()): Date {
+  return new Date(nowMs - STALE_TICKET_MAX_AGE_HOURS * 60 * 60 * 1000);
+}
+
 export const PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
 
 export type Priority = (typeof PRIORITIES)[number];

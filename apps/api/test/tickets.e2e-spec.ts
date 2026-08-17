@@ -1,6 +1,9 @@
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
-import type { ClientCatalogRow } from '@support-ticketing/shared';
+import {
+  type ClientCatalogRow,
+  STALE_TICKET_MAX_AGE_HOURS,
+} from '@support-ticketing/shared';
 import request from 'supertest';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { createTestApp } from './create-test-app';
@@ -496,7 +499,7 @@ describe('Tickets list (e2e)', () => {
     }>) {
       expect(ticket.status).not.toBe('closed');
       expect(Date.parse(ticket.updatedAt)).toBeLessThan(
-        Date.now() - 48 * 60 * 60 * 1000,
+        Date.now() - STALE_TICKET_MAX_AGE_HOURS * 60 * 60 * 1000,
       );
     }
   });

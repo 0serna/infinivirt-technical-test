@@ -1,41 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
-  DASHBOARD_OPEN_STATUSES,
   DASHBOARD_SHORT_LIST_CAP,
   type DashboardEnvelope,
   hasMinimumRole,
-  STALE_TICKET_MAX_AGE_HOURS,
-  type TicketListRow,
+  OPEN_TICKET_STATUSES,
+  staleTicketCutoff,
 } from '@support-ticketing/shared';
 import type { PublicUser } from '../auth/public-user';
 import { PrismaService } from '../prisma/prisma.service';
-
-const listRowSelect = {
-  id: true,
-  title: true,
-  status: true,
-  priority: true,
-  updatedAt: true,
-  createdAt: true,
-  client: { select: { id: true, name: true } },
-  assignee: { select: { id: true, displayName: true } },
-  createdBy: { select: { id: true, displayName: true } },
-} satisfies Prisma.TicketSelect;
-
-type ListRowRecord = Prisma.TicketGetPayload<{ select: typeof listRowSelect }>;
-
-function toListRow(ticket: ListRowRecord): TicketListRow {
-  return {
-    ...ticket,
-    updatedAt: ticket.updatedAt.toISOString(),
-    createdAt: ticket.createdAt.toISOString(),
-  };
-}
-
-function staleBeforeNow(): Date {
-  return new Date(Date.now() - STALE_TICKET_MAX_AGE_HOURS * 60 * 60 * 1000);
-}
+import {
+  ticketListRowSelect,
+  toTicketListRow,
+} from '../tickets/ticket-list-row';
 
 @Injectable()
 export class DashboardService {
@@ -51,7 +28,7 @@ export class DashboardService {
   private async teamDashboard(): Promise<DashboardEnvelope> {
     const staleWhere: Prisma.TicketWhereInput = {
       status: { not: 'closed' },
-      updatedAt: { lt: staleBeforeNow() },
+      updatedAt: { lt: staleTicketCutoff() },
     };
 
     const [openCount, inProgressCount, staleCount, staleRows] =
@@ -63,7 +40,7 @@ export class DashboardService {
           where: staleWhere,
           orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
           take: DASHBOARD_SHORT_LIST_CAP,
-          select: listRowSelect,
+          select: ticketListRowSelect,
         }),
       ]);
 
@@ -75,14 +52,14 @@ export class DashboardService {
         in_progress: inProgressCount,
       },
       staleCount,
-      stale: staleRows.map(toListRow),
+      stale: staleRows.map(toTicketListRow),
     };
   }
 
   private async agentDashboard(assigneeId: string): Promise<DashboardEnvelope> {
     const where: Prisma.TicketWhereInput = {
       assigneeId,
-      status: { in: [...DASHBOARD_OPEN_STATUSES] },
+      status: { in: [...OPEN_TICKET_STATUSES] },
     };
 
     const [openCount, rows] = await Promise.all([
@@ -91,14 +68,14 @@ export class DashboardService {
         where,
         orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
         take: DASHBOARD_SHORT_LIST_CAP,
-        select: listRowSelect,
+        select: ticketListRowSelect,
       }),
     ]);
 
     return {
       kind: 'agent',
       openCount,
-      openTickets: rows.map(toListRow),
+      openTickets: rows.map(toTicketListRow),
     };
   }
 }

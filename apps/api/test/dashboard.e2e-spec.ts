@@ -1,8 +1,9 @@
 import type { INestApplication } from '@nestjs/common';
-import type {
-  DashboardEnvelope,
-  TicketListEnvelope,
-  TicketListRow,
+import {
+  DASHBOARD_SHORT_LIST_CAP,
+  type DashboardEnvelope,
+  type TicketListEnvelope,
+  type TicketListRow,
 } from '@support-ticketing/shared';
 import request from 'supertest';
 import { createTestApp } from './create-test-app';
@@ -48,7 +49,10 @@ describe('Dashboard (e2e)', () => {
       .set('Authorization', `Bearer ${agent.accessToken}`)
       .expect(200);
     const list = listResponse.body as TicketListEnvelope;
-    const expectedShort = sortOldestUpdatedFirst(list.tickets).slice(0, 10);
+    const expectedShort = sortOldestUpdatedFirst(list.tickets).slice(
+      0,
+      DASHBOARD_SHORT_LIST_CAP,
+    );
 
     const response = await request(app.getHttpServer())
       .get('/dashboard')
@@ -67,7 +71,9 @@ describe('Dashboard (e2e)', () => {
     expect(body).not.toHaveProperty('openByStatus');
 
     expect(body.openCount).toBe(list.tickets.length);
-    expect(body.openTickets.length).toBeLessThanOrEqual(10);
+    expect(body.openTickets.length).toBeLessThanOrEqual(
+      DASHBOARD_SHORT_LIST_CAP,
+    );
     expect(body.openTickets).toEqual(expectedShort);
 
     expect(
@@ -120,7 +126,7 @@ describe('Dashboard (e2e)', () => {
       const staleBody = staleList.body as TicketListEnvelope;
       const expectedStaleShort = sortOldestUpdatedFirst(
         staleBody.tickets,
-      ).slice(0, 10);
+      ).slice(0, DASHBOARD_SHORT_LIST_CAP);
 
       const response = await request(app.getHttpServer())
         .get('/dashboard')
@@ -150,7 +156,7 @@ describe('Dashboard (e2e)', () => {
       ).toBe(true);
 
       expect(body.staleCount).toBe(staleBody.tickets.length);
-      expect(body.stale.length).toBeLessThanOrEqual(10);
+      expect(body.stale.length).toBeLessThanOrEqual(DASHBOARD_SHORT_LIST_CAP);
       expect(body.stale).toEqual(expectedStaleShort);
       expect(body.stale.every((ticket) => ticket.status !== 'closed')).toBe(
         true,

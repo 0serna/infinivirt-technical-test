@@ -19,7 +19,7 @@ import {
   type PatchTicketStatusBody,
   PRIORITIES,
   type Priority,
-  STALE_TICKET_MAX_AGE_HOURS,
+  staleTicketCutoff,
   TICKET_LIST_ASSIGNED_OPEN_SCOPE,
   TICKET_LIST_STALE_QUERY,
   TICKET_STATUSES,
@@ -35,6 +35,11 @@ import {
 } from '@support-ticketing/shared';
 import type { PublicUser } from '../auth/public-user';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  ticketListRowSelect,
+  ticketPersonSelect,
+  toTicketListRow,
+} from './ticket-list-row';
 
 type AssigneeFilter = { kind: 'unassigned' } | { kind: 'user'; id: string };
 
@@ -46,7 +51,6 @@ type ScopedTicket = Omit<TicketListRow, 'updatedAt' | 'createdAt'> & {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const ticketPersonSelect = { id: true, displayName: true } as const;
 const historyAsc = [{ changedAt: 'asc' as const }, { id: 'asc' as const }];
 
 const ticketDetailSelect = {
@@ -176,22 +180,16 @@ function parseStatusFilters(
   return [...new Set(statuses)];
 }
 
-function parseStaleFilter(value?: string): boolean {
+function parseExactQueryFlag(
+  value: string | undefined,
+  allowed: string,
+  field: string,
+): boolean {
   if (value === undefined) {
     return false;
   }
-  if (value !== TICKET_LIST_STALE_QUERY) {
-    throw new BadRequestException('Invalid stale');
-  }
-  return true;
-}
-
-function parseAssignedOpenScope(value?: string): boolean {
-  if (value === undefined) {
-    return false;
-  }
-  if (value !== TICKET_LIST_ASSIGNED_OPEN_SCOPE) {
-    throw new BadRequestException('Invalid scope');
+  if (value !== allowed) {
+    throw new BadRequestException(`Invalid ${field}`);
   }
   return true;
 }
@@ -321,8 +319,16 @@ export class TicketsService {
       query.clientId === undefined
         ? undefined
         : requireUuid(query.clientId, 'clientId');
-    const stale = parseStaleFilter(query.stale);
-    const assignedOpen = parseAssignedOpenScope(query.scope);
+    const stale = parseExactQueryFlag(
+      query.stale,
+      TICKET_LIST_STALE_QUERY,
+      'stale',
+    );
+    const assignedOpen = parseExactQueryFlag(
+      query.scope,
+      TICKET_LIST_ASSIGNED_OPEN_SCOPE,
+      'scope',
+    );
     const seesAllTickets = hasMinimumRole(user.role, 'supervisor');
     let assignee = seesAllTickets
       ? parseAssigneeFilter(query.assigneeId)
@@ -336,24 +342,12 @@ export class TicketsService {
       effectiveStatuses = [...OPEN_TICKET_STATUSES];
     }
 
-    const staleBefore = stale
-      ? new Date(Date.now() - STALE_TICKET_MAX_AGE_HOURS * 60 * 60 * 1000)
-      : undefined;
+    const staleBefore = stale ? staleTicketCutoff() : undefined;
 
     const scoped = await this.prisma.ticket.findMany({
       where: listScopeWhere(user),
       orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        priority: true,
-        updatedAt: true,
-        createdAt: true,
-        client: { select: { id: true, name: true } },
-        assignee: { select: { id: true, displayName: true } },
-        createdBy: { select: { id: true, displayName: true } },
-      },
+      select: ticketListRowSelect,
     });
 
     const tickets = scoped.filter((ticket) =>
@@ -367,11 +361,7 @@ export class TicketsService {
     );
 
     return {
-      tickets: tickets.map((ticket) => ({
-        ...ticket,
-        updatedAt: ticket.updatedAt.toISOString(),
-        createdAt: ticket.createdAt.toISOString(),
-      })),
+      tickets: tickets.map(toTicketListRow),
       filterOptions: filterOptionsFromScope(scoped),
     };
   }

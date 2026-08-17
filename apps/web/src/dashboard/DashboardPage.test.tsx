@@ -44,7 +44,7 @@ test('Agent dashboard shows Open Ticket Assignee KPI deep-link and short table r
   expect(
     await screen.findByRole('heading', { name: 'Operational Dashboard' }),
   ).toBeDefined();
-  expect(screen.getByText('Open Tickets (Assignee)')).toBeDefined();
+  expect(await screen.findByText('Open Tickets (Assignee)')).toBeDefined();
 
   const countLink = screen.getByRole('link', { name: '2' });
   expect(countLink.getAttribute('href')).toBe('/tickets?scope=assignedOpen');
@@ -145,7 +145,7 @@ test('team dashboard shows KPI strip deep-links and Stale short table', async ()
   expect(screen.queryByText(/Team metrics are not available/i)).toBeNull();
   expect(screen.queryByText('Open Tickets (Assignee)')).toBeNull();
 
-  expect(screen.getByText('Open Tickets')).toBeDefined();
+  expect(await screen.findByText('Open Tickets')).toBeDefined();
   expect(screen.getByRole('link', { name: '5' }).getAttribute('href')).toBe(
     '/tickets?status=open,in_progress',
   );

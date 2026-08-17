@@ -28,14 +28,6 @@ import {
   STATUS_LABEL,
 } from '../tickets/ticketLabels';
 
-function isAgentDashboard(body: DashboardEnvelope): body is AgentDashboard {
-  return body.kind === 'agent';
-}
-
-function isTeamDashboard(body: DashboardEnvelope): body is TeamDashboard {
-  return body.kind === 'team';
-}
-
 function ShortTicketTable({
   tickets,
   emptyLabel,
@@ -75,33 +67,6 @@ function ShortTicketTable({
   );
 }
 
-function AgentDashboardView({ dashboard }: { dashboard: AgentDashboard }) {
-  return (
-    <Stack>
-      <Group gap="xl">
-        <Stack gap={4}>
-          <Text size="sm" c="dimmed">
-            Open Tickets (Assignee)
-          </Text>
-          <Anchor
-            component={Link}
-            to={DASHBOARD_ASSIGNED_OPEN_LIST_PATH}
-            size="xl"
-            fw={700}
-          >
-            {dashboard.openCount}
-          </Anchor>
-        </Stack>
-      </Group>
-      <Title order={3}>Open Tickets assigned to you</Title>
-      <ShortTicketTable
-        tickets={dashboard.openTickets}
-        emptyLabel="No Open Tickets assigned to you."
-      />
-    </Stack>
-  );
-}
-
 function KpiLink({
   label,
   count,
@@ -119,6 +84,23 @@ function KpiLink({
       <Anchor component={Link} to={to} size="xl" fw={700}>
         {count}
       </Anchor>
+    </Stack>
+  );
+}
+
+function AgentDashboardView({ dashboard }: { dashboard: AgentDashboard }) {
+  return (
+    <Stack>
+      <KpiLink
+        label="Open Tickets (Assignee)"
+        count={dashboard.openCount}
+        to={DASHBOARD_ASSIGNED_OPEN_LIST_PATH}
+      />
+      <Title order={3}>Open Tickets assigned to you</Title>
+      <ShortTicketTable
+        tickets={dashboard.openTickets}
+        emptyLabel="No Open Tickets assigned to you."
+      />
     </Stack>
   );
 }
@@ -216,14 +198,10 @@ export function DashboardPage() {
         </Alert>
       ) : dashboard === null ? (
         <Text>Loading Operational Dashboard…</Text>
-      ) : isAgentDashboard(dashboard) ? (
+      ) : dashboard.kind === 'agent' ? (
         <AgentDashboardView dashboard={dashboard} />
-      ) : isTeamDashboard(dashboard) ? (
-        <TeamDashboardView dashboard={dashboard} />
       ) : (
-        <Alert>
-          <Text>Couldn't load the Operational Dashboard.</Text>
-        </Alert>
+        <TeamDashboardView dashboard={dashboard} />
       )}
     </Stack>
   );
