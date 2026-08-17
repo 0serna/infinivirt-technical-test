@@ -47,8 +47,8 @@ Canonical template: `.env.example`. More detail: README (Host CLI).
 
 When creating or using a **new** git worktree:
 
-1. Prefer copying `.env.example` → `.env`, then set a free `POSTGRES_PORT` and keep `DATABASE_URL` on `@postgres:5432`. Copying another worktree’s `.env` is fine for JWT alignment, but **re-check** `DATABASE_URL` still uses `postgres` (not `localhost`) before `compose:up`. Never commit `.env`.
-2. Reassign host-facing ports so they do **not** collide with the primary stack or other worktrees. At minimum set a free `POSTGRES_PORT`. Host `db:migrate` / `db:seed` / `test:e2e` use `localhost` + **this** worktree’s `POSTGRES_PORT` via command override (see above).
+1. Prefer copying `.env.example` → `.env` (or copy another worktree’s `.env` for JWT alignment), set a free `POSTGRES_PORT`, and keep Compose `DATABASE_URL` on `@postgres:5432` (see above). Never commit `.env`.
+2. Reassign host-facing ports so they do **not** collide with the primary stack or other worktrees. At minimum set a free `POSTGRES_PORT`. Host CLI uses `localhost` + this worktree’s `POSTGRES_PORT` via command override (see above).
 3. Before `compose:up`, confirm the API (`3000`) and web (`5173`) host ports are free for this worktree, or remap those Compose publish ports so this worktree does not fight another stack.
 
 ## Agent skills

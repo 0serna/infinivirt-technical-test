@@ -110,6 +110,14 @@ function requireUuid(value: string, field: string): string {
   return value;
 }
 
+function requireTrimmed(value: unknown, field: string): string {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (trimmed.length === 0) {
+    throw new BadRequestException(`Invalid ${field}`);
+  }
+  return trimmed;
+}
+
 function parseAssigneeFilter(value?: string): AssigneeFilter | undefined {
   if (value === undefined) {
     return undefined;
@@ -271,15 +279,8 @@ export class TicketsService {
     user: PublicUser,
     body: CreateTicketBody,
   ): Promise<TicketDetail> {
-    const title = typeof body?.title === 'string' ? body.title.trim() : '';
-    if (title.length === 0) {
-      throw new BadRequestException('Invalid title');
-    }
-    const description =
-      typeof body?.description === 'string' ? body.description.trim() : '';
-    if (description.length === 0) {
-      throw new BadRequestException('Invalid description');
-    }
+    const title = requireTrimmed(body?.title, 'title');
+    const description = requireTrimmed(body?.description, 'description');
     if (typeof body?.clientId !== 'string') {
       throw new BadRequestException('Invalid clientId');
     }
@@ -302,7 +303,6 @@ export class TicketsService {
         description,
         status: 'open',
         priority,
-        assigneeId: null,
         createdById: user.id,
         statusHistory: {
           create: {
@@ -312,10 +312,10 @@ export class TicketsService {
           },
         },
       },
-      select: { id: true },
+      select: ticketDetailSelect,
     });
 
-    return this.getById(user, created.id);
+    return toTicketDetail(created);
   }
 
   async createComment(
@@ -323,10 +323,7 @@ export class TicketsService {
     id: string,
     body: CreateTicketCommentBody,
   ): Promise<TicketDetail> {
-    const commentBody = typeof body?.body === 'string' ? body.body.trim() : '';
-    if (commentBody.length === 0) {
-      throw new BadRequestException('Invalid body');
-    }
+    const commentBody = requireTrimmed(body?.body, 'body');
     const visibility =
       parseOptionalEnum(body.visibility, COMMENT_VISIBILITIES, 'visibility') ??
       'public';

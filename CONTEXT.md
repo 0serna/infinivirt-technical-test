@@ -75,7 +75,7 @@ May consult Tickets in their List Scope, create tickets, add `public` Comments. 
 Everything an Agent can do, plus: list all tickets, reassign, see team metrics, review stale/overdue tickets, and `internal` Comments (in addition to `public`). Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment).
 
 **Administrator**:
-Everything a Supervisor can do, plus: update any ticket, assign to anyone, administer Users and Clients (full catalog management), close and reopen. May record any legal Status Transition on any Ticket (including unassigned) without being Assignee. Read-only Client catalog for Ticket create is already included via Agent.
+Everything a Supervisor can do, plus: update any ticket, assign to anyone, administer Users and Clients (full catalog management), close and reopen. May record any legal Status Transition on any Ticket (including unassigned) without being Assignee.
 
 ### Metrics views
 

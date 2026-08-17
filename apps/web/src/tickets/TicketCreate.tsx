@@ -3,7 +3,6 @@ import {
   Anchor,
   Breadcrumbs,
   Button,
-  Group,
   Select,
   Stack,
   Text,
@@ -36,8 +35,7 @@ export function TicketCreate() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
-  const [validationError, setValidationError] = useState(false);
-  const [submitError, setSubmitError] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
@@ -74,19 +72,12 @@ export function TicketCreate() {
     event.preventDefault();
     const trimmedTitle = title.trim();
     const trimmedDescription = description.trim();
-    if (
-      clientId == null ||
-      clientId === '' ||
-      trimmedTitle === '' ||
-      trimmedDescription === ''
-    ) {
-      setValidationError(true);
-      setSubmitError(false);
+    if (!clientId || trimmedTitle === '' || trimmedDescription === '') {
+      setFormError('Client, Title, and description are required.');
       return;
     }
 
-    setValidationError(false);
-    setSubmitError(false);
+    setFormError(null);
     setSubmitting(true);
 
     const body: CreateTicketBody = {
@@ -105,13 +96,13 @@ export function TicketCreate() {
         return;
       }
       if (!response.ok) {
-        setSubmitError(true);
+        setFormError("Couldn't create this ticket.");
         return;
       }
       const created = (await response.json()) as TicketDetailBody;
       navigate(`/tickets/${created.id}`, { replace: true });
     } catch {
-      setSubmitError(true);
+      setFormError("Couldn't create this ticket.");
     } finally {
       setSubmitting(false);
     }
@@ -187,21 +178,14 @@ export function TicketCreate() {
               }))}
               disabled={submitting}
             />
-            {validationError ? (
+            {formError ? (
               <Text c="red" size="sm">
-                Client, Title, and description are required.
+                {formError}
               </Text>
             ) : null}
-            {submitError ? (
-              <Text c="red" size="sm">
-                Couldn't create this ticket.
-              </Text>
-            ) : null}
-            <Group>
-              <Button type="submit" loading={submitting} disabled={submitting}>
-                Create ticket
-              </Button>
-            </Group>
+            <Button type="submit" loading={submitting} disabled={submitting}>
+              Create ticket
+            </Button>
           </Stack>
         </form>
       )}

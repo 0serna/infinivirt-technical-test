@@ -1286,15 +1286,26 @@ async function seededClientId(
   accessToken: string,
   clientName = 'Contoso Health',
 ): Promise<string> {
+  const catalog = await request(app.getHttpServer())
+    .get('/clients')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .expect(200);
+  const client = (catalog.body as ClientCatalogRow[]).find(
+    (row) => row.name === clientName,
+  );
+  expect(client).toBeDefined();
+  return client?.id as string;
+}
+
+async function listedTicketCount(
+  app: INestApplication,
+  accessToken: string,
+): Promise<number> {
   const list = await request(app.getHttpServer())
     .get('/tickets')
     .set('Authorization', `Bearer ${accessToken}`)
     .expect(200);
-  const client = (
-    list.body.filterOptions.clients as Array<{ id: string; name: string }>
-  ).find((row) => row.name === clientName);
-  expect(client).toBeDefined();
-  return client?.id as string;
+  return (list.body.tickets as unknown[]).length;
 }
 
 describe('Tickets create (e2e)', () => {
@@ -1465,11 +1476,7 @@ describe('Tickets create (e2e)', () => {
   it('POST /tickets with empty or whitespace-only Title or description returns HTTP 400 without writing', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
     const clientId = await seededClientId(app, accessToken);
-    const before = await request(app.getHttpServer())
-      .get('/tickets')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-    const beforeCount = (before.body.tickets as unknown[]).length;
+    const beforeCount = await listedTicketCount(app, accessToken);
 
     const blankTitle = await request(app.getHttpServer())
       .post('/tickets')
@@ -1500,21 +1507,13 @@ describe('Tickets create (e2e)', () => {
       expect(JSON.stringify(response.body)).not.toMatch(/TicketsService/);
     }
 
-    const after = await request(app.getHttpServer())
-      .get('/tickets')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-    expect((after.body.tickets as unknown[]).length).toBe(beforeCount);
+    expect(await listedTicketCount(app, accessToken)).toBe(beforeCount);
   });
 
   it('POST /tickets with unknown Client id matches Ticket non-existence without writing', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
     const unknownClientId = '00000000-0000-4000-8000-000000000099';
-    const before = await request(app.getHttpServer())
-      .get('/tickets')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-    const beforeCount = (before.body.tickets as unknown[]).length;
+    const beforeCount = await listedTicketCount(app, accessToken);
 
     const getUnknownTicket = await request(app.getHttpServer())
       .get(`/tickets/${unknownClientId}`)
@@ -1533,21 +1532,13 @@ describe('Tickets create (e2e)', () => {
     expect(create.body).toEqual(getUnknownTicket.body);
     expect(create.body).not.toHaveProperty('stack');
 
-    const after = await request(app.getHttpServer())
-      .get('/tickets')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-    expect((after.body.tickets as unknown[]).length).toBe(beforeCount);
+    expect(await listedTicketCount(app, accessToken)).toBe(beforeCount);
   });
 
   it('POST /tickets with invalid Priority returns HTTP 400 without writing', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
     const clientId = await seededClientId(app, accessToken);
-    const before = await request(app.getHttpServer())
-      .get('/tickets')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-    const beforeCount = (before.body.tickets as unknown[]).length;
+    const beforeCount = await listedTicketCount(app, accessToken);
 
     const response = await request(app.getHttpServer())
       .post('/tickets')
@@ -1563,10 +1554,6 @@ describe('Tickets create (e2e)', () => {
     expect(response.body).not.toHaveProperty('stack');
     expect(JSON.stringify(response.body)).not.toMatch(/TicketsService/);
 
-    const after = await request(app.getHttpServer())
-      .get('/tickets')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-    expect((after.body.tickets as unknown[]).length).toBe(beforeCount);
+    expect(await listedTicketCount(app, accessToken)).toBe(beforeCount);
   });
 });

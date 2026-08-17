@@ -6,10 +6,6 @@ import { createTestApp } from './create-test-app';
 import { ADMIN_EMAIL, AGENT_EMAIL, SUPERVISOR_EMAIL } from './demo-credentials';
 import { login } from './login';
 
-function catalogNames(body: unknown): string[] {
-  return (body as ClientCatalogRow[]).map((row) => row.name);
-}
-
 let app: INestApplication;
 
 beforeAll(async () => {
@@ -49,7 +45,9 @@ describe('Clients catalog (e2e)', () => {
         expect(Object.keys(row).sort()).toEqual(['id', 'name']);
       }
 
-      const names = catalogNames(response.body);
+      const names = (response.body as ClientCatalogRow[]).map(
+        (row) => row.name,
+      );
       expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
       expect(names).toEqual(
         expect.arrayContaining([

@@ -71,6 +71,33 @@ function clientOption(name: string) {
   return screen.getByRole('option', { name, hidden: true });
 }
 
+async function fillCreateFields(
+  user: ReturnType<typeof userEvent.setup>,
+  {
+    client,
+    title,
+    description,
+  }: { client: string; title: string; description: string },
+) {
+  await openClientSelect(user);
+  await user.click(clientOption(client));
+  await user.type(screen.getByRole('textbox', { name: 'Title' }), title);
+  await user.type(
+    screen.getByRole('textbox', { name: 'Description' }),
+    description,
+  );
+}
+
+function ticketPostCalls() {
+  return vi
+    .mocked(fetch)
+    .mock.calls.filter(
+      ([url, init]) =>
+        String(url) === '/api/tickets' &&
+        (init?.method ?? 'GET').toUpperCase() === 'POST',
+    );
+}
+
 test('Ticket List New ticket opens the create form without treating new as a Ticket id', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
@@ -91,10 +118,9 @@ test('Ticket List New ticket opens the create form without treating new as a Tic
     .mocked(fetch)
     .mock.calls.filter(
       ([url, init]) =>
-        String(url) === '/api/tickets/new' ||
-        (isTicketDetailUrl(String(url)) &&
-          (init?.method ?? 'GET').toUpperCase() === 'GET' &&
-          String(url).endsWith('/new')),
+        isTicketDetailUrl(String(url)) &&
+        (init?.method ?? 'GET').toUpperCase() === 'GET' &&
+        String(url).endsWith('/new'),
     );
   expect(detailCalls).toEqual([]);
 });
@@ -102,9 +128,7 @@ test('Ticket List New ticket opens the create form without treating new as a Tic
 test('create form loads Clients from GET /api/clients not Ticket List filterOptions', async () => {
   const user = userEvent.setup();
   localStorage.setItem('accessToken', 'token-abc');
-  mockCreateSession({
-    clients: sampleClientCatalog,
-  });
+  mockCreateSession();
 
   renderApp(['/tickets/new']);
 
@@ -152,37 +176,19 @@ test('client-side validation blocks submit when Client, Title, or description is
   expect(
     await screen.findByText('Client, Title, and description are required.'),
   ).toBeDefined();
+  expect(ticketPostCalls()).toEqual([]);
 
-  const postCalls = vi
-    .mocked(fetch)
-    .mock.calls.filter(
-      ([url, init]) =>
-        String(url) === '/api/tickets' &&
-        (init?.method ?? 'GET').toUpperCase() === 'POST',
-    );
-  expect(postCalls).toEqual([]);
-
-  await openClientSelect(user);
-  await user.click(clientOption('Acme Logistics'));
-  await user.type(screen.getByRole('textbox', { name: 'Title' }), '   ');
-  await user.type(
-    screen.getByRole('textbox', { name: 'Description' }),
-    'Has a description.',
-  );
+  await fillCreateFields(user, {
+    client: 'Acme Logistics',
+    title: '   ',
+    description: 'Has a description.',
+  });
   await user.click(screen.getByRole('button', { name: 'Create ticket' }));
 
   expect(
     await screen.findByText('Client, Title, and description are required.'),
   ).toBeDefined();
-  expect(
-    vi
-      .mocked(fetch)
-      .mock.calls.filter(
-        ([url, init]) =>
-          String(url) === '/api/tickets' &&
-          (init?.method ?? 'GET').toUpperCase() === 'POST',
-      ),
-  ).toEqual([]);
+  expect(ticketPostCalls()).toEqual([]);
 });
 
 test('successful create posts the Ticket and navigates to the new Ticket detail', async () => {
@@ -213,16 +219,11 @@ test('successful create posts the Ticket and navigates to the new Ticket detail'
 
   renderApp(['/tickets/new']);
 
-  await openClientSelect(user);
-  await user.click(clientOption('Acme Logistics'));
-  await user.type(
-    screen.getByRole('textbox', { name: 'Title' }),
-    'Printer offline at front desk',
-  );
-  await user.type(
-    screen.getByRole('textbox', { name: 'Description' }),
-    'Receipt printer shows offline since this morning.',
-  );
+  await fillCreateFields(user, {
+    client: 'Acme Logistics',
+    title: 'Printer offline at front desk',
+    description: 'Receipt printer shows offline since this morning.',
+  });
   await user.click(screen.getByRole('combobox', { name: 'Priority' }));
   await user.click(screen.getByRole('option', { name: 'High', hidden: true }));
   await user.click(screen.getByRole('button', { name: 'Create ticket' }));
@@ -257,16 +258,11 @@ test('submit is disabled while create is in flight', async () => {
 
   renderApp(['/tickets/new']);
 
-  await openClientSelect(user);
-  await user.click(clientOption('Contoso Health'));
-  await user.type(
-    screen.getByRole('textbox', { name: 'Title' }),
-    'VPN dropouts',
-  );
-  await user.type(
-    screen.getByRole('textbox', { name: 'Description' }),
-    'Intermittent VPN drops for warehouse staff.',
-  );
+  await fillCreateFields(user, {
+    client: 'Contoso Health',
+    title: 'VPN dropouts',
+    description: 'Intermittent VPN drops for warehouse staff.',
+  });
 
   const submit = screen.getByRole('button', { name: 'Create ticket' });
   await user.click(submit);
@@ -291,16 +287,11 @@ test('failed create shows English error copy without the raw server body', async
 
   renderApp(['/tickets/new']);
 
-  await openClientSelect(user);
-  await user.click(clientOption('Contoso Health'));
-  await user.type(
-    screen.getByRole('textbox', { name: 'Title' }),
-    'Should fail',
-  );
-  await user.type(
-    screen.getByRole('textbox', { name: 'Description' }),
-    'Body that will not create.',
-  );
+  await fillCreateFields(user, {
+    client: 'Contoso Health',
+    title: 'Should fail',
+    description: 'Body that will not create.',
+  });
   await user.click(screen.getByRole('button', { name: 'Create ticket' }));
 
   expect(await screen.findByText("Couldn't create this ticket.")).toBeDefined();
