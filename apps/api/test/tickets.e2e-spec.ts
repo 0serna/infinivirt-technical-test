@@ -1039,3 +1039,153 @@ describe('Tickets status transition (e2e)', () => {
     });
   });
 });
+
+describe('Tickets create Comment (e2e)', () => {
+  it('Agent POST Comment on an unassigned Ticket they created succeeds as public when visibility is omitted', async () => {
+    const { accessToken, userId } = await login(app, AGENT_EMAIL);
+    const ticket = await ticketByTitle(
+      app,
+      accessToken,
+      'High: patient portal MFA reset',
+    );
+    expect(ticket.assignee).toBeNull();
+    const priorComments = ticket.comments;
+    const priorUpdatedAt = ticket.updatedAt;
+
+    const response = await request(app.getHttpServer())
+      .post(`/tickets/${ticket.id}/comments`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ body: 'Client confirmed MFA emails still missing.' })
+      .expect(201);
+
+    expect(response.body.comments).toHaveLength(priorComments.length + 1);
+    expect(response.body.comments.slice(0, priorComments.length)).toEqual(
+      priorComments,
+    );
+    expect(response.body.comments[response.body.comments.length - 1]).toEqual({
+      id: expect.any(String),
+      body: 'Client confirmed MFA emails still missing.',
+      visibility: 'public',
+      createdAt: expect.any(String),
+      author: { id: userId, displayName: 'Alex Agent' },
+    });
+    expect(Date.parse(response.body.updatedAt)).toBeGreaterThan(
+      Date.parse(priorUpdatedAt),
+    );
+  });
+
+  it('Agent POST Comment with visibility public appends in oldest-first order and advances updatedAt', async () => {
+    const { accessToken, userId } = await login(app, AGENT_EMAIL);
+    const ticket = await ticketByTitle(
+      app,
+      accessToken,
+      'High: appointment sync lag',
+    );
+    expect(ticket.comments).toEqual([]);
+    const priorUpdatedAt = ticket.updatedAt;
+
+    const response = await request(app.getHttpServer())
+      .post(`/tickets/${ticket.id}/comments`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        body: 'Asked Client for sync window logs.',
+        visibility: 'public',
+      })
+      .expect(201);
+
+    expect(response.body.comments).toEqual([
+      {
+        id: expect.any(String),
+        body: 'Asked Client for sync window logs.',
+        visibility: 'public',
+        createdAt: expect.any(String),
+        author: { id: userId, displayName: 'Alex Agent' },
+      },
+    ]);
+    expect(Date.parse(response.body.updatedAt)).toBeGreaterThan(
+      Date.parse(priorUpdatedAt),
+    );
+  });
+
+  it('Agent POST Comment outside List Scope or unknown id matches GET Ticket non-existence', async () => {
+    const agent = await login(app, AGENT_EMAIL);
+    const supervisor = await login(app, SUPERVISOR_EMAIL);
+    const warehouse = await ticketByTitle(
+      app,
+      supervisor.accessToken,
+      'High: warehouse scanner pairing',
+    );
+
+    const unknownId = '00000000-0000-4000-8000-000000000099';
+    const getUnknown = await request(app.getHttpServer())
+      .get(`/tickets/${unknownId}`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .expect(404);
+    const postUnknown = await request(app.getHttpServer())
+      .post(`/tickets/${unknownId}/comments`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .send({ body: 'Should not land.' })
+      .expect(404);
+    const postHidden = await request(app.getHttpServer())
+      .post(`/tickets/${warehouse.id}/comments`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .send({ body: 'Should not land.' })
+      .expect(404);
+
+    expect(postUnknown.body).toEqual(getUnknown.body);
+    expect(postHidden.body).toEqual(getUnknown.body);
+    expect(JSON.stringify(postHidden.body)).not.toMatch(/warehouse scanner/);
+
+    const after = await ticketByTitle(
+      app,
+      supervisor.accessToken,
+      'High: warehouse scanner pairing',
+    );
+    expect(after.comments).toEqual(warehouse.comments);
+    expect(after.updatedAt).toBe(warehouse.updatedAt);
+  });
+
+  it('POST Comment with empty body returns HTTP 400 without writing', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const ticket = await ticketByTitle(
+      app,
+      accessToken,
+      'Resolved: fax gateway retry storm',
+    );
+    const prior = ticket;
+
+    const empty = await request(app.getHttpServer())
+      .post(`/tickets/${ticket.id}/comments`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ body: '   ' })
+      .expect(400);
+    const missing = await request(app.getHttpServer())
+      .post(`/tickets/${ticket.id}/comments`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({})
+      .expect(400);
+
+    for (const response of [empty, missing]) {
+      expect(response.body).not.toHaveProperty('stack');
+      expect(JSON.stringify(response.body)).not.toMatch(/TicketsService/);
+    }
+
+    const after = await ticketByTitle(
+      app,
+      accessToken,
+      'Resolved: fax gateway retry storm',
+    );
+    expect(after.comments).toEqual(prior.comments);
+    expect(after.updatedAt).toBe(prior.updatedAt);
+  });
+
+  it('POST /tickets/:id/comments without a token returns the same opaque 401 as GET /auth/me', async () => {
+    const me = await request(app.getHttpServer()).get('/auth/me').expect(401);
+    const created = await request(app.getHttpServer())
+      .post('/tickets/00000000-0000-4000-8000-000000000001/comments')
+      .send({ body: 'Unauthenticated.' })
+      .expect(401);
+
+    expect(created.body).toEqual(me.body);
+  });
+});

@@ -7,6 +7,9 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
+  COMMENT_VISIBILITIES,
+  type CommentVisibility,
+  type CreateTicketCommentBody,
   hasMinimumRole,
   isLegalStatusEdge,
   mayRecordStatusTransition,
@@ -265,6 +268,48 @@ export class TicketsService {
     return toTicketDetail(
       await this.requireScopedTicket(user, id, ticketDetailSelect),
     );
+  }
+
+  async createComment(
+    user: PublicUser,
+    id: string,
+    body: CreateTicketCommentBody,
+  ): Promise<TicketDetail> {
+    const commentBody = typeof body?.body === 'string' ? body.body.trim() : '';
+    if (commentBody.length === 0) {
+      throw new BadRequestException('Invalid body');
+    }
+    const visibility: CommentVisibility =
+      body.visibility === undefined
+        ? 'public'
+        : parseRequiredEnum(
+            body.visibility,
+            COMMENT_VISIBILITIES,
+            'visibility',
+          );
+    // Agent may only create public; Superv/Admin may create internal (#36 UI/e2e).
+    if (visibility === 'internal' && !hasMinimumRole(user.role, 'supervisor')) {
+      throw new ForbiddenException();
+    }
+
+    const ticket = await this.requireScopedTicket(user, id, { id: true });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.comment.create({
+        data: {
+          ticketId: ticket.id,
+          authorId: user.id,
+          body: commentBody,
+          visibility,
+        },
+      });
+      await tx.ticket.update({
+        where: { id: ticket.id },
+        data: { updatedAt: new Date() },
+      });
+    });
+
+    return this.getById(user, ticket.id);
   }
 
   async recordStatusTransition(

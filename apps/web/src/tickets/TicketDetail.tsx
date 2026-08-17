@@ -10,9 +10,11 @@ import {
   SimpleGrid,
   Stack,
   Text,
+  Textarea,
   Title,
 } from '@mantine/core';
 import {
+  type CreateTicketCommentBody,
   nextRecordableStatus,
   type PatchTicketStatusBody,
   type Priority,
@@ -148,6 +150,58 @@ function CommentThread({ comments }: { comments: TicketComment[] }) {
   );
 }
 
+function CommentComposer({
+  disabled,
+  error,
+  onSubmit,
+}: {
+  disabled: boolean;
+  error: boolean;
+  onSubmit: (body: string) => Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState('');
+
+  return (
+    <Stack
+      gap="sm"
+      component="form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const body = draft.trim();
+        if (body.length === 0 || disabled) {
+          return;
+        }
+        void onSubmit(body).then((ok) => {
+          if (ok) {
+            setDraft('');
+          }
+        });
+      }}
+    >
+      <Textarea
+        label="Comment"
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.currentTarget.value);
+        }}
+        minRows={3}
+        disabled={disabled}
+        aria-label="Comment"
+      />
+      <Group>
+        <Button type="submit" loading={disabled} disabled={draft.trim() === ''}>
+          Add comment
+        </Button>
+      </Group>
+      {error ? (
+        <Text c="red" size="sm">
+          Couldn't add this comment.
+        </Text>
+      ) : null}
+    </Stack>
+  );
+}
+
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'missing' }
@@ -161,6 +215,8 @@ export function TicketDetail() {
   const [reloadToken, setReloadToken] = useState(0);
   const [transitionError, setTransitionError] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [commentError, setCommentError] = useState(false);
+  const [isCommenting, setIsCommenting] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
   useEffect(() => {
@@ -171,6 +227,7 @@ export function TicketDetail() {
     let cancelled = false;
     setState({ kind: 'loading' });
     setTransitionError(false);
+    setCommentError(false);
 
     void apiFetch(`/api/tickets/${id}`)
       .then(async (response) => {
@@ -259,6 +316,39 @@ export function TicketDetail() {
       setTransitionError(true);
     } finally {
       setIsTransitioning(false);
+    }
+  }
+
+  async function createComment(bodyText: string): Promise<boolean> {
+    if (!id) {
+      return false;
+    }
+    setIsCommenting(true);
+    setCommentError(false);
+    try {
+      const body: CreateTicketCommentBody = {
+        body: bodyText,
+        visibility: 'public',
+      };
+      const response = await apiFetch(`/api/tickets/${id}/comments`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      if (response.status === 401) {
+        return false;
+      }
+      if (!response.ok) {
+        setCommentError(true);
+        return false;
+      }
+      const updated = (await response.json()) as TicketDetailBody;
+      setState({ kind: 'ready', ticket: updated });
+      return true;
+    } catch {
+      setCommentError(true);
+      return false;
+    } finally {
+      setIsCommenting(false);
     }
   }
 
@@ -357,6 +447,11 @@ export function TicketDetail() {
       </SimpleGrid>
       <StatusTimeline history={ticket.statusHistory} />
       <CommentThread comments={ticket.comments} />
+      <CommentComposer
+        disabled={isCommenting}
+        error={commentError}
+        onSubmit={createComment}
+      />
     </Stack>
   );
 }

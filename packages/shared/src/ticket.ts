@@ -88,6 +88,12 @@ export type PatchTicketStatusBody = {
   status: TicketStatus;
 };
 
+/** Visibility omitted defaults to `public`. */
+export type CreateTicketCommentBody = {
+  body: string;
+  visibility?: CommentVisibility;
+};
+
 export const NEXT_TICKET_STATUS: Record<TicketStatus, TicketStatus> = {
   open: 'in_progress',
   in_progress: 'resolved',

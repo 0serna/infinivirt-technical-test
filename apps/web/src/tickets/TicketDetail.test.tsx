@@ -129,7 +129,7 @@ test('Ticket consult shows current fields and Status Transition history oldest f
   expect(screen.getByLabelText('Created: 22 Jul 2026, 12:00')).toBeDefined();
   expect(screen.queryByText('Waiting on Client network details.')).toBeNull();
   expect(screen.queryByRole('button', { name: /assign/i })).toBeNull();
-  expect(screen.queryByRole('textbox')).toBeNull();
+  expect(screen.getByRole('textbox', { name: 'Comment' })).toBeDefined();
   expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Change status' })).toBeDefined();
@@ -180,8 +180,10 @@ test('Ticket consult shows Comment thread oldest first with visibility, author, 
   expect(
     within(thread).getByText(/Alex Agent \(user-2\) · 16 Aug 2026/),
   ).toBeDefined();
-  expect(screen.queryByRole('textbox')).toBeNull();
-  expect(screen.queryByRole('button', { name: /add comment/i })).toBeNull();
+  expect(screen.getByRole('textbox', { name: 'Comment' })).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Add comment' })).toBeDefined();
+  expect(screen.queryByRole('combobox')).toBeNull();
+  expect(screen.queryByRole('radio')).toBeNull();
 });
 
 test('Ticket consult with no Comments shows an empty thread state', async () => {
@@ -343,6 +345,116 @@ test('Agent who is not Assignee sees no Status Transition control', async () => 
   expect(screen.queryByRole('button', { name: 'Change status' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
+  expect(screen.getByRole('textbox', { name: 'Comment' })).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Add comment' })).toBeDefined();
+});
+
+test('Agent can submit a public Comment and the thread updates without a visibility control', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const updated = {
+    ...sampleTicketDetail,
+    updatedAt: '2026-08-16T14:00:00.000Z',
+    comments: [
+      ...sampleTicketDetail.comments,
+      {
+        id: 'comment-new',
+        body: 'Client confirmed MFA emails still missing.',
+        visibility: 'public' as const,
+        createdAt: '2026-08-16T14:00:00.000Z',
+        author: { id: 'user-2', displayName: 'Alex Agent' },
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, alex);
+    }
+    if (isTicketsUrl(url)) {
+      return jsonResponse(200, sampleTickets);
+    }
+    if (url === '/api/tickets/ticket-1/comments' && method === 'POST') {
+      expect(init?.body).toBe(
+        JSON.stringify({
+          body: 'Client confirmed MFA emails still missing.',
+          visibility: 'public',
+        }),
+      );
+      return jsonResponse(201, updated);
+    }
+    if (isTicketDetailUrl(url)) {
+      return jsonResponse(200, sampleTicketDetail);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  expect(screen.queryByRole('combobox')).toBeNull();
+  expect(screen.queryByRole('radio')).toBeNull();
+  await user.type(
+    screen.getByRole('textbox', { name: 'Comment' }),
+    'Client confirmed MFA emails still missing.',
+  );
+  await user.click(screen.getByRole('button', { name: 'Add comment' }));
+
+  const thread = await screen.findByLabelText('Comments');
+  expect(
+    within(thread).getByText('Client confirmed MFA emails still missing.'),
+  ).toBeDefined();
+  expect(within(thread).getByText('Created; needs assignment.')).toBeDefined();
+  expect(
+    (screen.getByRole('textbox', { name: 'Comment' }) as HTMLTextAreaElement)
+      .value,
+  ).toBe('');
+});
+
+test('failed Comment create shows error copy without the raw server body', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, alex);
+    }
+    if (isTicketsUrl(url)) {
+      return jsonResponse(200, sampleTickets);
+    }
+    if (url === '/api/tickets/ticket-1/comments' && method === 'POST') {
+      return jsonResponse(500, { message: 'Internal boom stack' });
+    }
+    if (isTicketDetailUrl(url)) {
+      return jsonResponse(200, sampleTicketDetail);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  await user.type(
+    screen.getByRole('textbox', { name: 'Comment' }),
+    'Should fail.',
+  );
+  await user.click(screen.getByRole('button', { name: 'Add comment' }));
+
+  expect(await screen.findByText("Couldn't add this comment.")).toBeDefined();
+  expect(screen.queryByText('Internal boom stack')).toBeNull();
+  const thread = screen.getByLabelText('Comments');
+  expect(within(thread).getByText('Created; needs assignment.')).toBeDefined();
+  expect(within(thread).queryByText('Should fail.')).toBeNull();
 });
 
 test('Agent Assignee can record the next forward Status Transition', async () => {
