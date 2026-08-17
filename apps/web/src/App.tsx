@@ -4,6 +4,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { LoginPage } from './pages/LoginPage';
 import { StaffShell } from './shell/StaffShell';
+import { TicketDetail } from './tickets/TicketDetail';
+import { TicketList } from './tickets/TicketList';
 
 function AuthGate({
   allow,
@@ -42,7 +44,10 @@ export function App() {
                 <StaffShell />
               </AuthGate>
             }
-          />
+          >
+            <Route index element={<TicketList />} />
+            <Route path="tickets/:id" element={<TicketDetail />} />
+          </Route>
         </Routes>
       </AuthProvider>
     </MantineProvider>

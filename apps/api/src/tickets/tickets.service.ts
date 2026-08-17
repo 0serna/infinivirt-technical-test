@@ -1,10 +1,20 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
 import {
-  EMPTY_TICKET_LIST_FILTER_OPTIONS,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import {
   hasMinimumRole,
+  isLegalStatusEdge,
+  mayRecordStatusTransition,
+  type PatchTicketStatusBody,
   PRIORITIES,
   type Priority,
   TICKET_STATUSES,
+  type TicketDetail,
   type TicketListClient,
   type TicketListEnvelope,
   type TicketListFilterOptions,
@@ -27,6 +37,34 @@ type ScopedTicket = Omit<TicketListRow, 'updatedAt' | 'createdAt'> & {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const ticketDetailSelect = {
+  id: true,
+  title: true,
+  status: true,
+  priority: true,
+  updatedAt: true,
+  createdAt: true,
+  description: true,
+  resolvedAt: true,
+  closedAt: true,
+  client: { select: { id: true, name: true } },
+  assignee: { select: { id: true, displayName: true } },
+  createdBy: { select: { id: true, displayName: true } },
+  statusHistory: {
+    orderBy: [{ changedAt: 'asc' as const }, { id: 'asc' as const }],
+    select: {
+      fromStatus: true,
+      toStatus: true,
+      changedAt: true,
+      changedBy: { select: { id: true, displayName: true } },
+    },
+  },
+} satisfies Prisma.TicketSelect;
+
+type TicketDetailRecord = Prisma.TicketGetPayload<{
+  select: typeof ticketDetailSelect;
+}>;
+
 function parseOptionalEnum<T extends string>(
   value: string | undefined,
   allowed: readonly T[],
@@ -39,6 +77,17 @@ function parseOptionalEnum<T extends string>(
     throw new BadRequestException(`Invalid ${field}`);
   }
   return value as T;
+}
+
+function parseRequiredEnum<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  field: string,
+): T {
+  if (typeof value !== 'string') {
+    throw new BadRequestException(`Invalid ${field}`);
+  }
+  return parseOptionalEnum(value, allowed, field) as T;
 }
 
 function requireUuid(value: string, field: string): string {
@@ -112,6 +161,33 @@ function filterOptionsFromScope(
   };
 }
 
+function listScopeWhere(user: PublicUser): Prisma.TicketWhereInput {
+  if (hasMinimumRole(user.role, 'supervisor')) {
+    return {};
+  }
+  return {
+    OR: [{ assigneeId: user.id }, { createdById: user.id }],
+  };
+}
+
+function toTicketDetail(ticket: TicketDetailRecord): TicketDetail {
+  const { updatedAt, createdAt, resolvedAt, closedAt, statusHistory, ...rest } =
+    ticket;
+  return {
+    ...rest,
+    updatedAt: updatedAt.toISOString(),
+    createdAt: createdAt.toISOString(),
+    resolvedAt: resolvedAt?.toISOString() ?? null,
+    closedAt: closedAt?.toISOString() ?? null,
+    statusHistory: statusHistory.map((row) => ({
+      from: row.fromStatus,
+      to: row.toStatus,
+      changedAt: row.changedAt.toISOString(),
+      changedBy: row.changedBy,
+    })),
+  };
+}
+
 @Injectable()
 export class TicketsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -132,11 +208,7 @@ export class TicketsService {
       : undefined;
 
     const scoped = await this.prisma.ticket.findMany({
-      where: seesAllTickets
-        ? {}
-        : {
-            OR: [{ assigneeId: user.id }, { createdById: user.id }],
-          },
+      where: listScopeWhere(user),
       orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
       select: {
         id: true,
@@ -161,9 +233,80 @@ export class TicketsService {
         updatedAt: ticket.updatedAt.toISOString(),
         createdAt: ticket.createdAt.toISOString(),
       })),
-      filterOptions: scoped.length
-        ? filterOptionsFromScope(scoped)
-        : EMPTY_TICKET_LIST_FILTER_OPTIONS,
+      filterOptions: filterOptionsFromScope(scoped),
     };
+  }
+
+  async getById(user: PublicUser, id: string): Promise<TicketDetail> {
+    return toTicketDetail(
+      await this.requireScopedTicket(user, id, ticketDetailSelect),
+    );
+  }
+
+  async recordStatusTransition(
+    user: PublicUser,
+    id: string,
+    body: PatchTicketStatusBody,
+  ): Promise<TicketDetail> {
+    const to = parseRequiredEnum(body?.status, TICKET_STATUSES, 'status');
+    const ticket = await this.requireScopedTicket(user, id, {
+      id: true,
+      status: true,
+      assigneeId: true,
+    });
+
+    if (!isLegalStatusEdge(ticket.status, to)) {
+      throw new ConflictException();
+    }
+
+    if (
+      !mayRecordStatusTransition({
+        from: ticket.status,
+        to,
+        role: user.role,
+        actorId: user.id,
+        assigneeId: ticket.assigneeId,
+      })
+    ) {
+      throw new ForbiddenException();
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ticket.update({
+        where: { id: ticket.id },
+        data: {
+          status: to,
+          ...(to === 'resolved' && { resolvedAt: new Date() }),
+          ...(to === 'closed' && { closedAt: new Date() }),
+          ...(ticket.status === 'closed' &&
+            to === 'open' && { resolvedAt: null, closedAt: null }),
+        },
+      });
+      await tx.ticketStatusHistory.create({
+        data: {
+          ticketId: ticket.id,
+          fromStatus: ticket.status,
+          toStatus: to,
+          changedById: user.id,
+        },
+      });
+    });
+
+    return this.getById(user, ticket.id);
+  }
+
+  private async requireScopedTicket<TSelect extends Prisma.TicketSelect>(
+    user: PublicUser,
+    id: string,
+    select: TSelect,
+  ): Promise<Prisma.TicketGetPayload<{ select: TSelect }>> {
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id: requireUuid(id, 'id'), ...listScopeWhere(user) },
+      select,
+    });
+    if (!ticket) {
+      throw new NotFoundException();
+    }
+    return ticket;
   }
 }

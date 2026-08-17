@@ -29,17 +29,15 @@ export const emptyTickets = {
   filterOptions: EMPTY_TICKET_LIST_FILTER_OPTIONS,
 };
 
-export const sampleFilterOptions = {
-  clients: [
-    { id: 'client-1', name: 'Contoso Health' },
-    { id: 'client-2', name: 'Initech Soft' },
-  ],
-  assignees: [{ id: 'user-3', displayName: 'Sam Supervisor' }],
-  includeUnassigned: true,
-};
-
 export const sampleTickets = {
-  filterOptions: sampleFilterOptions,
+  filterOptions: {
+    clients: [
+      { id: 'client-1', name: 'Contoso Health' },
+      { id: 'client-2', name: 'Initech Soft' },
+    ],
+    assignees: [{ id: 'user-3', displayName: 'Sam Supervisor' }],
+    includeUnassigned: true,
+  },
   tickets: [
     {
       id: 'ticket-1',
@@ -91,9 +89,151 @@ export function isTicketsUrl(url: string): boolean {
   return url === '/api/tickets' || url.startsWith('/api/tickets?');
 }
 
+export function isTicketDetailUrl(url: string): boolean {
+  return /^\/api\/tickets\/[^/?]+$/.test(url);
+}
+
+export const sampleTicketDetail = {
+  ...sampleTickets.tickets[0],
+  status: 'open' as const,
+  priority: 'high' as const,
+  description: 'MFA reset emails not arriving.',
+  resolvedAt: null,
+  closedAt: null,
+  statusHistory: [
+    {
+      from: null,
+      to: 'open' as const,
+      changedAt: '2026-07-31T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+  ],
+};
+
+export const sampleReopenedTicketDetail = {
+  id: 'ticket-3',
+  title: 'Reopened: returns portal blank page',
+  description:
+    'Was closed after hotfix; Client reports regression. Projection timestamps cleared on reopen.',
+  status: 'open' as const,
+  priority: 'high' as const,
+  client: { id: 'client-2', name: 'Northwind Retail' },
+  assignee: { id: 'user-2', displayName: 'Alex Agent' },
+  createdBy: { id: 'user-2', displayName: 'Alex Agent' },
+  updatedAt: '2026-08-16T12:00:00.000Z',
+  createdAt: '2026-07-22T12:00:00.000Z',
+  resolvedAt: null,
+  closedAt: null,
+  statusHistory: [
+    {
+      from: null,
+      to: 'open' as const,
+      changedAt: '2026-07-22T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'open' as const,
+      to: 'in_progress' as const,
+      changedAt: '2026-07-23T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'in_progress' as const,
+      to: 'resolved' as const,
+      changedAt: '2026-07-25T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'resolved' as const,
+      to: 'closed' as const,
+      changedAt: '2026-07-26T12:00:00.000Z',
+      changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
+    },
+    {
+      from: 'closed' as const,
+      to: 'open' as const,
+      changedAt: '2026-08-16T06:00:00.000Z',
+      changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
+    },
+  ],
+};
+
+export const sampleResolvedTicketDetail = {
+  ...sampleTicketDetail,
+  id: 'ticket-gift-card',
+  title: 'Resolved: gift-card balance mismatch',
+  description: 'Balances reconciled after ledger fix.',
+  status: 'resolved' as const,
+  priority: 'medium' as const,
+  client: { id: 'client-2', name: 'Northwind Retail' },
+  assignee: { id: 'user-2', displayName: 'Alex Agent' },
+  resolvedAt: '2026-08-11T12:00:00.000Z',
+  closedAt: null,
+  statusHistory: [
+    {
+      from: null,
+      to: 'open' as const,
+      changedAt: '2026-08-04T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'open' as const,
+      to: 'in_progress' as const,
+      changedAt: '2026-08-05T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'in_progress' as const,
+      to: 'resolved' as const,
+      changedAt: '2026-08-11T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+  ],
+};
+
+export const sampleClosedTicketDetail = {
+  ...sampleTicketDetail,
+  id: 'ticket-invoice',
+  title: 'Closed: invoice PDF encoding',
+  description: 'UTF-8 fix shipped; Client confirmed.',
+  status: 'closed' as const,
+  priority: 'medium' as const,
+  client: { id: 'client-5', name: 'Globex Energy' },
+  assignee: { id: 'user-2', displayName: 'Alex Agent' },
+  resolvedAt: '2026-08-14T12:00:00.000Z',
+  closedAt: '2026-08-15T12:00:00.000Z',
+  statusHistory: [
+    {
+      from: null,
+      to: 'open' as const,
+      changedAt: '2026-07-27T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'open' as const,
+      to: 'in_progress' as const,
+      changedAt: '2026-07-29T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'in_progress' as const,
+      to: 'resolved' as const,
+      changedAt: '2026-08-14T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'resolved' as const,
+      to: 'closed' as const,
+      changedAt: '2026-08-15T12:00:00.000Z',
+      changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
+    },
+  ],
+};
+
 export function mockAuthedSession(
   tickets: unknown = emptyTickets,
   user: typeof ada | typeof alex | typeof sam = ada,
+  detail?: unknown,
 ) {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
@@ -102,6 +242,9 @@ export function mockAuthedSession(
     }
     if (isTicketsUrl(url)) {
       return jsonResponse(200, tickets);
+    }
+    if (detail !== undefined && isTicketDetailUrl(url)) {
+      return jsonResponse(200, detail);
     }
     throw new Error(`unexpected fetch ${url}`);
   });

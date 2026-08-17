@@ -12,40 +12,22 @@ import {
   EMPTY_TICKET_LIST_FILTER_OPTIONS,
   hasMinimumRole,
   PRIORITIES,
-  type Priority,
   TICKET_STATUSES,
   type TicketListEnvelope,
   type TicketListFilterOptions,
   type TicketListFilters,
   type TicketListRow,
-  type TicketStatus,
   UNASSIGNED_ASSIGNEE_QUERY,
 } from '@support-ticketing/shared';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
-
-const STATUS_LABEL: Record<TicketStatus, string> = {
-  open: 'Open',
-  in_progress: 'In progress',
-  resolved: 'Resolved',
-  closed: 'Closed',
-};
-
-const PRIORITY_LABEL: Record<Priority, string> = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  critical: 'Critical',
-};
-
-function formatUpdatedAt(value: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'UTC',
-  }).format(new Date(value));
-}
+import {
+  formatTicketInstant,
+  PRIORITY_LABEL,
+  STATUS_LABEL,
+} from './ticketLabels';
 
 function ticketsUrl(
   filters: TicketListFilters,
@@ -65,7 +47,7 @@ function ticketsUrl(
     params.set('assigneeId', filters.assigneeId);
   }
   const query = params.toString();
-  return query === '' ? '/api/tickets' : `/api/tickets?${query}`;
+  return query ? `/api/tickets?${query}` : '/api/tickets';
 }
 
 function assigneeSelectData(options: TicketListFilterOptions) {
@@ -89,6 +71,13 @@ export function TicketList() {
     useState<TicketListFilterOptions | null>(null);
   const [failed, setFailed] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+
+  function setFilter(key: keyof TicketListFilters, value: string | null) {
+    setFilters((current) => ({
+      ...current,
+      [key]: value ?? undefined,
+    }));
+  }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
   useEffect(() => {
@@ -130,12 +119,7 @@ export function TicketList() {
             label="Status"
             clearable
             value={filters.status ?? null}
-            onChange={(status) =>
-              setFilters((current) => ({
-                ...current,
-                status: status ?? undefined,
-              }))
-            }
+            onChange={(status) => setFilter('status', status)}
             data={TICKET_STATUSES.map((value) => ({
               value,
               label: STATUS_LABEL[value],
@@ -145,12 +129,7 @@ export function TicketList() {
             label="Priority"
             clearable
             value={filters.priority ?? null}
-            onChange={(priority) =>
-              setFilters((current) => ({
-                ...current,
-                priority: priority ?? undefined,
-              }))
-            }
+            onChange={(priority) => setFilter('priority', priority)}
             data={PRIORITIES.map((value) => ({
               value,
               label: PRIORITY_LABEL[value],
@@ -160,12 +139,7 @@ export function TicketList() {
             label="Client"
             clearable
             value={filters.clientId ?? null}
-            onChange={(clientId) =>
-              setFilters((current) => ({
-                ...current,
-                clientId: clientId ?? undefined,
-              }))
-            }
+            onChange={(clientId) => setFilter('clientId', clientId)}
             data={filterOptions.clients.map((client) => ({
               value: client.id,
               label: client.name,
@@ -176,12 +150,7 @@ export function TicketList() {
               label="Assignee"
               clearable
               value={filters.assigneeId ?? null}
-              onChange={(assigneeId) =>
-                setFilters((current) => ({
-                  ...current,
-                  assigneeId: assigneeId ?? undefined,
-                }))
-              }
+              onChange={(assigneeId) => setFilter('assigneeId', assigneeId)}
               data={assigneeSelectData(filterOptions)}
             />
           ) : null}
@@ -224,7 +193,9 @@ export function TicketList() {
           <Table.Tbody>
             {tickets.map((ticket) => (
               <Table.Tr key={ticket.id}>
-                <Table.Td>{ticket.title}</Table.Td>
+                <Table.Td>
+                  <Link to={`/tickets/${ticket.id}`}>{ticket.title}</Link>
+                </Table.Td>
                 <Table.Td>{STATUS_LABEL[ticket.status]}</Table.Td>
                 <Table.Td>{PRIORITY_LABEL[ticket.priority]}</Table.Td>
                 <Table.Td>{ticket.client.name}</Table.Td>
@@ -232,7 +203,7 @@ export function TicketList() {
                   {ticket.assignee?.displayName ?? 'Unassigned'}
                 </Table.Td>
                 <Table.Td>{ticket.createdBy.displayName}</Table.Td>
-                <Table.Td>{formatUpdatedAt(ticket.updatedAt)}</Table.Td>
+                <Table.Td>{formatTicketInstant(ticket.updatedAt)}</Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>
