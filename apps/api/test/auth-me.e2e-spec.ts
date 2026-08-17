@@ -34,7 +34,7 @@ describe('Auth me (e2e)', () => {
     expect(response.body).toEqual({
       id: login.body.user.id,
       email: AGENT_EMAIL,
-      displayName: 'Alex Agent',
+      displayName: 'Alex Turing',
       role: 'agent',
     });
     expect(response.body).not.toHaveProperty('passwordHash');

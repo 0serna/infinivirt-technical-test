@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { DashboardPage } from './dashboard/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { StaffShell } from './shell/StaffShell';
+import { theme } from './theme';
 import { TicketCreate } from './tickets/TicketCreate';
 import { TicketDetail } from './tickets/TicketDetail';
 import { TicketList } from './tickets/TicketList';
@@ -30,7 +31,7 @@ function AuthGate({
 
 export function App() {
   return (
-    <MantineProvider defaultColorScheme="light">
+    <MantineProvider theme={theme} defaultColorScheme="light">
       <AuthProvider>
         <Routes>
           <Route

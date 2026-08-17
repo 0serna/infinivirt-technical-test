@@ -62,8 +62,8 @@ test('Ticket List rows render Title, Status, Priority, Client, Assignee, creator
   expect(within(table).getByText('Resolved')).toBeDefined();
   expect(within(table).getByText('Low')).toBeDefined();
   expect(within(table).getByText('Initech Soft')).toBeDefined();
-  expect(within(table).getByText('Sam Supervisor')).toBeDefined();
-  expect(within(table).getAllByText('Alex Agent').length).toBeGreaterThan(0);
+  expect(within(table).getByText('Sam Hopper')).toBeDefined();
+  expect(within(table).getAllByText('Alex Turing').length).toBeGreaterThan(0);
   expect(screen.getByText('1 Aug 2026, 12:00')).toBeDefined();
   expect(screen.getByText('30 Jul 2026, 09:15')).toBeDefined();
   expect(screen.getByRole('columnheader', { name: 'Title' })).toBeDefined();
@@ -232,7 +232,7 @@ test('Supervisor Ticket List has an Assignee filter including unassigned from fi
 
   await user.click(await screen.findByRole('combobox', { name: 'Assignee' }));
   expect(filterOption('Unassigned')).toBeDefined();
-  expect(filterOption('Sam Supervisor')).toBeDefined();
+  expect(filterOption('Sam Hopper')).toBeDefined();
 });
 
 test('Administrator Ticket List has an Assignee filter including unassigned from filterOptions', async () => {
@@ -244,7 +244,7 @@ test('Administrator Ticket List has an Assignee filter including unassigned from
 
   await user.click(await screen.findByRole('combobox', { name: 'Assignee' }));
   expect(filterOption('Unassigned')).toBeDefined();
-  expect(filterOption('Sam Supervisor')).toBeDefined();
+  expect(filterOption('Sam Hopper')).toBeDefined();
 });
 
 test('Ticket List filter choices come from filterOptions and do not list Client or User catalogs', async () => {
@@ -345,7 +345,7 @@ test('opening /tickets with filter search params applies them in the UI and list
   ).toHaveProperty('value', 'Open');
   expect(filterControl('Priority')).toHaveProperty('value', 'High');
   expect(filterControl('Client')).toHaveProperty('value', 'Contoso Health');
-  expect(filterControl('Assignee')).toHaveProperty('value', 'Sam Supervisor');
+  expect(filterControl('Assignee')).toHaveProperty('value', 'Sam Hopper');
 
   const ticketUrls = vi
     .mocked(fetch)
@@ -379,7 +379,7 @@ test('changing Ticket List filters updates the URL search params', async () => {
   await user.click(filterControl('Client'));
   await user.click(filterOption('Contoso Health'));
   await user.click(filterControl('Assignee'));
-  await user.click(filterOption('Sam Supervisor'));
+  await user.click(filterOption('Sam Hopper'));
 
   expect(await screen.findByTestId('location-path')).toHaveProperty(
     'textContent',

@@ -39,17 +39,17 @@ function stableSeedUuid(key: string): string {
 const USERS = [
   {
     email: 'agent@example.com',
-    displayName: 'Alex Agent',
+    displayName: 'Alex Turing',
     role: Role.agent,
   },
   {
     email: 'supervisor@example.com',
-    displayName: 'Sam Supervisor',
+    displayName: 'Sam Hopper',
     role: Role.supervisor,
   },
   {
     email: 'admin@example.com',
-    displayName: 'Ada Admin',
+    displayName: 'Ada Lovelace',
     role: Role.admin,
   },
 ] as const;

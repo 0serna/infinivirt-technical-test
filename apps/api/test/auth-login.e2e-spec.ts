@@ -42,7 +42,7 @@ describe('Auth login (e2e)', () => {
       user: {
         id: expect.any(String),
         email: AGENT_EMAIL,
-        displayName: 'Alex Agent',
+        displayName: 'Alex Turing',
         role: 'agent',
       },
     });

@@ -93,7 +93,7 @@ test('Administrator /admin/users lists Users and can create one via POST', async
   const table = await screen.findByRole('table');
   expect(within(table).getByText('Ada Lovelace')).toBeDefined();
   expect(within(table).getByText('ada@example.com')).toBeDefined();
-  expect(within(table).getByText('Alex Agent')).toBeDefined();
+  expect(within(table).getByText('Alex Turing')).toBeDefined();
 
   await user.type(screen.getByLabelText('Email'), 'new.agent@example.com');
   await user.type(screen.getByLabelText('Display name'), 'New Agent');
@@ -135,7 +135,7 @@ test('Administrator can edit displayName/role and reset a User password', async 
     {
       id: 'user-2',
       email: 'agent@example.com',
-      displayName: 'Alex Agent',
+      displayName: 'Alex Turing',
       role: 'agent',
       deletedAt: null,
     },
@@ -171,16 +171,16 @@ test('Administrator can edit displayName/role and reset a User password', async 
   renderApp(['/admin/users']);
 
   const table = await screen.findByRole('table');
-  expect(within(table).getByText('Alex Agent')).toBeDefined();
+  expect(within(table).getByText('Alex Turing')).toBeDefined();
 
   await user.click(screen.getByRole('button', { name: 'Edit' }));
   const displayNameInput = screen.getByLabelText(
-    'Edit display name Alex Agent',
+    'Edit display name Alex Turing',
   );
   await user.clear(displayNameInput);
   await user.type(displayNameInput, 'Alex Renamed');
   await user.click(
-    screen.getByRole('combobox', { name: 'Edit role Alex Agent' }),
+    screen.getByRole('combobox', { name: 'Edit role Alex Turing' }),
   );
   const supervisorOptions = screen.getAllByRole('option', {
     name: 'Supervisor',
@@ -233,7 +233,7 @@ test('Administrator can soft-delete and restore a User', async () => {
     {
       id: 'user-2',
       email: 'agent@example.com',
-      displayName: 'Alex Agent',
+      displayName: 'Alex Turing',
       role: 'agent',
       deletedAt: null,
     },
@@ -265,7 +265,7 @@ test('Administrator can soft-delete and restore a User', async () => {
   renderApp(['/admin/users']);
 
   const table = await screen.findByRole('table');
-  expect(within(table).getByText('Alex Agent')).toBeDefined();
+  expect(within(table).getByText('Alex Turing')).toBeDefined();
   expect(within(table).getByText('Current')).toBeDefined();
 
   await user.click(screen.getByRole('button', { name: 'Soft-delete' }));
@@ -321,7 +321,7 @@ test('edit conflict on a non-Administrator does not claim last-Administrator dem
     {
       id: 'user-2',
       email: 'agent@example.com',
-      displayName: 'Alex Agent',
+      displayName: 'Alex Turing',
       role: 'agent',
       deletedAt: null,
     },
@@ -343,7 +343,7 @@ test('edit conflict on a non-Administrator does not claim last-Administrator dem
   });
 
   renderApp(['/admin/users']);
-  expect(await screen.findByText('Alex Agent')).toBeDefined();
+  expect(await screen.findByText('Alex Turing')).toBeDefined();
   await user.click(screen.getByRole('button', { name: 'Edit' }));
   await user.click(screen.getByRole('button', { name: 'Save' }));
   expect(await screen.findByText("Couldn't update this User.")).toBeDefined();

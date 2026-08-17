@@ -224,7 +224,7 @@ describe('Tickets list (e2e)', () => {
       priority: 'high',
       client: { id: expect.any(String), name: 'Contoso Health' },
       assignee: null,
-      createdBy: { id: expect.any(String), displayName: 'Alex Agent' },
+      createdBy: { id: expect.any(String), displayName: 'Alex Turing' },
       updatedAt: expect.any(String),
       createdAt: expect.any(String),
     });
@@ -294,7 +294,7 @@ describe('Tickets list (e2e)', () => {
     expect(response.body.filterOptions.includeUnassigned).toBe(true);
     expect(response.body.filterOptions.assignees).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ displayName: 'Sam Supervisor' }),
+        expect.objectContaining({ displayName: 'Sam Hopper' }),
       ]),
     );
     expect(response.body.filterOptions.assignees).not.toEqual(
@@ -633,7 +633,7 @@ describe('Tickets get by id (e2e)', () => {
       priority: 'high',
       client: { id: expect.any(String), name: 'Contoso Health' },
       assignee: null,
-      createdBy: { id: expect.any(String), displayName: 'Alex Agent' },
+      createdBy: { id: expect.any(String), displayName: 'Alex Turing' },
       updatedAt: expect.any(String),
       createdAt: expect.any(String),
       resolvedAt: null,
@@ -643,7 +643,7 @@ describe('Tickets get by id (e2e)', () => {
           from: null,
           to: 'open',
           changedAt: expect.any(String),
-          changedBy: { id: expect.any(String), displayName: 'Alex Agent' },
+          changedBy: { id: expect.any(String), displayName: 'Alex Turing' },
         },
       ],
       comments: [
@@ -652,7 +652,7 @@ describe('Tickets get by id (e2e)', () => {
           body: 'Logged from the portal call this morning. Still sitting unassigned.',
           visibility: 'public',
           createdAt: expect.any(String),
-          author: { id: expect.any(String), displayName: 'Alex Agent' },
+          author: { id: expect.any(String), displayName: 'Alex Turing' },
         },
       ],
       assignments: [],
@@ -671,7 +671,7 @@ describe('Tickets get by id (e2e)', () => {
     expect(body.status).toBe('open');
     expect(body.assignee).toEqual({
       id: expect.any(String),
-      displayName: 'Alex Agent',
+      displayName: 'Alex Turing',
     });
     expect(body.resolvedAt).toBeNull();
     expect(body.closedAt).toBeNull();
@@ -694,24 +694,24 @@ describe('Tickets get by id (e2e)', () => {
         body: 'They say it is back. Do not tell them we closed it for good.',
         visibility: 'internal',
         createdAt: expect.any(String),
-        author: { id: expect.any(String), displayName: 'Ada Admin' },
+        author: { id: expect.any(String), displayName: 'Ada Lovelace' },
       },
       {
         id: expect.any(String),
         body: 'On the returns submit path again. Need a HAR from Chrome when it blanks.',
         visibility: 'public',
         createdAt: expect.any(String),
-        author: { id: expect.any(String), displayName: 'Alex Agent' },
+        author: { id: expect.any(String), displayName: 'Alex Turing' },
       },
     ]);
     expect(body.assignments).toEqual([
       {
         from: null,
-        to: { id: expect.any(String), displayName: 'Alex Agent' },
+        to: { id: expect.any(String), displayName: 'Alex Turing' },
         changedAt: expect.any(String),
         changedBy: {
           id: expect.any(String),
-          displayName: 'Sam Supervisor',
+          displayName: 'Sam Hopper',
         },
       },
     ]);
@@ -727,7 +727,7 @@ describe('Tickets get by id (e2e)', () => {
 
     expect(body.assignee).toEqual({
       id: expect.any(String),
-      displayName: 'Alex Agent',
+      displayName: 'Alex Turing',
     });
     expect(
       body.assignments.map((row) => [
@@ -736,10 +736,10 @@ describe('Tickets get by id (e2e)', () => {
         row.changedBy.displayName,
       ]),
     ).toEqual([
-      [null, 'Alex Agent', 'Sam Supervisor'],
-      ['Alex Agent', 'Sam Supervisor', 'Ada Admin'],
-      ['Sam Supervisor', null, 'Ada Admin'],
-      [null, 'Alex Agent', 'Sam Supervisor'],
+      [null, 'Alex Turing', 'Sam Hopper'],
+      ['Alex Turing', 'Sam Hopper', 'Ada Lovelace'],
+      ['Sam Hopper', null, 'Ada Lovelace'],
+      [null, 'Alex Turing', 'Sam Hopper'],
     ]);
     const changedAt = body.assignments.map((row) => Date.parse(row.changedAt));
     for (let index = 1; index < changedAt.length; index += 1) {
@@ -766,8 +766,8 @@ describe('Tickets get by id (e2e)', () => {
       ],
     ]);
     expect(body.comments.map((row) => row.author.displayName)).toEqual([
-      'Alex Agent',
-      'Sam Supervisor',
+      'Alex Turing',
+      'Sam Hopper',
     ]);
     const createdAt = body.comments.map((row) => Date.parse(row.createdAt));
     for (let index = 1; index < createdAt.length; index += 1) {
@@ -809,7 +809,7 @@ describe('Tickets get by id (e2e)', () => {
     expect(body.closedAt).toBeNull();
     expect(body.assignee).toEqual({
       id: expect.any(String),
-      displayName: 'Sam Supervisor',
+      displayName: 'Sam Hopper',
     });
   });
 
@@ -1046,7 +1046,7 @@ describe('Tickets status transition (e2e)', () => {
     expectLatestTransition(response.body, {
       from: 'open',
       to: 'in_progress',
-      changedBy: { id: userId, displayName: 'Alex Agent' },
+      changedBy: { id: userId, displayName: 'Alex Turing' },
     });
   });
 
@@ -1076,7 +1076,7 @@ describe('Tickets status transition (e2e)', () => {
     expectLatestTransition(response.body, {
       from: 'in_progress',
       to: 'resolved',
-      changedBy: { id: userId, displayName: 'Alex Agent' },
+      changedBy: { id: userId, displayName: 'Alex Turing' },
     });
   });
 
@@ -1102,7 +1102,7 @@ describe('Tickets status transition (e2e)', () => {
     expectLatestTransition(response.body, {
       from: 'open',
       to: 'in_progress',
-      changedBy: { id: admin.userId, displayName: 'Ada Admin' },
+      changedBy: { id: admin.userId, displayName: 'Ada Lovelace' },
     });
   });
 
@@ -1193,7 +1193,7 @@ describe('Tickets status transition (e2e)', () => {
     expect(ticket.closedAt).toBeNull();
     expect(ticket.assignee).toEqual({
       id: expect.any(String),
-      displayName: 'Alex Agent',
+      displayName: 'Alex Turing',
     });
     const historyLength = ticket.statusHistory.length;
 
@@ -1211,7 +1211,7 @@ describe('Tickets status transition (e2e)', () => {
     expectLatestTransition(response.body, {
       from: 'resolved',
       to: 'closed',
-      changedBy: { id: admin.userId, displayName: 'Ada Admin' },
+      changedBy: { id: admin.userId, displayName: 'Ada Lovelace' },
     });
   });
 
@@ -1239,7 +1239,7 @@ describe('Tickets status transition (e2e)', () => {
     expect(response.body.closedAt).toBeNull();
     expect(response.body.assignee).toEqual({
       id: assignee?.id,
-      displayName: 'Alex Agent',
+      displayName: 'Alex Turing',
     });
     expect(response.body.statusHistory).toHaveLength(priorHistory.length + 1);
     expect(response.body.statusHistory.slice(0, priorHistory.length)).toEqual(
@@ -1248,7 +1248,7 @@ describe('Tickets status transition (e2e)', () => {
     expectLatestTransition(response.body, {
       from: 'closed',
       to: 'open',
-      changedBy: { id: admin.userId, displayName: 'Ada Admin' },
+      changedBy: { id: admin.userId, displayName: 'Ada Lovelace' },
     });
   });
 });
@@ -1280,7 +1280,7 @@ describe('Tickets create Comment (e2e)', () => {
       body: 'Client confirmed MFA emails still missing.',
       visibility: 'public',
       createdAt: expect.any(String),
-      author: { id: userId, displayName: 'Alex Agent' },
+      author: { id: userId, displayName: 'Alex Turing' },
     });
     expect(Date.parse(response.body.updatedAt)).toBeGreaterThan(
       Date.parse(priorUpdatedAt),
@@ -1312,7 +1312,7 @@ describe('Tickets create Comment (e2e)', () => {
         body: 'Asked Client for sync window logs.',
         visibility: 'public',
         createdAt: expect.any(String),
-        author: { id: userId, displayName: 'Alex Agent' },
+        author: { id: userId, displayName: 'Alex Turing' },
       },
     ]);
     expect(Date.parse(response.body.updatedAt)).toBeGreaterThan(
@@ -1447,7 +1447,7 @@ describe('Tickets create Comment (e2e)', () => {
       title: 'Docs still list /v1/shipments',
       body: 'Internal: check docs PR before closing.',
       visibility: 'internal' as const,
-      displayName: 'Sam Supervisor',
+      displayName: 'Sam Hopper',
     },
     {
       roleLabel: 'Administrator',
@@ -1455,7 +1455,7 @@ describe('Tickets create Comment (e2e)', () => {
       title: 'New scanners fail Bluetooth pairing',
       body: 'Internal: warehouse firmware rollback plan.',
       visibility: 'internal' as const,
-      displayName: 'Ada Admin',
+      displayName: 'Ada Lovelace',
     },
     {
       roleLabel: 'Supervisor',
@@ -1463,7 +1463,7 @@ describe('Tickets create Comment (e2e)', () => {
       title: 'Vehicle telemetry stopped overnight',
       body: 'Supervisor public update for telematics Client.',
       visibility: 'public' as const,
-      displayName: 'Sam Supervisor',
+      displayName: 'Sam Hopper',
     },
     {
       roleLabel: 'Administrator',
@@ -1471,7 +1471,7 @@ describe('Tickets create Comment (e2e)', () => {
       title: 'Card checkout returns 500',
       body: 'Administrator public update for checkout outage.',
       visibility: undefined,
-      displayName: 'Ada Admin',
+      displayName: 'Ada Lovelace',
     },
   ] as const)(
     '$roleLabel POST Comment on an in-scope Ticket succeeds (visibility $visibility)',
@@ -1556,7 +1556,7 @@ describe('Tickets create (e2e)', () => {
       priority: 'medium',
       client: { id: clientId, name: 'Contoso Health' },
       assignee: null,
-      createdBy: { id: userId, displayName: 'Alex Agent' },
+      createdBy: { id: userId, displayName: 'Alex Turing' },
       updatedAt: expect.any(String),
       createdAt: expect.any(String),
       resolvedAt: null,
@@ -1566,7 +1566,7 @@ describe('Tickets create (e2e)', () => {
           from: null,
           to: 'open',
           changedAt: expect.any(String),
-          changedBy: { id: userId, displayName: 'Alex Agent' },
+          changedBy: { id: userId, displayName: 'Alex Turing' },
         },
       ],
       comments: [],
@@ -1631,13 +1631,13 @@ describe('Tickets create (e2e)', () => {
     {
       roleLabel: 'Supervisor',
       email: SUPERVISOR_EMAIL,
-      displayName: 'Sam Supervisor',
+      displayName: 'Sam Hopper',
       priority: 'high' as const,
     },
     {
       roleLabel: 'Administrator',
       email: ADMIN_EMAIL,
-      displayName: 'Ada Admin',
+      displayName: 'Ada Lovelace',
       priority: 'critical' as const,
     },
   ] as const)(
@@ -1839,9 +1839,9 @@ describe('Tickets Reassignment (e2e)', () => {
     async ({ email }) => {
       const actor = await login(app, email);
       const catalog = await staffCatalog(app, actor.accessToken);
-      const agent = catalog.find((row) => row.displayName === 'Alex Agent');
+      const agent = catalog.find((row) => row.displayName === 'Alex Turing');
       const supervisor = catalog.find(
-        (row) => row.displayName === 'Sam Supervisor',
+        (row) => row.displayName === 'Sam Hopper',
       );
       expect(agent).toBeDefined();
       expect(supervisor).toBeDefined();
@@ -1863,12 +1863,12 @@ describe('Tickets Reassignment (e2e)', () => {
 
       expect(firstAssign.body.assignee).toEqual({
         id: agent?.id,
-        displayName: 'Alex Agent',
+        displayName: 'Alex Turing',
       });
       expect(firstAssign.body.assignments).toEqual([
         {
           from: null,
-          to: { id: agent?.id, displayName: 'Alex Agent' },
+          to: { id: agent?.id, displayName: 'Alex Turing' },
           changedAt: expect.any(String),
           changedBy: {
             id: actor.userId,
@@ -1890,12 +1890,12 @@ describe('Tickets Reassignment (e2e)', () => {
 
       expect(reassign.body.assignee).toEqual({
         id: supervisor?.id,
-        displayName: 'Sam Supervisor',
+        displayName: 'Sam Hopper',
       });
       expect(reassign.body.assignments).toHaveLength(2);
       expect(reassign.body.assignments[1]).toEqual({
-        from: { id: agent?.id, displayName: 'Alex Agent' },
-        to: { id: supervisor?.id, displayName: 'Sam Supervisor' },
+        from: { id: agent?.id, displayName: 'Alex Turing' },
+        to: { id: supervisor?.id, displayName: 'Sam Hopper' },
         changedAt: expect.any(String),
         changedBy: {
           id: actor.userId,
@@ -1917,7 +1917,7 @@ describe('Tickets Reassignment (e2e)', () => {
       expect(unassign.body.assignee).toBeNull();
       expect(unassign.body.assignments).toHaveLength(3);
       expect(unassign.body.assignments[2]).toEqual({
-        from: { id: supervisor?.id, displayName: 'Sam Supervisor' },
+        from: { id: supervisor?.id, displayName: 'Sam Hopper' },
         to: null,
         changedAt: expect.any(String),
         changedBy: {
@@ -1977,7 +1977,7 @@ describe('Tickets Reassignment (e2e)', () => {
     expect(before.body.status).toBe('closed');
 
     const catalogAgent = catalog.find(
-      (row) => row.displayName === 'Alex Agent',
+      (row) => row.displayName === 'Alex Turing',
     );
     const onClosed = await request(app.getHttpServer())
       .patch(`/tickets/${created.id}/assignee`)
@@ -1988,7 +1988,7 @@ describe('Tickets Reassignment (e2e)', () => {
     expect(onClosed.body.status).toBe('closed');
     expect(onClosed.body.assignee).toEqual({
       id: catalogAgent?.id,
-      displayName: 'Alex Agent',
+      displayName: 'Alex Turing',
     });
     expect(onClosed.body.assignments.length).toBeGreaterThan(
       before.body.assignments.length,
@@ -1998,7 +1998,7 @@ describe('Tickets Reassignment (e2e)', () => {
   it('no-op same assignee (including null→null) appends no row and does not bump updatedAt', async () => {
     const supervisor = await login(app, SUPERVISOR_EMAIL);
     const catalog = await staffCatalog(app, supervisor.accessToken);
-    const agent = catalog.find((row) => row.displayName === 'Alex Agent');
+    const agent = catalog.find((row) => row.displayName === 'Alex Turing');
 
     const created = await createOpenTicket(
       app,
@@ -2037,7 +2037,7 @@ describe('Tickets Reassignment (e2e)', () => {
     const agent = await login(app, AGENT_EMAIL);
     const supervisor = await login(app, SUPERVISOR_EMAIL);
     const catalog = await staffCatalog(app, supervisor.accessToken);
-    const target = catalog.find((row) => row.displayName === 'Sam Supervisor');
+    const target = catalog.find((row) => row.displayName === 'Sam Hopper');
 
     const before = await ticketByTitle(
       app,
