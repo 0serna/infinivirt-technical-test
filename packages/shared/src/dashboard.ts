@@ -1,6 +1,8 @@
 import {
+  OPEN_TICKET_LOAD_STATUS_QUERY,
   OPEN_TICKET_STATUSES,
   TICKET_LIST_ASSIGNED_OPEN_SCOPE,
+  TICKET_LIST_STALE_QUERY,
   type TicketListRow,
 } from './ticket';
 
@@ -12,6 +14,19 @@ export const DASHBOARD_SHORT_LIST_CAP = 10;
  * (`scope=assignedOpen`).
  */
 export const DASHBOARD_ASSIGNED_OPEN_LIST_PATH = `/tickets?scope=${TICKET_LIST_ASSIGNED_OPEN_SCOPE}`;
+
+/** Ticket List deep-link for team Open Ticket load (`open` + `in_progress`). */
+export const DASHBOARD_OPEN_LOAD_LIST_PATH = `/tickets?status=${OPEN_TICKET_LOAD_STATUS_QUERY}`;
+
+/** Ticket List deep-link for Status `open` only. */
+export const DASHBOARD_OPEN_STATUS_LIST_PATH = '/tickets?status=open';
+
+/** Ticket List deep-link for Status `in_progress` only. */
+export const DASHBOARD_IN_PROGRESS_STATUS_LIST_PATH =
+  '/tickets?status=in_progress';
+
+/** Ticket List deep-link for Stale Tickets (`stale=1`). */
+export const DASHBOARD_STALE_LIST_PATH = `/tickets?stale=${TICKET_LIST_STALE_QUERY}`;
 
 /** Statuses counted as Open Ticket load on the dashboard. */
 export const DASHBOARD_OPEN_STATUSES = OPEN_TICKET_STATUSES;
@@ -28,11 +43,9 @@ export type AgentDashboard = {
 };
 
 /**
- * Team Operational Dashboard (Supervisor / Administrator).
- *
- * Full Open / Stale aggregations are owned by F7.4 (#50). Until then the API
- * may return this shape with zeros and empty lists so `/dashboard` does not
- * crash for Roles above Agent.
+ * Team Operational Dashboard (Supervisor / Administrator): account-wide Open
+ * Ticket load, Open-by-Status, and Stale count + short list. No Admin-only
+ * metrics in F7.
  */
 export type TeamDashboard = {
   kind: 'team';
@@ -48,7 +61,7 @@ export type TeamDashboard = {
 
 export type DashboardEnvelope = AgentDashboard | TeamDashboard;
 
-/** Empty team envelope for interim Supervisor/Admin responses (F7.3). */
+/** Empty team envelope (tests / zero-state fixtures). */
 export const EMPTY_TEAM_DASHBOARD: TeamDashboard = {
   kind: 'team',
   openCount: 0,

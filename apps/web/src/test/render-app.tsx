@@ -156,6 +156,37 @@ export const emptyTeamDashboard = {
   stale: [],
 };
 
+export const sampleTeamDashboard = {
+  kind: 'team' as const,
+  openCount: 5,
+  openByStatus: { open: 3, in_progress: 2 },
+  staleCount: 4,
+  stale: [
+    {
+      id: 'ticket-stale-billing',
+      title: 'Stale open: billing portal timeout',
+      status: 'open' as const,
+      priority: 'high' as const,
+      client: { id: 'client-acme', name: 'Acme Logistics' },
+      assignee: null,
+      createdBy: { id: 'user-3', displayName: 'Sam Supervisor' },
+      updatedAt: '2026-08-10T12:00:00.000Z',
+      createdAt: '2026-08-08T12:00:00.000Z',
+    },
+    {
+      id: 'ticket-gift-card',
+      title: 'Resolved: gift-card balance mismatch',
+      status: 'resolved' as const,
+      priority: 'medium' as const,
+      client: { id: 'client-2', name: 'Northwind Retail' },
+      assignee: { id: 'user-2', displayName: 'Alex Agent' },
+      createdBy: { id: 'user-2', displayName: 'Alex Agent' },
+      updatedAt: '2026-08-12T09:00:00.000Z',
+      createdAt: '2026-08-11T09:00:00.000Z',
+    },
+  ],
+};
+
 /** Full Client catalog (ADR 0010). Includes Clients absent from list filterOptions. */
 export const sampleClientCatalog = [
   { id: 'client-1', name: 'Contoso Health' },

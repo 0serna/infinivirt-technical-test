@@ -7,7 +7,9 @@ import {
   jsonResponse,
   mockAuthedSession,
   renderApp,
+  sam,
   sampleAgentDashboard,
+  sampleTeamDashboard,
 } from '../test/render-app';
 
 beforeEach(() => {
@@ -123,4 +125,47 @@ test('dashboard Try again refetches after a failure', async () => {
 
   expect(await screen.findByText('Open assigned')).toBeDefined();
   expect(screen.getByRole('link', { name: '2' })).toBeDefined();
+});
+
+test('team dashboard shows KPI strip deep-links and Stale short table', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockAuthedSession(emptyTickets, sam, undefined, sampleTeamDashboard);
+
+  renderApp(['/dashboard']);
+
+  expect(
+    await screen.findByRole('heading', { name: 'Dashboard' }),
+  ).toBeDefined();
+  expect(screen.queryByText(/Team metrics are not available/i)).toBeNull();
+  expect(screen.queryByText('Open assigned')).toBeNull();
+
+  expect(screen.getByText('Open tickets')).toBeDefined();
+  expect(screen.getByRole('link', { name: '5' }).getAttribute('href')).toBe(
+    '/tickets?status=open,in_progress',
+  );
+  expect(screen.getByRole('link', { name: '3' }).getAttribute('href')).toBe(
+    '/tickets?status=open',
+  );
+  expect(screen.getByRole('link', { name: '2' }).getAttribute('href')).toBe(
+    '/tickets?status=in_progress',
+  );
+  expect(screen.getByText('Stale')).toBeDefined();
+  expect(screen.getByRole('link', { name: '4' }).getAttribute('href')).toBe(
+    '/tickets?stale=1',
+  );
+
+  expect(screen.getByRole('heading', { name: 'Stale tickets' })).toBeDefined();
+
+  const table = screen.getByRole('table');
+  expect(
+    within(table)
+      .getByRole('link', { name: 'Stale open: billing portal timeout' })
+      .getAttribute('href'),
+  ).toBe('/tickets/ticket-stale-billing');
+  expect(
+    within(table)
+      .getByRole('link', { name: 'Resolved: gift-card balance mismatch' })
+      .getAttribute('href'),
+  ).toBe('/tickets/ticket-gift-card');
+  expect(within(table).getByText('Resolved')).toBeDefined();
 });

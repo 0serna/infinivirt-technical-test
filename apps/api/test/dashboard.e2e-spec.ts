@@ -85,21 +85,94 @@ describe('Dashboard (e2e)', () => {
     expect(titles).not.toContain('Resolved: gift-card balance mismatch');
   });
 
-  it('Supervisor and Admin GET /dashboard return an interim team stub (F7.4 owns full metrics)', async () => {
+  it('Supervisor and Admin GET /dashboard return the same team Open/Stale payload', async () => {
+    const payloads: DashboardEnvelope[] = [];
+
     for (const email of [SUPERVISOR_EMAIL, ADMIN_EMAIL]) {
       const { accessToken } = await login(app, email);
+
+      const [openLoad, openOnly, inProgress, staleList] = await Promise.all([
+        request(app.getHttpServer())
+          .get('/tickets')
+          .query({ status: 'open,in_progress' })
+          .set('Authorization', `Bearer ${accessToken}`)
+          .expect(200),
+        request(app.getHttpServer())
+          .get('/tickets')
+          .query({ status: 'open' })
+          .set('Authorization', `Bearer ${accessToken}`)
+          .expect(200),
+        request(app.getHttpServer())
+          .get('/tickets')
+          .query({ status: 'in_progress' })
+          .set('Authorization', `Bearer ${accessToken}`)
+          .expect(200),
+        request(app.getHttpServer())
+          .get('/tickets')
+          .query({ stale: '1' })
+          .set('Authorization', `Bearer ${accessToken}`)
+          .expect(200),
+      ]);
+
+      const openLoadBody = openLoad.body as TicketListEnvelope;
+      const openOnlyBody = openOnly.body as TicketListEnvelope;
+      const inProgressBody = inProgress.body as TicketListEnvelope;
+      const staleBody = staleList.body as TicketListEnvelope;
+      const expectedStaleShort = sortOldestUpdatedFirst(
+        staleBody.tickets,
+      ).slice(0, 10);
+
       const response = await request(app.getHttpServer())
         .get('/dashboard')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
-      expect(response.body).toEqual({
-        kind: 'team',
-        openCount: 0,
-        openByStatus: { open: 0, in_progress: 0 },
-        staleCount: 0,
-        stale: [],
+      const body = response.body as DashboardEnvelope;
+      expect(body.kind).toBe('team');
+      if (body.kind !== 'team') {
+        return;
+      }
+
+      expect(body).not.toHaveProperty('assignedOpenCount');
+      expect(body).not.toHaveProperty('assignedOpen');
+
+      expect(body.openCount).toBe(openLoadBody.tickets.length);
+      expect(body.openByStatus).toEqual({
+        open: openOnlyBody.tickets.length,
+        in_progress: inProgressBody.tickets.length,
       });
+      expect(body.openCount).toBe(
+        body.openByStatus.open + body.openByStatus.in_progress,
+      );
+      expect(
+        openLoadBody.tickets.every((ticket) =>
+          ['open', 'in_progress'].includes(ticket.status),
+        ),
+      ).toBe(true);
+
+      expect(body.staleCount).toBe(staleBody.tickets.length);
+      expect(body.stale.length).toBeLessThanOrEqual(10);
+      expect(body.stale).toEqual(expectedStaleShort);
+      expect(body.stale.every((ticket) => ticket.status !== 'closed')).toBe(
+        true,
+      );
+      expect(body.stale.some((ticket) => ticket.status === 'resolved')).toBe(
+        true,
+      );
+      expect(body.stale.map((ticket) => ticket.title)).not.toContain(
+        'Closed (older): dealer SSO onboarding',
+      );
+      expect(
+        staleBody.tickets.every((ticket) => ticket.status !== 'closed'),
+      ).toBe(true);
+      expect(
+        staleBody.tickets.some((ticket) => ticket.status === 'resolved'),
+      ).toBe(true);
+
+      payloads.push(body);
     }
+
+    expect(payloads).toHaveLength(2);
+    expect(payloads[0]).toEqual(payloads[1]);
   });
 });

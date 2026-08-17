@@ -11,6 +11,10 @@ import {
 import {
   type AgentDashboard,
   DASHBOARD_ASSIGNED_OPEN_LIST_PATH,
+  DASHBOARD_IN_PROGRESS_STATUS_LIST_PATH,
+  DASHBOARD_OPEN_LOAD_LIST_PATH,
+  DASHBOARD_OPEN_STATUS_LIST_PATH,
+  DASHBOARD_STALE_LIST_PATH,
   type DashboardEnvelope,
   type TeamDashboard,
   type TicketListRow,
@@ -98,30 +102,51 @@ function AgentDashboardView({ dashboard }: { dashboard: AgentDashboard }) {
   );
 }
 
+function KpiLink({
+  label,
+  count,
+  to,
+}: {
+  label: string;
+  count: number;
+  to: string;
+}) {
+  return (
+    <Stack gap={4}>
+      <Text size="sm" c="dimmed">
+        {label}
+      </Text>
+      <Anchor component={Link} to={to} size="xl" fw={700}>
+        {count}
+      </Anchor>
+    </Stack>
+  );
+}
+
 function TeamDashboardView({ dashboard }: { dashboard: TeamDashboard }) {
   return (
     <Stack>
-      <Text c="dimmed">
-        Team metrics are not available yet. Open and Stale totals will land in a
-        follow-up.
-      </Text>
       <Group gap="xl">
-        <Stack gap={4}>
-          <Text size="sm" c="dimmed">
-            Open tickets
-          </Text>
-          <Text size="xl" fw={700}>
-            {dashboard.openCount}
-          </Text>
-        </Stack>
-        <Stack gap={4}>
-          <Text size="sm" c="dimmed">
-            Stale tickets
-          </Text>
-          <Text size="xl" fw={700}>
-            {dashboard.staleCount}
-          </Text>
-        </Stack>
+        <KpiLink
+          label="Open tickets"
+          count={dashboard.openCount}
+          to={DASHBOARD_OPEN_LOAD_LIST_PATH}
+        />
+        <KpiLink
+          label="Open"
+          count={dashboard.openByStatus.open}
+          to={DASHBOARD_OPEN_STATUS_LIST_PATH}
+        />
+        <KpiLink
+          label="In progress"
+          count={dashboard.openByStatus.in_progress}
+          to={DASHBOARD_IN_PROGRESS_STATUS_LIST_PATH}
+        />
+        <KpiLink
+          label="Stale"
+          count={dashboard.staleCount}
+          to={DASHBOARD_STALE_LIST_PATH}
+        />
       </Group>
       <Title order={3}>Stale tickets</Title>
       <ShortTicketTable
