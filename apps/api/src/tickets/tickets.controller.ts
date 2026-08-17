@@ -1,12 +1,15 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
+  Patch,
   Query,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
 import type {
+  PatchTicketStatusBody,
   TicketDetail,
   TicketListEnvelope,
   TicketListFilters,
@@ -43,5 +46,19 @@ export class TicketsController {
       throw new UnauthorizedException();
     }
     return this.ticketsService.getById(user, id);
+  }
+
+  @Patch(':id')
+  @RequireRole('agent')
+  updateStatus(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: PatchTicketStatusBody,
+  ): Promise<TicketDetail> {
+    const user = request.user;
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+    return this.ticketsService.updateStatus(user, id, body);
   }
 }

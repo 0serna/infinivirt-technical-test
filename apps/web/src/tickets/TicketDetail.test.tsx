@@ -2,9 +2,11 @@ import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   ada,
+  alex,
   isTicketDetailUrl,
   jsonResponse,
   renderApp,
+  type sam,
   sampleReopenedTicketDetail,
   sampleTicketDetail,
   sampleTickets,
@@ -21,11 +23,14 @@ afterEach(() => {
   localStorage.clear();
 });
 
-function mockTicketSession(detail: unknown = sampleTicketDetail) {
+function mockTicketSession(
+  detail: unknown = sampleTicketDetail,
+  user: typeof ada | typeof alex | typeof sam = ada,
+) {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
     if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
+      return jsonResponse(200, user);
     }
     if (url === '/api/tickets' || url.startsWith('/api/tickets?')) {
       return jsonResponse(200, sampleTickets);
@@ -84,9 +89,13 @@ test('Ticket consult shows current fields and Status Transition history oldest f
   expect(screen.getByText('Client: Northwind Retail')).toBeDefined();
   expect(screen.getByText('Assignee: Alex Agent')).toBeDefined();
   expect(screen.queryByText('Waiting on Client network details.')).toBeNull();
-  expect(screen.queryByRole('button', { name: /in progress/i })).toBeNull();
   expect(screen.queryByRole('button', { name: /assign/i })).toBeNull();
   expect(screen.queryByRole('textbox')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Mark as in progress' }),
+  ).toBeDefined();
 
   const history = screen.getByRole('table', { name: 'Status history' });
   const rows = within(history).getAllByRole('row');
@@ -227,4 +236,186 @@ test('staff shell title returns to the Ticket List', async () => {
   await user.click(screen.getByRole('link', { name: 'Support Ticketing' }));
   expect(await screen.findByRole('heading', { name: 'Tickets' })).toBeDefined();
   expect(screen.getByText('High: patient portal MFA reset')).toBeDefined();
+});
+
+test('Agent who is not Assignee sees no Status Transition control', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockTicketSession(sampleTicketDetail, alex);
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  expect(
+    screen.queryByRole('button', { name: 'Mark as in progress' }),
+  ).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Mark as resolved' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
+});
+
+test('Agent Assignee can record the next forward Status Transition', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const updated = {
+    ...sampleReopenedTicketDetail,
+    status: 'in_progress' as const,
+    updatedAt: '2026-08-16T13:00:00.000Z',
+    statusHistory: [
+      ...sampleReopenedTicketDetail.statusHistory,
+      {
+        from: 'open' as const,
+        to: 'in_progress' as const,
+        changedAt: '2026-08-16T13:00:00.000Z',
+        changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, alex);
+    }
+    if (url === '/api/tickets' || url.startsWith('/api/tickets?')) {
+      return jsonResponse(200, sampleTickets);
+    }
+    if (isTicketDetailUrl(url) && method === 'PATCH') {
+      expect(init?.body).toBe(JSON.stringify({ status: 'in_progress' }));
+      return jsonResponse(200, updated);
+    }
+    if (isTicketDetailUrl(url)) {
+      return jsonResponse(200, sampleReopenedTicketDetail);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/tickets/ticket-3']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Reopened: returns portal blank page',
+    }),
+  ).toBeDefined();
+  await user.click(screen.getByRole('button', { name: 'Mark as in progress' }));
+
+  expect(await screen.findByText('Status: In progress')).toBeDefined();
+  expect(
+    screen.queryByRole('button', { name: 'Mark as in progress' }),
+  ).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Mark as resolved' }),
+  ).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
+});
+
+test('Administrator can record a forward Status Transition on an unassigned Ticket', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const updated = {
+    ...sampleTicketDetail,
+    status: 'in_progress' as const,
+    updatedAt: '2026-08-16T13:00:00.000Z',
+    statusHistory: [
+      ...sampleTicketDetail.statusHistory,
+      {
+        from: 'open' as const,
+        to: 'in_progress' as const,
+        changedAt: '2026-08-16T13:00:00.000Z',
+        changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isTicketDetailUrl(url) && method === 'PATCH') {
+      expect(init?.body).toBe(JSON.stringify({ status: 'in_progress' }));
+      return jsonResponse(200, updated);
+    }
+    if (isTicketDetailUrl(url)) {
+      return jsonResponse(200, sampleTicketDetail);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  expect(screen.getByText('Assignee: Unassigned')).toBeDefined();
+  await user.click(screen.getByRole('button', { name: 'Mark as in progress' }));
+  expect(await screen.findByText('Status: In progress')).toBeDefined();
+});
+
+test('resolved Ticket offers no Close or Reopen control', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockTicketSession(
+    {
+      ...sampleTicketDetail,
+      id: 'ticket-2',
+      title: 'Resolved: SSO redirect loop',
+      status: 'resolved' as const,
+      assignee: { id: 'user-3', displayName: 'Sam Supervisor' },
+      resolvedAt: '2026-07-30T09:15:00.000Z',
+    },
+    alex,
+  );
+
+  renderApp(['/tickets/ticket-2']);
+
+  expect(
+    await screen.findByRole('heading', { name: 'Resolved: SSO redirect loop' }),
+  ).toBeDefined();
+  expect(screen.getByText('Status: Resolved')).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Mark as resolved' })).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Mark as in progress' }),
+  ).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
+});
+
+test('failed Status Transition shows error copy without the raw server body', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isTicketDetailUrl(url) && method === 'PATCH') {
+      return jsonResponse(409, { message: 'Illegal edge stack' });
+    }
+    if (isTicketDetailUrl(url)) {
+      return jsonResponse(200, sampleTicketDetail);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  await user.click(screen.getByRole('button', { name: 'Mark as in progress' }));
+
+  expect(
+    await screen.findByText("Couldn't update this ticket's status."),
+  ).toBeDefined();
+  expect(screen.queryByText('Illegal edge stack')).toBeNull();
+  expect(screen.getByText('Status: Open')).toBeDefined();
 });

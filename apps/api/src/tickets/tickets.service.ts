@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -7,11 +9,13 @@ import type { Prisma } from '@prisma/client';
 import {
   EMPTY_TICKET_LIST_FILTER_OPTIONS,
   hasMinimumRole,
+  isLegalStatusEdge,
+  type PatchTicketStatusBody,
   PRIORITIES,
   type Priority,
   TICKET_STATUSES,
-  type TicketListClient,
   type TicketDetail,
+  type TicketListClient,
   type TicketListEnvelope,
   type TicketListFilterOptions,
   type TicketListFilters,
@@ -42,6 +46,20 @@ function parseOptionalEnum<T extends string>(
     return undefined;
   }
   if (!(allowed as readonly string[]).includes(value)) {
+    throw new BadRequestException(`Invalid ${field}`);
+  }
+  return value as T;
+}
+
+function parseRequiredEnum<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  field: string,
+): T {
+  if (
+    typeof value !== 'string' ||
+    !(allowed as readonly string[]).includes(value)
+  ) {
     throw new BadRequestException(`Invalid ${field}`);
   }
   return value as T;
@@ -210,25 +228,96 @@ export class TicketsService {
       throw new NotFoundException();
     }
 
-    return {
-      id: ticket.id,
-      title: ticket.title,
-      status: ticket.status,
-      priority: ticket.priority,
-      client: ticket.client,
-      assignee: ticket.assignee,
-      createdBy: ticket.createdBy,
-      updatedAt: ticket.updatedAt.toISOString(),
-      createdAt: ticket.createdAt.toISOString(),
-      description: ticket.description,
-      resolvedAt: ticket.resolvedAt?.toISOString() ?? null,
-      closedAt: ticket.closedAt?.toISOString() ?? null,
-      statusHistory: ticket.statusHistory.map((row) => ({
-        from: row.fromStatus,
-        to: row.toStatus,
-        changedAt: row.changedAt.toISOString(),
-        changedBy: row.changedBy,
-      })),
-    };
+    return toTicketDetail(ticket);
   }
+
+  async updateStatus(
+    user: PublicUser,
+    id: string,
+    body: PatchTicketStatusBody,
+  ): Promise<TicketDetail> {
+    const ticketId = requireUuid(id, 'id');
+    const to = parseRequiredEnum(body?.status, TICKET_STATUSES, 'status');
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, AND: [listScopeWhere(user)] },
+      select: { id: true, status: true, assigneeId: true },
+    });
+    if (!ticket) {
+      throw new NotFoundException();
+    }
+
+    if (ticket.status === to || !isLegalStatusEdge(ticket.status, to)) {
+      throw new ConflictException();
+    }
+
+    const closeOrReopen = to === 'closed' || ticket.status === 'closed';
+    const mayRecord =
+      !closeOrReopen &&
+      (hasMinimumRole(user.role, 'admin') || ticket.assigneeId === user.id);
+    if (!mayRecord) {
+      throw new ForbiddenException();
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ticket.update({
+        where: { id: ticket.id },
+        data: {
+          status: to,
+          ...(to === 'resolved' ? { resolvedAt: new Date() } : {}),
+        },
+      });
+      await tx.ticketStatusHistory.create({
+        data: {
+          ticketId: ticket.id,
+          fromStatus: ticket.status,
+          toStatus: to,
+          changedById: user.id,
+        },
+      });
+    });
+
+    return this.getById(user, ticket.id);
+  }
+}
+
+function toTicketDetail(ticket: {
+  id: string;
+  title: string;
+  status: TicketStatus;
+  priority: Priority;
+  client: TicketListClient;
+  assignee: TicketListPerson | null;
+  createdBy: TicketListPerson;
+  updatedAt: Date;
+  createdAt: Date;
+  description: string;
+  resolvedAt: Date | null;
+  closedAt: Date | null;
+  statusHistory: Array<{
+    fromStatus: TicketStatus | null;
+    toStatus: TicketStatus;
+    changedAt: Date;
+    changedBy: TicketListPerson;
+  }>;
+}): TicketDetail {
+  return {
+    id: ticket.id,
+    title: ticket.title,
+    status: ticket.status,
+    priority: ticket.priority,
+    client: ticket.client,
+    assignee: ticket.assignee,
+    createdBy: ticket.createdBy,
+    updatedAt: ticket.updatedAt.toISOString(),
+    createdAt: ticket.createdAt.toISOString(),
+    description: ticket.description,
+    resolvedAt: ticket.resolvedAt?.toISOString() ?? null,
+    closedAt: ticket.closedAt?.toISOString() ?? null,
+    statusHistory: ticket.statusHistory.map((row) => ({
+      from: row.fromStatus,
+      to: row.toStatus,
+      changedAt: row.changedAt.toISOString(),
+      changedBy: row.changedBy,
+    })),
+  };
 }

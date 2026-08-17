@@ -584,3 +584,290 @@ describe('Tickets get by id (e2e)', () => {
     expect(JSON.stringify(response.body)).not.toMatch(/TicketsService/);
   });
 });
+
+describe('Tickets status transition (e2e)', () => {
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    app = await createTestApp();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  async function ticketByTitle(
+    accessToken: string,
+    title: string,
+  ): Promise<{
+    id: string;
+    status: string;
+    updatedAt: string;
+    resolvedAt: string | null;
+    statusHistory: Array<{ from: string | null; to: string }>;
+  }> {
+    const list = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    const listed = (
+      list.body.tickets as Array<{ id: string; title: string }>
+    ).find((ticket) => ticket.title === title);
+    expect(listed).toBeDefined();
+    const detail = await request(app.getHttpServer())
+      .get(`/tickets/${listed?.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    return detail.body;
+  }
+
+  it('PATCH /tickets/:id without a token returns the same opaque 401 as GET /auth/me', async () => {
+    const me = await request(app.getHttpServer()).get('/auth/me').expect(401);
+    const patched = await request(app.getHttpServer())
+      .patch('/tickets/00000000-0000-4000-8000-000000000001')
+      .send({ status: 'in_progress' })
+      .expect(401);
+
+    expect(patched.body).toEqual(me.body);
+  });
+
+  it('malformed Ticket id on PATCH returns HTTP 400 without a stack', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const response = await request(app.getHttpServer())
+      .patch('/tickets/not-a-uuid')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ status: 'in_progress' })
+      .expect(400);
+
+    expect(response.body).not.toHaveProperty('stack');
+    expect(JSON.stringify(response.body)).not.toMatch(/TicketsService/);
+  });
+
+  it('Agent PATCH of a well-formed unknown id matches PATCH outside List Scope and GET 404', async () => {
+    const agent = await login(app, AGENT_EMAIL);
+    const supervisor = await login(app, SUPERVISOR_EMAIL);
+    const warehouse = await ticketByTitle(
+      supervisor.accessToken,
+      'High: warehouse scanner pairing',
+    );
+
+    const unknownId = '00000000-0000-4000-8000-000000000099';
+    const getUnknown = await request(app.getHttpServer())
+      .get(`/tickets/${unknownId}`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .expect(404);
+    const patchUnknown = await request(app.getHttpServer())
+      .patch(`/tickets/${unknownId}`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .send({ status: 'in_progress' })
+      .expect(404);
+    const patchHidden = await request(app.getHttpServer())
+      .patch(`/tickets/${warehouse.id}`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .send({ status: 'in_progress' })
+      .expect(404);
+
+    expect(patchUnknown.body).toEqual(getUnknown.body);
+    expect(patchHidden.body).toEqual(getUnknown.body);
+    expect(JSON.stringify(patchHidden.body)).not.toMatch(/warehouse scanner/);
+  });
+
+  it('Agent creator of an unassigned Ticket cannot record a Status Transition', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const ticket = await ticketByTitle(
+      accessToken,
+      'High: patient portal MFA reset',
+    );
+    expect(ticket.status).toBe('open');
+    const historyLength = ticket.statusHistory.length;
+
+    const response = await request(app.getHttpServer())
+      .patch(`/tickets/${ticket.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ status: 'in_progress' })
+      .expect(403);
+
+    expect(response.body).not.toHaveProperty('stack');
+    const after = await ticketByTitle(
+      accessToken,
+      'High: patient portal MFA reset',
+    );
+    expect(after.status).toBe('open');
+    expect(after.updatedAt).toBe(ticket.updatedAt);
+    expect(after.statusHistory).toHaveLength(historyLength);
+  });
+
+  it('Supervisor who is not Assignee cannot record a forward Status Transition', async () => {
+    const supervisor = await login(app, SUPERVISOR_EMAIL);
+    const ticket = await ticketByTitle(
+      supervisor.accessToken,
+      'High: warehouse scanner pairing',
+    );
+    expect(ticket.status).toBe('open');
+
+    await request(app.getHttpServer())
+      .patch(`/tickets/${ticket.id}`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .send({ status: 'in_progress' })
+      .expect(403);
+
+    const after = await ticketByTitle(
+      supervisor.accessToken,
+      'High: warehouse scanner pairing',
+    );
+    expect(after.status).toBe('open');
+    expect(after.updatedAt).toBe(ticket.updatedAt);
+    expect(after.statusHistory).toEqual(ticket.statusHistory);
+  });
+
+  it('Agent who created a Ticket assigned to another User cannot transition it', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const ticket = await ticketByTitle(
+      accessToken,
+      'Resolved: SSO redirect loop',
+    );
+    expect(ticket.status).toBe('resolved');
+
+    await request(app.getHttpServer())
+      .patch(`/tickets/${ticket.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ status: 'closed' })
+      .expect(403);
+
+    const after = await ticketByTitle(
+      accessToken,
+      'Resolved: SSO redirect loop',
+    );
+    expect(after.status).toBe('resolved');
+    expect(after.updatedAt).toBe(ticket.updatedAt);
+    expect(after.statusHistory).toEqual(ticket.statusHistory);
+  });
+
+  it('skip and same Status return 409 with no write, including for Administrator', async () => {
+    const admin = await login(app, ADMIN_EMAIL);
+    const ticket = await ticketByTitle(
+      admin.accessToken,
+      'High: patient portal MFA reset',
+    );
+    expect(ticket.status).toBe('open');
+
+    const same = await request(app.getHttpServer())
+      .patch(`/tickets/${ticket.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .send({ status: 'open' })
+      .expect(409);
+    const skipResolved = await request(app.getHttpServer())
+      .patch(`/tickets/${ticket.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .send({ status: 'resolved' })
+      .expect(409);
+    const skipClosed = await request(app.getHttpServer())
+      .patch(`/tickets/${ticket.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .send({ status: 'closed' })
+      .expect(409);
+
+    for (const response of [same, skipResolved, skipClosed]) {
+      expect(response.body).not.toHaveProperty('stack');
+    }
+
+    const after = await ticketByTitle(
+      admin.accessToken,
+      'High: patient portal MFA reset',
+    );
+    expect(after.status).toBe('open');
+    expect(after.updatedAt).toBe(ticket.updatedAt);
+    expect(after.statusHistory).toEqual(ticket.statusHistory);
+  });
+
+  it('Agent Assignee can record open → in_progress', async () => {
+    const { accessToken, userId } = await login(app, AGENT_EMAIL);
+    const ticket = await ticketByTitle(
+      accessToken,
+      'Stale open: billing portal timeout',
+    );
+    expect(ticket.status).toBe('open');
+    const historyLength = ticket.statusHistory.length;
+
+    const response = await request(app.getHttpServer())
+      .patch(`/tickets/${ticket.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ status: 'in_progress' })
+      .expect(200);
+
+    expect(response.body.status).toBe('in_progress');
+    expect(response.body.resolvedAt).toBeNull();
+    expect(Date.parse(response.body.updatedAt)).toBeGreaterThan(
+      Date.parse(ticket.updatedAt),
+    );
+    expect(response.body.statusHistory).toHaveLength(historyLength + 1);
+    expect(
+      response.body.statusHistory[response.body.statusHistory.length - 1],
+    ).toEqual({
+      from: 'open',
+      to: 'in_progress',
+      changedAt: expect.any(String),
+      changedBy: { id: userId, displayName: 'Alex Agent' },
+    });
+  });
+
+  it('Agent Assignee can record in_progress → resolved and sets resolvedAt', async () => {
+    const { accessToken, userId } = await login(app, AGENT_EMAIL);
+    const ticket = await ticketByTitle(
+      accessToken,
+      'In progress: shipment tracking API',
+    );
+    expect(ticket.status).toBe('in_progress');
+    expect(ticket.resolvedAt).toBeNull();
+    const historyLength = ticket.statusHistory.length;
+
+    const response = await request(app.getHttpServer())
+      .patch(`/tickets/${ticket.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ status: 'resolved' })
+      .expect(200);
+
+    expect(response.body.status).toBe('resolved');
+    expect(response.body.resolvedAt).toEqual(expect.any(String));
+    expect(Date.parse(response.body.updatedAt)).toBeGreaterThan(
+      Date.parse(ticket.updatedAt),
+    );
+    expect(response.body.statusHistory).toHaveLength(historyLength + 1);
+    expect(
+      response.body.statusHistory[response.body.statusHistory.length - 1],
+    ).toEqual({
+      from: 'in_progress',
+      to: 'resolved',
+      changedAt: expect.any(String),
+      changedBy: { id: userId, displayName: 'Alex Agent' },
+    });
+  });
+
+  it('Administrator can record open → in_progress on an unassigned Ticket they are not Assignee of', async () => {
+    const admin = await login(app, ADMIN_EMAIL);
+    const ticket = await ticketByTitle(
+      admin.accessToken,
+      'High: warehouse scanner pairing',
+    );
+    expect(ticket.status).toBe('open');
+    const historyLength = ticket.statusHistory.length;
+
+    const response = await request(app.getHttpServer())
+      .patch(`/tickets/${ticket.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .send({ status: 'in_progress' })
+      .expect(200);
+
+    expect(response.body.status).toBe('in_progress');
+    expect(response.body.assignee).toBeNull();
+    expect(response.body.statusHistory).toHaveLength(historyLength + 1);
+    expect(
+      response.body.statusHistory[response.body.statusHistory.length - 1],
+    ).toEqual({
+      from: 'open',
+      to: 'in_progress',
+      changedAt: expect.any(String),
+      changedBy: { id: admin.userId, displayName: 'Ada Admin' },
+    });
+  });
+});

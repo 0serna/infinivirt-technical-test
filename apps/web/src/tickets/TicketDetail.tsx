@@ -1,11 +1,14 @@
 import { Alert, Button, Stack, Table, Text, Title } from '@mantine/core';
-import type {
-  Priority,
-  TicketDetail as TicketDetailBody,
-  TicketStatus,
+import {
+  nextRecordableForwardStatus,
+  type PatchTicketStatusBody,
+  type Priority,
+  type TicketDetail as TicketDetailBody,
+  type TicketStatus,
 } from '@support-ticketing/shared';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
 
 const STATUS_LABEL: Record<TicketStatus, string> = {
@@ -38,8 +41,11 @@ type LoadState =
 
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [reloadToken, setReloadToken] = useState(0);
+  const [transitionError, setTransitionError] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
   useEffect(() => {
@@ -49,6 +55,7 @@ export function TicketDetail() {
     }
     let cancelled = false;
     setState({ kind: 'loading' });
+    setTransitionError(false);
 
     void apiFetch(`/api/tickets/${id}`)
       .then(async (response) => {
@@ -103,6 +110,42 @@ export function TicketDetail() {
   }
 
   const { ticket } = state;
+  const nextStatus = user
+    ? nextRecordableForwardStatus({
+        status: ticket.status,
+        role: user.role,
+        actorId: user.id,
+        assigneeId: ticket.assignee?.id ?? null,
+      })
+    : null;
+
+  async function recordTransition(to: TicketStatus) {
+    if (!id) {
+      return;
+    }
+    setIsTransitioning(true);
+    setTransitionError(false);
+    try {
+      const body: PatchTicketStatusBody = { status: to };
+      const response = await apiFetch(`/api/tickets/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      if (response.status === 401) {
+        return;
+      }
+      if (!response.ok) {
+        setTransitionError(true);
+        return;
+      }
+      const updated = (await response.json()) as TicketDetailBody;
+      setState({ kind: 'ready', ticket: updated });
+    } catch {
+      setTransitionError(true);
+    } finally {
+      setIsTransitioning(false);
+    }
+  }
 
   return (
     <Stack>
@@ -119,6 +162,20 @@ export function TicketDetail() {
       ) : null}
       {ticket.closedAt ? (
         <Text>Closed: {formatInstant(ticket.closedAt)}</Text>
+      ) : null}
+      {nextStatus ? (
+        <Button
+          type="button"
+          loading={isTransitioning}
+          onClick={() => {
+            void recordTransition(nextStatus);
+          }}
+        >
+          Mark as {STATUS_LABEL[nextStatus].toLowerCase()}
+        </Button>
+      ) : null}
+      {transitionError ? (
+        <Alert>Couldn't update this ticket's status.</Alert>
       ) : null}
       <Table aria-label="Status history">
         <Table.Thead>
