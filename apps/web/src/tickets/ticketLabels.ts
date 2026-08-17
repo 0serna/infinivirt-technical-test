@@ -23,6 +23,25 @@ export const COMMENT_VISIBILITY_LABEL: Record<CommentVisibility, string> = {
   internal: 'Internal',
 };
 
+export const STATUS_COLOR: Record<TicketStatus, string> = {
+  open: 'blue',
+  in_progress: 'yellow',
+  resolved: 'teal',
+  closed: 'gray',
+};
+
+export const PRIORITY_COLOR: Record<Priority, string> = {
+  low: 'gray',
+  medium: 'blue',
+  high: 'orange',
+  critical: 'red',
+};
+
+export const COMMENT_VISIBILITY_COLOR: Record<CommentVisibility, string> = {
+  public: 'blue',
+  internal: 'orange',
+};
+
 export function assigneeLabel(
   person: { displayName: string } | null | undefined,
 ): string {

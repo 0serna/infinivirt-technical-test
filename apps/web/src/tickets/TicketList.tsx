@@ -1,11 +1,18 @@
 import {
   Alert,
+  Anchor,
+  Avatar,
+  Badge,
   Button,
+  Card,
+  Center,
   Group,
+  Loader,
   Select,
   Stack,
   Table,
   Text,
+  ThemeIcon,
   Title,
 } from '@mantine/core';
 import {
@@ -20,13 +27,26 @@ import {
   type TicketListRow,
   UNASSIGNED_ASSIGNEE_QUERY,
 } from '@support-ticketing/shared';
+import {
+  IconAlertCircle,
+  IconBuildings,
+  IconFilterOff,
+  IconFlag,
+  IconPlus,
+  IconProgress,
+  IconRefresh,
+  IconTicket,
+  IconUser,
+} from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
 import {
   formatTicketInstant,
+  PRIORITY_COLOR,
   PRIORITY_LABEL,
+  STATUS_COLOR,
   STATUS_LABEL,
   assigneeLabel,
 } from './ticketLabels';
@@ -112,13 +132,24 @@ function assigneeSelectData(options: TicketListFilterOptions) {
   return people;
 }
 
+function PersonCell({ name }: { name: string }) {
+  return (
+    <Group gap="xs" wrap="nowrap">
+      <Avatar name={name} color="indigo" radius="xl" size={26} />
+      <Text size="sm">{name}</Text>
+    </Group>
+  );
+}
+
 export function TicketList() {
   const { user } = useAuth();
   const includeAssignee =
     user != null && hasMinimumRole(user.role, 'supervisor');
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const filters = filtersFromSearchParams(searchParams, includeAssignee);
   const filterQuery = searchParams.toString();
+  const hasActiveFilters = filterQuery.length > 0;
   const [tickets, setTickets] = useState<TicketListRow[] | null>(null);
   const [filterOptions, setFilterOptions] =
     useState<TicketListFilterOptions | null>(null);
@@ -138,6 +169,10 @@ export function TicketList() {
       },
       { replace: true },
     );
+  }
+
+  function clearFilters() {
+    setSearchParams(new URLSearchParams(), { replace: true });
   }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again; filterQuery tracks URL filters
@@ -176,18 +211,25 @@ export function TicketList() {
   }, [filterQuery, includeAssignee, reloadToken]);
 
   return (
-    <Stack>
+    <Stack gap="lg">
       <Group justify="space-between" align="center">
-        <Title order={2}>Tickets</Title>
-        <Button component={Link} to="/tickets/new" variant="filled">
+        <Title order={2} size="h3">
+          Tickets
+        </Title>
+        <Button
+          component={Link}
+          to="/tickets/new"
+          leftSection={<IconPlus size={16} stroke={1.8} />}
+        >
           New ticket
         </Button>
       </Group>
       {filterOptions ? (
-        <Group>
+        <Group gap="sm" align="flex-end">
           <Select
             label="Status"
             clearable
+            leftSection={<IconProgress size={16} stroke={1.6} />}
             value={filters.status ?? null}
             onChange={(status) => setFilter('status', status)}
             data={STATUS_FILTER_DATA}
@@ -195,6 +237,7 @@ export function TicketList() {
           <Select
             label="Priority"
             clearable
+            leftSection={<IconFlag size={16} stroke={1.6} />}
             value={filters.priority ?? null}
             onChange={(priority) => setFilter('priority', priority)}
             data={PRIORITIES.map((value) => ({
@@ -205,6 +248,7 @@ export function TicketList() {
           <Select
             label="Client"
             clearable
+            leftSection={<IconBuildings size={16} stroke={1.6} />}
             value={filters.clientId ?? null}
             onChange={(clientId) => setFilter('clientId', clientId)}
             data={filterOptions.clients.map((client) => ({
@@ -216,63 +260,142 @@ export function TicketList() {
             <Select
               label="Assignee"
               clearable
+              leftSection={<IconUser size={16} stroke={1.6} />}
               value={filters.assigneeId ?? null}
               onChange={(assigneeId) => setFilter('assigneeId', assigneeId)}
               data={assigneeSelectData(filterOptions)}
             />
           ) : null}
+          {hasActiveFilters ? (
+            <Button
+              type="button"
+              variant="subtle"
+              color="gray"
+              leftSection={<IconFilterOff size={16} stroke={1.6} />}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </Button>
+          ) : null}
         </Group>
       ) : null}
       {failed ? (
-        <Alert>
+        <Alert color="red" icon={<IconAlertCircle size={16} />}>
           <Stack gap="sm">
             <Text>Couldn't load tickets.</Text>
-            <Button
-              type="button"
-              variant="default"
-              onClick={() => {
-                setFailed(false);
-                setTickets(null);
-                setReloadToken((token) => token + 1);
-              }}
-            >
-              Try again
-            </Button>
+            <Group>
+              <Button
+                type="button"
+                variant="default"
+                leftSection={<IconRefresh size={14} stroke={1.8} />}
+                onClick={() => {
+                  setFailed(false);
+                  setTickets(null);
+                  setReloadToken((token) => token + 1);
+                }}
+              >
+                Try again
+              </Button>
+            </Group>
           </Stack>
         </Alert>
       ) : tickets === null ? (
-        <Text>Loading tickets…</Text>
+        <Center py="xl">
+          <Group gap="sm">
+            <Loader size="sm" />
+            <Text c="dimmed">Loading tickets…</Text>
+          </Group>
+        </Center>
       ) : tickets.length === 0 ? (
-        <Text>No tickets to show.</Text>
+        <Center py="xl">
+          <Stack align="center" gap="sm">
+            <ThemeIcon size={48} radius="xl" variant="light" color="gray">
+              <IconTicket size={24} stroke={1.5} />
+            </ThemeIcon>
+            <Text c="dimmed">No tickets to show.</Text>
+          </Stack>
+        </Center>
       ) : (
-        <Table>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Title</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Priority</Table.Th>
-              <Table.Th>Client</Table.Th>
-              <Table.Th>Assignee</Table.Th>
-              <Table.Th>Created by</Table.Th>
-              <Table.Th>Updated</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {tickets.map((ticket) => (
-              <Table.Tr key={ticket.id}>
-                <Table.Td>
-                  <Link to={`/tickets/${ticket.id}`}>{ticket.title}</Link>
-                </Table.Td>
-                <Table.Td>{STATUS_LABEL[ticket.status]}</Table.Td>
-                <Table.Td>{PRIORITY_LABEL[ticket.priority]}</Table.Td>
-                <Table.Td>{ticket.client.name}</Table.Td>
-                <Table.Td>{assigneeLabel(ticket.assignee)}</Table.Td>
-                <Table.Td>{ticket.createdBy.displayName}</Table.Td>
-                <Table.Td>{formatTicketInstant(ticket.updatedAt)}</Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+        <Card withBorder radius="md" p={0}>
+          <Table.ScrollContainer minWidth={760}>
+            <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Title</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th>Priority</Table.Th>
+                  <Table.Th>Client</Table.Th>
+                  <Table.Th>Assignee</Table.Th>
+                  <Table.Th>Created by</Table.Th>
+                  <Table.Th>Updated</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {tickets.map((ticket) => (
+                  <Table.Tr
+                    key={ticket.id}
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest('a')) {
+                        return;
+                      }
+                      navigate(`/tickets/${ticket.id}`);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <Table.Td>
+                      <Anchor
+                        component={Link}
+                        to={`/tickets/${ticket.id}`}
+                        size="sm"
+                        fw={500}
+                      >
+                        {ticket.title}
+                      </Anchor>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge
+                        color={STATUS_COLOR[ticket.status]}
+                        variant="light"
+                        radius="sm"
+                      >
+                        {STATUS_LABEL[ticket.status]}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge
+                        color={PRIORITY_COLOR[ticket.priority]}
+                        variant="outline"
+                        radius="sm"
+                      >
+                        {PRIORITY_LABEL[ticket.priority]}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm">{ticket.client.name}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      {ticket.assignee ? (
+                        <PersonCell name={ticket.assignee.displayName} />
+                      ) : (
+                        <Text size="sm" c="dimmed">
+                          Unassigned
+                        </Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <PersonCell name={ticket.createdBy.displayName} />
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" c="dimmed">
+                        {formatTicketInstant(ticket.updatedAt)}
+                      </Text>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Card>
       )}
     </Stack>
   );

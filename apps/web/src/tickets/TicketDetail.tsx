@@ -40,31 +40,15 @@ import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
 import {
+  COMMENT_VISIBILITY_COLOR,
   COMMENT_VISIBILITY_LABEL,
   assigneeLabel,
   formatTicketInstant,
+  PRIORITY_COLOR,
   PRIORITY_LABEL,
+  STATUS_COLOR,
   STATUS_LABEL,
 } from './ticketLabels';
-
-const STATUS_COLOR: Record<TicketStatus, string> = {
-  open: 'blue',
-  in_progress: 'yellow',
-  resolved: 'teal',
-  closed: 'gray',
-};
-
-const PRIORITY_COLOR: Record<Priority, string> = {
-  low: 'gray',
-  medium: 'blue',
-  high: 'orange',
-  critical: 'red',
-};
-
-const COMMENT_VISIBILITY_COLOR: Record<CommentVisibility, string> = {
-  public: 'blue',
-  internal: 'orange',
-};
 
 function transitionMenuLabel(from: TicketStatus, to: TicketStatus): string {
   if (to === 'closed') {
