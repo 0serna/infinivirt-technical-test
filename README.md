@@ -13,14 +13,7 @@ Leave `DATABASE_URL` on hostname `postgres` and port `5432`. That name only exis
 
 Host ports: API `3000`, web `5173`, Postgres `POSTGRES_PORT` (default `5432`). Compose does not remap `3000` or `5173`; free them or edit `compose.yaml`. If host `5432` is taken, set `POSTGRES_PORT` in `.env` (for example `15432`). Do not point `.env` `DATABASE_URL` at `localhost` or the API container cannot reach Postgres.
 
-Migrations run when the API container starts. Seed does not. After the stack is up:
-
-```bash
-npm ci
-DATABASE_URL=postgresql://support:support@localhost:${POSTGRES_PORT:-5432}/support_ticketing npm run db:seed
-```
-
-Use the published Postgres port (`docker compose port postgres 5432` if you remapped it). Seed is idempotent.
+Migrations and the demo seed run when the API container starts (`SEED_ON_START=1` in `.env.example`). Seed is idempotent; set `SEED_ON_START=0` to skip it.
 
 Web: http://localhost:5173 · API: http://localhost:3000
 
@@ -40,7 +33,11 @@ Sign in at `/login` or `POST /auth/login` with `{ "email", "password" }`. The re
 
 ## Host CLI
 
-`npm run db:migrate`, `npm run db:migrate:dev`, and `npm run db:seed` run on the host. They need the localhost `DATABASE_URL` override above, not the Compose URL in `.env`.
+`npm run db:migrate`, `npm run db:migrate:dev`, and `npm run db:seed` run on the host. They need a localhost `DATABASE_URL`, not the Compose URL in `.env`:
+
+```bash
+DATABASE_URL=postgresql://support:support@localhost:${POSTGRES_PORT:-5432}/support_ticketing npm run db:seed
+```
 
 ## Operational SQL (`queries.sql`)
 

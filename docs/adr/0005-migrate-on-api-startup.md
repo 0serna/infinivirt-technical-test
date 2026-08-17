@@ -1,3 +1,3 @@
-# Migrate on API container startup
+# Migrate and seed on API container startup
 
-Local Compose runs `prisma migrate deploy` in the API container entrypoint before Nest starts, so a single `compose:up` brings schema and app online. Seed stays an explicit, idempotent command (`db:seed`), not part of startup. The web image stays free of Prisma. A one-shot migrate service or host-only migrate were rejected for local DX: one extra Compose service, or a broken “up and it works” path.
+Local Compose runs `prisma migrate deploy` in the API container entrypoint before Nest starts, then `prisma db seed` when `SEED_ON_START=1` (Compose default). One `compose up` brings schema, demo data, and the app online. Seed stays idempotent; turning the flag off skips it (production images should leave it unset or `0`). The web image stays free of Prisma. Host `db:seed` remains for a re-seed without rebuilding. A one-shot migrate/seed service or host-only migrate were rejected for local DX: extra Compose services, or a broken “up and it works” path.
