@@ -166,6 +166,78 @@ export const sampleReopenedTicketDetail = {
   ],
 };
 
+export const sampleResolvedTicketDetail = {
+  ...sampleTicketDetail,
+  id: 'ticket-gift-card',
+  title: 'Resolved: gift-card balance mismatch',
+  description: 'Balances reconciled after ledger fix.',
+  status: 'resolved' as const,
+  priority: 'medium' as const,
+  client: { id: 'client-2', name: 'Northwind Retail' },
+  assignee: { id: 'user-2', displayName: 'Alex Agent' },
+  resolvedAt: '2026-08-11T12:00:00.000Z',
+  closedAt: null,
+  statusHistory: [
+    {
+      from: null,
+      to: 'open' as const,
+      changedAt: '2026-08-04T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'open' as const,
+      to: 'in_progress' as const,
+      changedAt: '2026-08-05T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'in_progress' as const,
+      to: 'resolved' as const,
+      changedAt: '2026-08-11T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+  ],
+};
+
+export const sampleClosedTicketDetail = {
+  ...sampleTicketDetail,
+  id: 'ticket-invoice',
+  title: 'Closed: invoice PDF encoding',
+  description: 'UTF-8 fix shipped; Client confirmed.',
+  status: 'closed' as const,
+  priority: 'medium' as const,
+  client: { id: 'client-5', name: 'Globex Energy' },
+  assignee: { id: 'user-2', displayName: 'Alex Agent' },
+  resolvedAt: '2026-08-14T12:00:00.000Z',
+  closedAt: '2026-08-15T12:00:00.000Z',
+  statusHistory: [
+    {
+      from: null,
+      to: 'open' as const,
+      changedAt: '2026-07-27T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'open' as const,
+      to: 'in_progress' as const,
+      changedAt: '2026-07-29T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'in_progress' as const,
+      to: 'resolved' as const,
+      changedAt: '2026-08-14T12:00:00.000Z',
+      changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+    {
+      from: 'resolved' as const,
+      to: 'closed' as const,
+      changedAt: '2026-08-15T12:00:00.000Z',
+      changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
+    },
+  ],
+};
+
 export function mockAuthedSession(
   tickets: unknown = emptyTickets,
   user: typeof ada | typeof alex | typeof sam = ada,

@@ -604,7 +604,14 @@ describe('Tickets status transition (e2e)', () => {
     status: string;
     updatedAt: string;
     resolvedAt: string | null;
-    statusHistory: Array<{ from: string | null; to: string }>;
+    closedAt: string | null;
+    assignee: { id: string; displayName: string } | null;
+    statusHistory: Array<{
+      from: string | null;
+      to: string;
+      changedAt: string;
+      changedBy: { id: string; displayName: string };
+    }>;
   }> {
     const list = await request(app.getHttpServer())
       .get('/tickets')
@@ -866,6 +873,191 @@ describe('Tickets status transition (e2e)', () => {
     ).toEqual({
       from: 'open',
       to: 'in_progress',
+      changedAt: expect.any(String),
+      changedBy: { id: admin.userId, displayName: 'Ada Admin' },
+    });
+  });
+
+  it('Agent and Supervisor cannot close or reopen even when Assignee; Ticket unchanged', async () => {
+    const agent = await login(app, AGENT_EMAIL);
+    const supervisor = await login(app, SUPERVISOR_EMAIL);
+
+    const giftCard = await ticketByTitle(
+      agent.accessToken,
+      'Resolved: gift-card balance mismatch',
+    );
+    expect(giftCard.status).toBe('resolved');
+    await request(app.getHttpServer())
+      .patch(`/tickets/${giftCard.id}`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .send({ status: 'closed' })
+      .expect(403);
+    const giftCardAfter = await ticketByTitle(
+      agent.accessToken,
+      'Resolved: gift-card balance mismatch',
+    );
+    expect(giftCardAfter.status).toBe('resolved');
+    expect(giftCardAfter.updatedAt).toBe(giftCard.updatedAt);
+    expect(giftCardAfter.statusHistory).toEqual(giftCard.statusHistory);
+    expect(giftCardAfter.closedAt).toBeNull();
+
+    const invoice = await ticketByTitle(
+      agent.accessToken,
+      'Closed: invoice PDF encoding',
+    );
+    expect(invoice.status).toBe('closed');
+    await request(app.getHttpServer())
+      .patch(`/tickets/${invoice.id}`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .send({ status: 'open' })
+      .expect(403);
+    const invoiceAfter = await ticketByTitle(
+      agent.accessToken,
+      'Closed: invoice PDF encoding',
+    );
+    expect(invoiceAfter.status).toBe('closed');
+    expect(invoiceAfter.updatedAt).toBe(invoice.updatedAt);
+    expect(invoiceAfter.statusHistory).toEqual(invoice.statusHistory);
+    expect(invoiceAfter.resolvedAt).toBe(invoice.resolvedAt);
+    expect(invoiceAfter.closedAt).toBe(invoice.closedAt);
+
+    const sso = await ticketByTitle(
+      supervisor.accessToken,
+      'Resolved: SSO redirect loop',
+    );
+    expect(sso.status).toBe('resolved');
+    await request(app.getHttpServer())
+      .patch(`/tickets/${sso.id}`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .send({ status: 'closed' })
+      .expect(403);
+    const ssoAfter = await ticketByTitle(
+      supervisor.accessToken,
+      'Resolved: SSO redirect loop',
+    );
+    expect(ssoAfter.status).toBe('resolved');
+    expect(ssoAfter.updatedAt).toBe(sso.updatedAt);
+    expect(ssoAfter.statusHistory).toEqual(sso.statusHistory);
+
+    const dealer = await ticketByTitle(
+      supervisor.accessToken,
+      'Closed (older): dealer SSO onboarding',
+    );
+    expect(dealer.status).toBe('closed');
+    await request(app.getHttpServer())
+      .patch(`/tickets/${dealer.id}`)
+      .set('Authorization', `Bearer ${supervisor.accessToken}`)
+      .send({ status: 'open' })
+      .expect(403);
+    const dealerAfter = await ticketByTitle(
+      supervisor.accessToken,
+      'Closed (older): dealer SSO onboarding',
+    );
+    expect(dealerAfter.status).toBe('closed');
+    expect(dealerAfter.updatedAt).toBe(dealer.updatedAt);
+    expect(dealerAfter.statusHistory).toEqual(dealer.statusHistory);
+  });
+
+  it('Agent close or reopen of a Ticket outside List Scope is 404', async () => {
+    const agent = await login(app, AGENT_EMAIL);
+    const supervisor = await login(app, SUPERVISOR_EMAIL);
+    const dealer = await ticketByTitle(
+      supervisor.accessToken,
+      'Closed (older): dealer SSO onboarding',
+    );
+
+    const patchClose = await request(app.getHttpServer())
+      .patch(`/tickets/${dealer.id}`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .send({ status: 'closed' })
+      .expect(404);
+    const patchReopen = await request(app.getHttpServer())
+      .patch(`/tickets/${dealer.id}`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .send({ status: 'open' })
+      .expect(404);
+
+    expect(JSON.stringify(patchClose.body)).not.toMatch(/dealer SSO/);
+    expect(JSON.stringify(patchReopen.body)).not.toMatch(/dealer SSO/);
+
+    const after = await ticketByTitle(
+      supervisor.accessToken,
+      'Closed (older): dealer SSO onboarding',
+    );
+    expect(after.status).toBe('closed');
+    expect(after.updatedAt).toBe(dealer.updatedAt);
+  });
+
+  it('Administrator can close a resolved Ticket they are not Assignee of', async () => {
+    const admin = await login(app, ADMIN_EMAIL);
+    const ticket = await ticketByTitle(
+      admin.accessToken,
+      'Resolved: gift-card balance mismatch',
+    );
+    expect(ticket.status).toBe('resolved');
+    expect(ticket.closedAt).toBeNull();
+    expect(ticket.assignee).toEqual({
+      id: expect.any(String),
+      displayName: 'Alex Agent',
+    });
+    const historyLength = ticket.statusHistory.length;
+
+    const response = await request(app.getHttpServer())
+      .patch(`/tickets/${ticket.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .send({ status: 'closed' })
+      .expect(200);
+
+    expect(response.body.status).toBe('closed');
+    expect(response.body.closedAt).toEqual(expect.any(String));
+    expect(response.body.resolvedAt).toEqual(expect.any(String));
+    expect(response.body.assignee).toEqual(ticket.assignee);
+    expect(response.body.statusHistory).toHaveLength(historyLength + 1);
+    expect(
+      response.body.statusHistory[response.body.statusHistory.length - 1],
+    ).toEqual({
+      from: 'resolved',
+      to: 'closed',
+      changedAt: expect.any(String),
+      changedBy: { id: admin.userId, displayName: 'Ada Admin' },
+    });
+  });
+
+  it('Administrator can reopen a closed Ticket without changing Assignee and clears timestamps', async () => {
+    const admin = await login(app, ADMIN_EMAIL);
+    const ticket = await ticketByTitle(
+      admin.accessToken,
+      'Closed: invoice PDF encoding',
+    );
+    expect(ticket.status).toBe('closed');
+    expect(ticket.closedAt).toEqual(expect.any(String));
+    expect(ticket.resolvedAt).toEqual(expect.any(String));
+    const priorHistory = ticket.statusHistory;
+    const assignee = ticket.assignee;
+
+    const response = await request(app.getHttpServer())
+      .patch(`/tickets/${ticket.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .send({ status: 'open' })
+      .expect(200);
+
+    expect(response.body.status).toBe('open');
+    expect(response.body.resolvedAt).toBeNull();
+    expect(response.body.closedAt).toBeNull();
+    expect(response.body.assignee).toEqual(assignee);
+    expect(response.body.assignee).toEqual({
+      id: expect.any(String),
+      displayName: 'Alex Agent',
+    });
+    expect(response.body.statusHistory).toHaveLength(priorHistory.length + 1);
+    expect(response.body.statusHistory.slice(0, priorHistory.length)).toEqual(
+      priorHistory,
+    );
+    expect(
+      response.body.statusHistory[response.body.statusHistory.length - 1],
+    ).toEqual({
+      from: 'closed',
+      to: 'open',
       changedAt: expect.any(String),
       changedBy: { id: admin.userId, displayName: 'Ada Admin' },
     });

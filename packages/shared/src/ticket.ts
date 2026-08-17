@@ -91,8 +91,8 @@ export function isLegalStatusEdge(
 }
 
 /**
- * Next forward Status this User may record on the detail screen.
- * Close (`resolved` → `closed`) and reopen are not offered here.
+ * Next Status this User may record on the detail screen.
+ * Close (`resolved` → `closed`) and reopen (`closed` → `open`) are Administrator-only.
  */
 export function nextRecordableForwardStatus(args: {
   status: TicketStatus;
@@ -101,8 +101,12 @@ export function nextRecordableForwardStatus(args: {
   assigneeId: string | null;
 }): TicketStatus | null {
   const next = NEXT_TICKET_STATUS[args.status];
-  if (next !== 'in_progress' && next !== 'resolved') {
+  if (next == null) {
     return null;
+  }
+  const closeOrReopen = next === 'closed' || args.status === 'closed';
+  if (closeOrReopen) {
+    return hasMinimumRole(args.role, 'admin') ? next : null;
   }
   if (hasMinimumRole(args.role, 'admin')) {
     return next;

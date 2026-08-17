@@ -251,9 +251,10 @@ export class TicketsService {
     }
 
     const closeOrReopen = to === 'closed' || ticket.status === 'closed';
-    const mayRecord =
-      !closeOrReopen &&
-      (hasMinimumRole(user.role, 'admin') || ticket.assigneeId === user.id);
+    const isAdmin = hasMinimumRole(user.role, 'admin');
+    const mayRecord = closeOrReopen
+      ? isAdmin
+      : isAdmin || ticket.assigneeId === user.id;
     if (!mayRecord) {
       throw new ForbiddenException();
     }
@@ -264,6 +265,10 @@ export class TicketsService {
         data: {
           status: to,
           ...(to === 'resolved' ? { resolvedAt: new Date() } : {}),
+          ...(to === 'closed' ? { closedAt: new Date() } : {}),
+          ...(ticket.status === 'closed' && to === 'open'
+            ? { resolvedAt: null, closedAt: null }
+            : {}),
         },
       });
       await tx.ticketStatusHistory.create({

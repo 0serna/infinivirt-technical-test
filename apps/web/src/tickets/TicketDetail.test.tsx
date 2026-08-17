@@ -6,8 +6,10 @@ import {
   isTicketDetailUrl,
   jsonResponse,
   renderApp,
-  type sam,
+  sam,
+  sampleClosedTicketDetail,
   sampleReopenedTicketDetail,
+  sampleResolvedTicketDetail,
   sampleTicketDetail,
   sampleTickets,
   unauthorized,
@@ -418,4 +420,144 @@ test('failed Status Transition shows error copy without the raw server body', as
   ).toBeDefined();
   expect(screen.queryByText('Illegal edge stack')).toBeNull();
   expect(screen.getByText('Status: Open')).toBeDefined();
+});
+
+test('Agent Assignee on a resolved Ticket sees no Close or Reopen control', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockTicketSession(sampleResolvedTicketDetail, alex);
+
+  renderApp(['/tickets/ticket-gift-card']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Resolved: gift-card balance mismatch',
+    }),
+  ).toBeDefined();
+  expect(screen.getByText('Status: Resolved')).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Mark as resolved' })).toBeNull();
+});
+
+test('Supervisor on a closed Ticket sees no Close or Reopen control', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockTicketSession(sampleClosedTicketDetail, sam);
+
+  renderApp(['/tickets/ticket-invoice']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Closed: invoice PDF encoding',
+    }),
+  ).toBeDefined();
+  expect(screen.getByText('Status: Closed')).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
+});
+
+test('Administrator can close a resolved Ticket', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const updated = {
+    ...sampleResolvedTicketDetail,
+    status: 'closed' as const,
+    closedAt: '2026-08-16T13:00:00.000Z',
+    updatedAt: '2026-08-16T13:00:00.000Z',
+    statusHistory: [
+      ...sampleResolvedTicketDetail.statusHistory,
+      {
+        from: 'resolved' as const,
+        to: 'closed' as const,
+        changedAt: '2026-08-16T13:00:00.000Z',
+        changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isTicketDetailUrl(url) && method === 'PATCH') {
+      expect(init?.body).toBe(JSON.stringify({ status: 'closed' }));
+      return jsonResponse(200, updated);
+    }
+    if (isTicketDetailUrl(url)) {
+      return jsonResponse(200, sampleResolvedTicketDetail);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/tickets/ticket-gift-card']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Resolved: gift-card balance mismatch',
+    }),
+  ).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Close' })).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Mark as resolved' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Close' }));
+
+  expect(await screen.findByText('Status: Closed')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Reopen' })).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+});
+
+test('Administrator can reopen a closed Ticket', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const updated = {
+    ...sampleClosedTicketDetail,
+    status: 'open' as const,
+    resolvedAt: null,
+    closedAt: null,
+    updatedAt: '2026-08-16T13:00:00.000Z',
+    statusHistory: [
+      ...sampleClosedTicketDetail.statusHistory,
+      {
+        from: 'closed' as const,
+        to: 'open' as const,
+        changedAt: '2026-08-16T13:00:00.000Z',
+        changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isTicketDetailUrl(url) && method === 'PATCH') {
+      expect(init?.body).toBe(JSON.stringify({ status: 'open' }));
+      return jsonResponse(200, updated);
+    }
+    if (isTicketDetailUrl(url)) {
+      return jsonResponse(200, sampleClosedTicketDetail);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/tickets/ticket-invoice']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Closed: invoice PDF encoding',
+    }),
+  ).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Reopen' })).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Mark as in progress' }),
+  ).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Reopen' }));
+
+  expect(await screen.findByText('Status: Open')).toBeDefined();
+  expect(
+    screen.getByRole('button', { name: 'Mark as in progress' }),
+  ).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
 });

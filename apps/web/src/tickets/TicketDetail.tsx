@@ -33,6 +33,16 @@ function formatInstant(value: string): string {
   }).format(new Date(value));
 }
 
+function transitionButtonLabel(from: TicketStatus, to: TicketStatus): string {
+  if (to === 'closed') {
+    return 'Close';
+  }
+  if (from === 'closed' && to === 'open') {
+    return 'Reopen';
+  }
+  return `Mark as ${STATUS_LABEL[to].toLowerCase()}`;
+}
+
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'missing' }
@@ -171,7 +181,7 @@ export function TicketDetail() {
             void recordTransition(nextStatus);
           }}
         >
-          Mark as {STATUS_LABEL[nextStatus].toLowerCase()}
+          {transitionButtonLabel(ticket.status, nextStatus)}
         </Button>
       ) : null}
       {transitionError ? (
