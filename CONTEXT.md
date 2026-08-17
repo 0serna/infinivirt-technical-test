@@ -37,8 +37,8 @@ Change of a Ticket's Assignee. Every change — first assignment (`null`→user)
 _Avoid_: Transfer, handoff (as an entity)
 
 **Comment**:
-Message on a Ticket thread. Visibility is `public` (customer-facing) or `internal` (staff only). In the first release, with no Client portal, every authenticated User sees both types. Agents create `public` by default; Supervisor and Administrator may create `internal`.
-_Avoid_: Note, message, reply (as a domain type)
+Message on a Ticket thread. Visibility is `public` (customer-facing) or `internal` (staff only). In the first release, with no Client portal, every authenticated User who can consult the Ticket sees both types. Consult includes the full Comment thread, oldest first (both visibilities). Adding a Comment requires List Scope (same as consult); being Assignee or `created_by` is not an extra gate. Allowed in any Ticket Status. Append-only: body and visibility do not change after create. Creating a Comment refreshes the Ticket's `updated_at`. Agent may create only `public`; Supervisor and Administrator may create `public` or `internal` (cascade). Composer defaults: Agent `public`; Supervisor and Administrator `internal`. When visibility is omitted on create (API), it is `public`. A consultable Ticket can still reject a create when the Role may not use the requested visibility — that is Authorization, not “Ticket does not exist”.
+_Avoid_: Note, message, reply (as a domain type); treating Superv/Admin composer default as if the API omitted-visibility default changed
 
 **Status Transition**:
 Change of Ticket Status recorded in an append-only history (from, to, at, by). Status on the Ticket is the current projection. The actor names `to`; `from` is always the current Status. Creating a Ticket records a birth row (`from` absent → `open`, by `created_by`). Consult of a Ticket includes the full history, every cycle, oldest first — same visibility as the Ticket. On reopen (`closed` → `open`), `resolved_at` and `closed_at` are cleared; Assignee is unchanged; history keeps prior cycles. Entering `resolved` sets `resolved_at`; entering `closed` sets `closed_at`. Same `to` as current is not a legal transition. Rejected attempts do not append a row or change timestamps. Who may consult is List Scope; who may record a Status Transition is Authorization — a consultable Ticket can still reject a Transition (illegal edge vs Role/Assignee) without pretending the Ticket does not exist.
@@ -72,7 +72,7 @@ _Avoid_: Severity (unless split later), custom priorities; treating Priority as 
 May consult Tickets in their List Scope, create tickets, add `public` Comments. May record forward Status Transitions through `resolved` only when Assignee. Creating the Ticket, or consulting it, is not enough. Cannot close or reopen. Unassigned Tickets are frozen for this Role.
 
 **Supervisor**:
-Everything an Agent can do, plus: list all tickets, reassign, see team metrics, review stale/overdue tickets, `internal` Comments. Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment).
+Everything an Agent can do, plus: list all tickets, reassign, see team metrics, review stale/overdue tickets, and `internal` Comments (in addition to `public`). Does not close or reopen. Does not edit fields or Status on a Ticket they are not Assignee of (except Reassignment).
 
 **Administrator**:
 Everything a Supervisor can do, plus: update any ticket, assign to anyone, list Users and Clients, close and reopen. May record any legal Status Transition on any Ticket (including unassigned) without being Assignee.

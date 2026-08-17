@@ -108,6 +108,15 @@ export const sampleTicketDetail = {
       changedBy: { id: 'user-2', displayName: 'Alex Agent' },
     },
   ],
+  comments: [
+    {
+      id: 'comment-1',
+      body: 'Created; needs assignment.',
+      visibility: 'public' as const,
+      createdAt: '2026-07-31T12:30:00.000Z',
+      author: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+  ],
 };
 
 export const sampleReopenedTicketDetail = {
@@ -156,6 +165,22 @@ export const sampleReopenedTicketDetail = {
       changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
     },
   ],
+  comments: [
+    {
+      id: 'comment-reopen-1',
+      body: 'Reopened after regression report; prior closed cycle kept in history.',
+      visibility: 'internal' as const,
+      createdAt: '2026-08-16T06:00:00.000Z',
+      author: { id: 'user-1', displayName: 'Ada Lovelace' },
+    },
+    {
+      id: 'comment-reopen-2',
+      body: 'Investigating blank page on returns portal again.',
+      visibility: 'public' as const,
+      createdAt: '2026-08-16T07:00:00.000Z',
+      author: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+  ],
 };
 
 export const sampleResolvedTicketDetail = {
@@ -187,6 +212,15 @@ export const sampleResolvedTicketDetail = {
       to: 'resolved' as const,
       changedAt: '2026-08-11T12:00:00.000Z',
       changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+  ],
+  comments: [
+    {
+      id: 'comment-gift',
+      body: 'Ledger patch deployed; balances match.',
+      visibility: 'public' as const,
+      createdAt: '2026-08-11T12:00:00.000Z',
+      author: { id: 'user-2', displayName: 'Alex Agent' },
     },
   ],
 };
@@ -228,6 +262,7 @@ export const sampleClosedTicketDetail = {
       changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
     },
   ],
+  comments: [],
 };
 
 export function mockAuthedSession(

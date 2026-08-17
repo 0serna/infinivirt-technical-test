@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
+  COMMENT_VISIBILITIES,
+  type CreateTicketCommentBody,
   hasMinimumRole,
   isLegalStatusEdge,
   mayRecordStatusTransition,
@@ -57,6 +59,16 @@ const ticketDetailSelect = {
       toStatus: true,
       changedAt: true,
       changedBy: { select: { id: true, displayName: true } },
+    },
+  },
+  comments: {
+    orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+    select: {
+      id: true,
+      body: true,
+      visibility: true,
+      createdAt: true,
+      author: { select: { id: true, displayName: true } },
     },
   },
 } satisfies Prisma.TicketSelect;
@@ -171,8 +183,15 @@ function listScopeWhere(user: PublicUser): Prisma.TicketWhereInput {
 }
 
 function toTicketDetail(ticket: TicketDetailRecord): TicketDetail {
-  const { updatedAt, createdAt, resolvedAt, closedAt, statusHistory, ...rest } =
-    ticket;
+  const {
+    updatedAt,
+    createdAt,
+    resolvedAt,
+    closedAt,
+    statusHistory,
+    comments,
+    ...rest
+  } = ticket;
   return {
     ...rest,
     updatedAt: updatedAt.toISOString(),
@@ -184,6 +203,10 @@ function toTicketDetail(ticket: TicketDetailRecord): TicketDetail {
       to: row.toStatus,
       changedAt: row.changedAt.toISOString(),
       changedBy: row.changedBy,
+    })),
+    comments: comments.map(({ createdAt, ...row }) => ({
+      ...row,
+      createdAt: createdAt.toISOString(),
     })),
   };
 }
@@ -241,6 +264,43 @@ export class TicketsService {
     return toTicketDetail(
       await this.requireScopedTicket(user, id, ticketDetailSelect),
     );
+  }
+
+  async createComment(
+    user: PublicUser,
+    id: string,
+    body: CreateTicketCommentBody,
+  ): Promise<TicketDetail> {
+    const commentBody = typeof body?.body === 'string' ? body.body.trim() : '';
+    if (commentBody.length === 0) {
+      throw new BadRequestException('Invalid body');
+    }
+    const visibility =
+      parseOptionalEnum(body.visibility, COMMENT_VISIBILITIES, 'visibility') ??
+      'public';
+
+    const ticket = await this.requireScopedTicket(user, id, { id: true });
+
+    // List Scope (non-existence) is checked first — never leak via 403.
+    if (visibility === 'internal' && !hasMinimumRole(user.role, 'supervisor')) {
+      throw new ForbiddenException();
+    }
+
+    await this.prisma.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        updatedAt: new Date(),
+        comments: {
+          create: {
+            authorId: user.id,
+            body: commentBody,
+            visibility,
+          },
+        },
+      },
+    });
+
+    return this.getById(user, ticket.id);
   }
 
   async recordStatusTransition(
