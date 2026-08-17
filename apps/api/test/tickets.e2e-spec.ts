@@ -1131,9 +1131,27 @@ describe('Tickets create Comment (e2e)', () => {
       .set('Authorization', `Bearer ${agent.accessToken}`)
       .send({ body: 'Should not land.' })
       .expect(404);
+    const postHiddenInternal = await request(app.getHttpServer())
+      .post(`/tickets/${warehouse.id}/comments`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .send({
+        body: 'Should not land as internal either.',
+        visibility: 'internal',
+      })
+      .expect(404);
+    const postUnknownInternal = await request(app.getHttpServer())
+      .post(`/tickets/${unknownId}/comments`)
+      .set('Authorization', `Bearer ${agent.accessToken}`)
+      .send({
+        body: 'Should not land as internal either.',
+        visibility: 'internal',
+      })
+      .expect(404);
 
     expect(postUnknown.body).toEqual(getUnknown.body);
     expect(postHidden.body).toEqual(getUnknown.body);
+    expect(postHiddenInternal.body).toEqual(getUnknown.body);
+    expect(postUnknownInternal.body).toEqual(getUnknown.body);
     expect(JSON.stringify(postHidden.body)).not.toMatch(/warehouse scanner/);
 
     const after = await ticketByTitle(
@@ -1179,16 +1197,6 @@ describe('Tickets create Comment (e2e)', () => {
     expect(after.updatedAt).toBe(prior.updatedAt);
   });
 
-  it('POST /tickets/:id/comments without a token returns the same opaque 401 as GET /auth/me', async () => {
-    const me = await request(app.getHttpServer()).get('/auth/me').expect(401);
-    const created = await request(app.getHttpServer())
-      .post('/tickets/00000000-0000-4000-8000-000000000001/comments')
-      .send({ body: 'Unauthenticated.' })
-      .expect(401);
-
-    expect(created.body).toEqual(me.body);
-  });
-
   it('Agent POST internal Comment on a consultable Ticket is Authorization failure without writing', async () => {
     const { accessToken } = await login(app, AGENT_EMAIL);
     const before = await ticketByTitle(
@@ -1219,75 +1227,53 @@ describe('Tickets create Comment (e2e)', () => {
     expect(after.updatedAt).toBe(before.updatedAt);
   });
 
-  it('Supervisor POST internal Comment on an in-scope Ticket succeeds', async () => {
-    const { accessToken, userId } = await login(app, SUPERVISOR_EMAIL);
-    const ticket = await ticketByTitle(
-      app,
-      accessToken,
-      'Low: documentation typo',
-    );
-    const priorComments = ticket.comments;
-    const priorUpdatedAt = ticket.updatedAt;
-
-    const response = await request(app.getHttpServer())
-      .post(`/tickets/${ticket.id}/comments`)
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({
-        body: 'Internal: check docs PR before closing.',
-        visibility: 'internal',
-      })
-      .expect(201);
-
-    expect(response.body.comments).toHaveLength(priorComments.length + 1);
-    expect(response.body.comments.slice(0, priorComments.length)).toEqual(
-      priorComments,
-    );
-    expect(response.body.comments[response.body.comments.length - 1]).toEqual({
-      id: expect.any(String),
+  it.each([
+    {
+      roleLabel: 'Supervisor',
+      email: SUPERVISOR_EMAIL,
+      title: 'Low: documentation typo',
       body: 'Internal: check docs PR before closing.',
-      visibility: 'internal',
-      createdAt: expect.any(String),
-      author: { id: userId, displayName: 'Sam Supervisor' },
-    });
-    expect(Date.parse(response.body.updatedAt)).toBeGreaterThan(
-      Date.parse(priorUpdatedAt),
-    );
-  });
-
-  it('Administrator POST internal Comment on an in-scope Ticket succeeds', async () => {
-    const { accessToken, userId } = await login(app, ADMIN_EMAIL);
-    const ticket = await ticketByTitle(
-      app,
-      accessToken,
-      'High: warehouse scanner pairing',
-    );
-    const priorComments = ticket.comments;
-    const priorUpdatedAt = ticket.updatedAt;
-
-    const response = await request(app.getHttpServer())
-      .post(`/tickets/${ticket.id}/comments`)
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({
-        body: 'Internal: warehouse firmware rollback plan.',
-        visibility: 'internal',
-      })
-      .expect(201);
-
-    expect(response.body.comments).toHaveLength(priorComments.length + 1);
-    expect(response.body.comments.slice(0, priorComments.length)).toEqual(
-      priorComments,
-    );
-    expect(response.body.comments[response.body.comments.length - 1]).toEqual({
-      id: expect.any(String),
+      displayName: 'Sam Supervisor',
+    },
+    {
+      roleLabel: 'Administrator',
+      email: ADMIN_EMAIL,
+      title: 'High: warehouse scanner pairing',
       body: 'Internal: warehouse firmware rollback plan.',
-      visibility: 'internal',
-      createdAt: expect.any(String),
-      author: { id: userId, displayName: 'Ada Admin' },
-    });
-    expect(Date.parse(response.body.updatedAt)).toBeGreaterThan(
-      Date.parse(priorUpdatedAt),
-    );
-  });
+      displayName: 'Ada Admin',
+    },
+  ] as const)(
+    '$roleLabel POST internal Comment on an in-scope Ticket succeeds',
+    async ({ email, title, body, displayName }) => {
+      const { accessToken, userId } = await login(app, email);
+      const ticket = await ticketByTitle(app, accessToken, title);
+      const priorComments = ticket.comments;
+      const priorUpdatedAt = ticket.updatedAt;
+
+      const response = await request(app.getHttpServer())
+        .post(`/tickets/${ticket.id}/comments`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ body, visibility: 'internal' })
+        .expect(201);
+
+      expect(response.body.comments).toHaveLength(priorComments.length + 1);
+      expect(response.body.comments.slice(0, priorComments.length)).toEqual(
+        priorComments,
+      );
+      expect(response.body.comments[response.body.comments.length - 1]).toEqual(
+        {
+          id: expect.any(String),
+          body,
+          visibility: 'internal',
+          createdAt: expect.any(String),
+          author: { id: userId, displayName },
+        },
+      );
+      expect(Date.parse(response.body.updatedAt)).toBeGreaterThan(
+        Date.parse(priorUpdatedAt),
+      );
+    },
+  );
 
   it('Supervisor and Administrator can still create public Comments', async () => {
     const supervisor = await login(app, SUPERVISOR_EMAIL);

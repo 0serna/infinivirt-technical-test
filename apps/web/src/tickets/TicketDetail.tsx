@@ -78,6 +78,20 @@ function MetaItem({ label, children }: { label: string; children: string }) {
   );
 }
 
+function PersonInstant({
+  person,
+  at,
+}: {
+  person: { id: string; displayName: string };
+  at: string;
+}) {
+  return (
+    <Text size="xs" c="dimmed" title={person.id}>
+      {person.displayName} ({person.id}) · {formatTicketInstant(at)}
+    </Text>
+  );
+}
+
 function StatusTimeline({ history }: { history: TicketStatusHistoryRow[] }) {
   return (
     <Stack gap="sm" aria-label="Status history">
@@ -109,10 +123,7 @@ function StatusTimeline({ history }: { history: TicketStatusHistoryRow[] }) {
               {row.from ? STATUS_LABEL[row.from] : 'Created'} →{' '}
               {STATUS_LABEL[row.to]}
             </Text>
-            <Text size="xs" c="dimmed" title={row.changedBy.id}>
-              {row.changedBy.displayName} ({row.changedBy.id}) ·{' '}
-              {formatTicketInstant(row.changedAt)}
-            </Text>
+            <PersonInstant person={row.changedBy} at={row.changedAt} />
           </Stack>
         </Group>
       ))}
@@ -141,10 +152,7 @@ function CommentThread({ comments }: { comments: TicketComment[] }) {
               >
                 {COMMENT_VISIBILITY_LABEL[comment.visibility]}
               </Badge>
-              <Text size="xs" c="dimmed" title={comment.author.id}>
-                {comment.author.displayName} ({comment.author.id}) ·{' '}
-                {formatTicketInstant(comment.createdAt)}
-              </Text>
+              <PersonInstant person={comment.author} at={comment.createdAt} />
             </Group>
             <Text size="sm">{comment.body}</Text>
           </Stack>
@@ -321,68 +329,61 @@ export function TicketDetail() {
       })
     : null;
 
-  async function recordTransition(to: TicketStatus) {
-    if (!id) {
-      return;
-    }
-    setIsTransitioning(true);
-    setTransitionError(false);
-    try {
-      const body: PatchTicketStatusBody = { status: to };
-      const response = await apiFetch(`/api/tickets/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      });
-      if (response.status === 401) {
-        return;
-      }
-      if (!response.ok) {
-        setTransitionError(true);
-        return;
-      }
-      const updated = (await response.json()) as TicketDetailBody;
-      setState({ kind: 'ready', ticket: updated });
-    } catch {
-      setTransitionError(true);
-    } finally {
-      setIsTransitioning(false);
-    }
-  }
-
-  async function createComment(
-    bodyText: string,
-    visibility: CommentVisibility,
+  async function mutateTicket(
+    path: string,
+    init: RequestInit,
+    setBusy: (busy: boolean) => void,
+    setError: (error: boolean) => void,
   ): Promise<boolean> {
     if (!id) {
       return false;
     }
-    setIsCommenting(true);
-    setCommentError(false);
+    setBusy(true);
+    setError(false);
     try {
-      const body: CreateTicketCommentBody = {
-        body: bodyText,
-        visibility,
-      };
-      const response = await apiFetch(`/api/tickets/${id}/comments`, {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
+      const response = await apiFetch(path, init);
       if (response.status === 401) {
         return false;
       }
       if (!response.ok) {
-        setCommentError(true);
+        setError(true);
         return false;
       }
       const updated = (await response.json()) as TicketDetailBody;
       setState({ kind: 'ready', ticket: updated });
       return true;
     } catch {
-      setCommentError(true);
+      setError(true);
       return false;
     } finally {
-      setIsCommenting(false);
+      setBusy(false);
     }
+  }
+
+  async function recordTransition(to: TicketStatus) {
+    const body: PatchTicketStatusBody = { status: to };
+    await mutateTicket(
+      `/api/tickets/${id}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+      setIsTransitioning,
+      setTransitionError,
+    );
+  }
+
+  async function createComment(
+    bodyText: string,
+    visibility: CommentVisibility,
+  ): Promise<boolean> {
+    const body: CreateTicketCommentBody = {
+      body: bodyText,
+      visibility,
+    };
+    return mutateTicket(
+      `/api/tickets/${id}/comments`,
+      { method: 'POST', body: JSON.stringify(body) },
+      setIsCommenting,
+      setCommentError,
+    );
   }
 
   return (

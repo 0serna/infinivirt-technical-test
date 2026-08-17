@@ -287,12 +287,14 @@ export class TicketsService {
             COMMENT_VISIBILITIES,
             'visibility',
           );
-    // Agent may only create public; Superv/Admin may create internal (#36 UI/e2e).
+
+    const ticket = await this.requireScopedTicket(user, id, { id: true });
+
+    // Agent may only create public; Superv/Admin may create internal.
+    // List Scope (non-existence) is checked first — never leak via 403.
     if (visibility === 'internal' && !hasMinimumRole(user.role, 'supervisor')) {
       throw new ForbiddenException();
     }
-
-    const ticket = await this.requireScopedTicket(user, id, { id: true });
 
     await this.prisma.$transaction(async (tx) => {
       await tx.comment.create({
