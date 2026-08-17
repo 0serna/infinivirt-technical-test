@@ -1,29 +1,15 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, type InitialEntry } from 'react-router-dom';
-import { App } from './App';
 import { apiFetch } from './auth/api';
-
-function renderApp(initialEntries: InitialEntry[]) {
-  return render(
-    <MemoryRouter initialEntries={initialEntries}>
-      <App />
-    </MemoryRouter>,
-  );
-}
-
-function jsonResponse(status: number, body: unknown): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-  } as Response;
-}
-
-const unauthorized = jsonResponse(401, {
-  statusCode: 401,
-  message: 'Unauthorized',
-});
+import {
+  ada,
+  emptyTickets,
+  isTicketsUrl,
+  jsonResponse,
+  mockAuthedSession,
+  renderApp,
+  unauthorized,
+} from './test/render-app';
 
 beforeEach(() => {
   localStorage.clear();
@@ -83,18 +69,18 @@ test('login network failure shows server unreachable copy', async () => {
   ).toBeDefined();
 });
 
-const ada = {
-  id: 'user-1',
-  email: 'ada@example.com',
-  displayName: 'Ada Lovelace',
-  role: 'admin' as const,
-};
-
 test('successful login shows the shell', async () => {
   const user = userEvent.setup();
-  vi.mocked(fetch).mockResolvedValue(
-    jsonResponse(200, { accessToken: 'token-abc', user: ada }),
-  );
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === '/api/auth/login') {
+      return jsonResponse(200, { accessToken: 'token-abc', user: ada });
+    }
+    if (isTicketsUrl(url)) {
+      return jsonResponse(200, emptyTickets);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
 
   renderApp(['/login']);
 
@@ -113,7 +99,7 @@ test('successful login shows the shell', async () => {
 
 test('bootstrap with a valid token hydrates the shell from /api/auth/me', async () => {
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockResolvedValue(jsonResponse(200, ada));
+  mockAuthedSession();
 
   renderApp(['/']);
 
@@ -159,6 +145,9 @@ test('sign out returns to login and later requests do not send Bearer', async ()
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
     }
+    if (isTicketsUrl(url)) {
+      return jsonResponse(200, emptyTickets);
+    }
     if (url === '/api/auth/login') {
       return unauthorized;
     }
@@ -186,7 +175,7 @@ test('sign out returns to login and later requests do not send Bearer', async ()
 
 test('authenticated visit to /login is sent to the shell at /', async () => {
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockResolvedValue(jsonResponse(200, ada));
+  mockAuthedSession();
 
   renderApp(['/login']);
 
@@ -218,6 +207,9 @@ test('mid-session 401 shows the session expired alert on login', async () => {
       meCalls += 1;
       return meCalls === 1 ? jsonResponse(200, ada) : unauthorized;
     }
+    if (isTicketsUrl(url)) {
+      return jsonResponse(200, emptyTickets);
+    }
     throw new Error(`unexpected fetch ${url}`);
   });
 
@@ -246,7 +238,7 @@ test('reload of login ignores leftover sessionExpired history state', () => {
 
 test('clearing the token from another tab leaves the shell', async () => {
   localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockResolvedValue(jsonResponse(200, ada));
+  mockAuthedSession();
 
   renderApp(['/']);
 

@@ -1,5 +1,6 @@
 import {
   Alert,
+  Box,
   Button,
   Center,
   PasswordInput,
@@ -38,8 +39,8 @@ export function LoginPage() {
 
   return (
     <Center mih="100vh" p="xl">
-      <form onSubmit={handleSubmit}>
-        <Stack w="100%" maw="24rem">
+      <Box component="form" w="100%" maw="24rem" onSubmit={handleSubmit}>
+        <Stack>
           <Title order={1}>Sign in</Title>
           {sessionExpired ? (
             <Alert>Your session expired. Sign in again.</Alert>
@@ -58,7 +59,7 @@ export function LoginPage() {
           {error ? <Text c="red">{error}</Text> : null}
           <Button type="submit">Sign in</Button>
         </Stack>
-      </form>
+      </Box>
     </Center>
   );
 }
