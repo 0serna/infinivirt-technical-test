@@ -595,7 +595,7 @@ export function TicketDetail() {
   return (
     <Stack gap="lg">
       <Breadcrumbs separator="›" separatorMargin="xs">
-        <Anchor component={Link} to="/" size="sm" c="dimmed">
+        <Anchor component={Link} to="/tickets" size="sm" c="dimmed">
           Tickets
         </Anchor>
         <Text size="sm" lineClamp={1} maw={420}>

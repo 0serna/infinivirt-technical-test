@@ -20,7 +20,7 @@ function AuthGate({
     return <Text p="md">Loading…</Text>;
   }
   if (allow === 'guest') {
-    return user ? <Navigate to="/" replace /> : children;
+    return user ? <Navigate to="/tickets" replace /> : children;
   }
   return user ? children : <Navigate to="/login" replace />;
 }
@@ -46,7 +46,9 @@ export function App() {
               </AuthGate>
             }
           >
-            <Route index element={<TicketList />} />
+            {/* Interim until F7.3 dashboard home: / → /tickets */}
+            <Route index element={<Navigate to="/tickets" replace />} />
+            <Route path="tickets" element={<TicketList />} />
             <Route path="tickets/new" element={<TicketCreate />} />
             <Route path="tickets/:id" element={<TicketDetail />} />
           </Route>

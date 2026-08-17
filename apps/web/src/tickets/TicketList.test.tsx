@@ -31,22 +31,34 @@ function filterOption(name: string) {
   return screen.getByRole('option', { name, hidden: true });
 }
 
-test('signed-in home shows the Ticket List instead of the old placeholder', async () => {
+test('authenticated /tickets serves the Ticket List', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets);
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   expect(await screen.findByRole('heading', { name: 'Tickets' })).toBeDefined();
   expect(screen.getByText('High: patient portal MFA reset')).toBeDefined();
   expect(screen.queryByText(/You are signed in as/)).toBeNull();
 });
 
-test('Ticket List rows render Title, Status, Priority, Client, Assignee, creator, and updatedAt', async () => {
+test('authenticated / redirects to /tickets (interim until dashboard home)', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets);
 
   renderApp(['/']);
+
+  expect(
+    await screen.findByText('High: patient portal MFA reset'),
+  ).toBeDefined();
+  expect(screen.getByRole('heading', { name: 'Tickets' })).toBeDefined();
+});
+
+test('Ticket List rows render Title, Status, Priority, Client, Assignee, creator, and updatedAt', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockAuthedSession(sampleTickets);
+
+  renderApp(['/tickets']);
 
   expect(
     await screen.findByText('High: patient portal MFA reset'),
@@ -79,7 +91,7 @@ test('empty Ticket List shows an empty state', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(emptyTickets);
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   expect(await screen.findByText('No tickets to show.')).toBeDefined();
   expect(screen.queryByRole('columnheader', { name: 'Title' })).toBeNull();
@@ -102,7 +114,7 @@ test('in-flight Ticket List shows loading before rows', async () => {
     throw new Error(`unexpected fetch ${url}`);
   });
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   expect(await screen.findByText('Loading tickets…')).toBeDefined();
   expect(screen.queryByText('No tickets to show.')).toBeNull();
@@ -131,7 +143,7 @@ test('failed Ticket List fetch shows error copy without the raw server body', as
     throw new Error(`unexpected fetch ${url}`);
   });
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   expect(await screen.findByText("Couldn't load tickets.")).toBeDefined();
   expect(screen.queryByText('Internal boom stack')).toBeNull();
@@ -156,7 +168,7 @@ test('failed first Ticket List load can be retried without a page reload', async
     throw new Error(`unexpected fetch ${url}`);
   });
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   expect(await screen.findByText("Couldn't load tickets.")).toBeDefined();
   await user.click(screen.getByRole('button', { name: 'Try again' }));
@@ -172,7 +184,7 @@ test('Ticket List uses /api/tickets with the session Bearer token', async () => 
   localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets);
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   expect(
     await screen.findByText('High: patient portal MFA reset'),
@@ -199,7 +211,7 @@ test('Ticket List 401 signs the User out', async () => {
     throw new Error(`unexpected fetch ${url}`);
   });
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   expect(await screen.findByRole('button', { name: 'Sign in' })).toBeDefined();
   expect(
@@ -213,7 +225,7 @@ test('Agent Ticket List has Status, Priority, and Client filters and no Assignee
   localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets, alex);
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   expect(await screen.findByRole('combobox', { name: 'Status' })).toBeDefined();
   expect(filterControl('Priority')).toBeDefined();
@@ -226,7 +238,7 @@ test('Supervisor Ticket List has an Assignee filter including unassigned from fi
   localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets, sam);
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   await user.click(await screen.findByRole('combobox', { name: 'Assignee' }));
   expect(filterOption('Unassigned')).toBeDefined();
@@ -238,7 +250,7 @@ test('Administrator Ticket List has an Assignee filter including unassigned from
   localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets);
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   await user.click(await screen.findByRole('combobox', { name: 'Assignee' }));
   expect(filterOption('Unassigned')).toBeDefined();
@@ -257,7 +269,7 @@ test('Ticket List filter choices come from filterOptions and do not list Client 
     },
   });
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   await user.click(await screen.findByRole('combobox', { name: 'Client' }));
   expect(filterOption('Contoso Health')).toBeDefined();
@@ -290,7 +302,7 @@ test('choosing Status and Client refetches tickets with those query params', asy
     throw new Error(`unexpected fetch ${url}`);
   });
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   await user.click(await screen.findByRole('combobox', { name: 'Status' }));
   await user.click(filterOption('Open'));
@@ -308,7 +320,7 @@ test('Ticket List Titles link to the Ticket consult route', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession(sampleTickets);
 
-  renderApp(['/']);
+  renderApp(['/tickets']);
 
   const title = await screen.findByRole('link', {
     name: 'High: patient portal MFA reset',
@@ -319,4 +331,68 @@ test('Ticket List Titles link to the Ticket consult route', async () => {
       .getByRole('link', { name: 'Resolved: SSO redirect loop' })
       .getAttribute('href'),
   ).toBe('/tickets/ticket-2');
+});
+
+test('opening /tickets with filter search params applies them in the UI and list request', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isTicketsUrl(url)) {
+      return jsonResponse(200, sampleTickets);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp([
+    '/tickets?status=open&priority=high&clientId=client-1&assigneeId=user-3',
+  ]);
+
+  expect(
+    await screen.findByRole('combobox', { name: 'Status' }),
+  ).toHaveProperty('value', 'Open');
+  expect(filterControl('Priority')).toHaveProperty('value', 'High');
+  expect(filterControl('Client')).toHaveProperty('value', 'Contoso Health');
+  expect(filterControl('Assignee')).toHaveProperty('value', 'Sam Supervisor');
+
+  const ticketUrls = vi
+    .mocked(fetch)
+    .mock.calls.map(([url]) => String(url))
+    .filter((url) => isTicketsUrl(url));
+  expect(ticketUrls).toContain(
+    '/api/tickets?status=open&priority=high&clientId=client-1&assigneeId=user-3',
+  );
+});
+
+test('changing Ticket List filters updates the URL search params', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isTicketsUrl(url)) {
+      return jsonResponse(200, sampleTickets);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+
+  renderApp(['/tickets'], { probeLocation: true });
+
+  await user.click(await screen.findByRole('combobox', { name: 'Status' }));
+  await user.click(filterOption('Open'));
+  await user.click(filterControl('Priority'));
+  await user.click(filterOption('High'));
+  await user.click(filterControl('Client'));
+  await user.click(filterOption('Contoso Health'));
+  await user.click(filterControl('Assignee'));
+  await user.click(filterOption('Sam Supervisor'));
+
+  expect(await screen.findByTestId('location-path')).toHaveProperty(
+    'textContent',
+    '/tickets?status=open&priority=high&clientId=client-1&assigneeId=user-3',
+  );
 });

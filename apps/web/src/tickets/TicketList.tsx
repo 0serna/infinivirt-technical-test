@@ -20,7 +20,7 @@ import {
   UNASSIGNED_ASSIGNEE_QUERY,
 } from '@support-ticketing/shared';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
 import {
@@ -50,6 +50,30 @@ function ticketsUrl(
   return query ? `/api/tickets?${query}` : '/api/tickets';
 }
 
+function filtersFromSearchParams(
+  searchParams: URLSearchParams,
+  includeAssignee: boolean,
+): TicketListFilters {
+  const filters: TicketListFilters = {};
+  const status = searchParams.get('status');
+  const priority = searchParams.get('priority');
+  const clientId = searchParams.get('clientId');
+  const assigneeId = searchParams.get('assigneeId');
+  if (status) {
+    filters.status = status;
+  }
+  if (priority) {
+    filters.priority = priority;
+  }
+  if (clientId) {
+    filters.clientId = clientId;
+  }
+  if (includeAssignee && assigneeId) {
+    filters.assigneeId = assigneeId;
+  }
+  return filters;
+}
+
 function assigneeSelectData(options: TicketListFilterOptions) {
   const people = options.assignees.map((assignee) => ({
     value: assignee.id,
@@ -65,7 +89,9 @@ export function TicketList() {
   const { user } = useAuth();
   const includeAssignee =
     user != null && hasMinimumRole(user.role, 'supervisor');
-  const [filters, setFilters] = useState<TicketListFilters>({});
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = filtersFromSearchParams(searchParams, includeAssignee);
+  const filterQuery = searchParams.toString();
   const [tickets, setTickets] = useState<TicketListRow[] | null>(null);
   const [filterOptions, setFilterOptions] =
     useState<TicketListFilterOptions | null>(null);
@@ -73,17 +99,29 @@ export function TicketList() {
   const [reloadToken, setReloadToken] = useState(0);
 
   function setFilter(key: keyof TicketListFilters, value: string | null) {
-    setFilters((current) => ({
-      ...current,
-      [key]: value ?? undefined,
-    }));
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (value) {
+          next.set(key, value);
+        } else {
+          next.delete(key);
+        }
+        return next;
+      },
+      { replace: true },
+    );
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again; filterQuery tracks URL filters
   useEffect(() => {
     let cancelled = false;
+    const listFilters = filtersFromSearchParams(
+      new URLSearchParams(filterQuery),
+      includeAssignee,
+    );
 
-    void apiFetch(ticketsUrl(filters, includeAssignee))
+    void apiFetch(ticketsUrl(listFilters, includeAssignee))
       .then(async (response) => {
         if (cancelled || response.status === 401) {
           return;
@@ -108,7 +146,7 @@ export function TicketList() {
     return () => {
       cancelled = true;
     };
-  }, [filters, includeAssignee, reloadToken]);
+  }, [filterQuery, includeAssignee, reloadToken]);
 
   return (
     <Stack>

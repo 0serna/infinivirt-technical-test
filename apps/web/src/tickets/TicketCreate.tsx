@@ -115,7 +115,7 @@ export function TicketCreate() {
       <Box w="100%" maw="32rem">
         <Stack>
           <Breadcrumbs>
-            <Anchor component={Link} to="/">
+            <Anchor component={Link} to="/tickets">
               Tickets
             </Anchor>
             <Text>New ticket</Text>

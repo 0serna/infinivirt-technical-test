@@ -173,7 +173,7 @@ test('sign out returns to login and later requests do not send Bearer', async ()
   expect(new Headers(init?.headers).get('Authorization')).toBeNull();
 });
 
-test('authenticated visit to /login is sent to the shell at /', async () => {
+test('authenticated visit to /login is sent to the Ticket List at /tickets', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   mockAuthedSession();
 
@@ -185,6 +185,7 @@ test('authenticated visit to /login is sent to the shell at /', async () => {
   expect(
     screen.getByRole('heading', { name: 'Support Ticketing' }),
   ).toBeDefined();
+  expect(await screen.findByRole('heading', { name: 'Tickets' })).toBeDefined();
 });
 
 test('unauthenticated visit to / is sent to login without showing the shell', async () => {

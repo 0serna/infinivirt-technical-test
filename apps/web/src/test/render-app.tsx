@@ -1,12 +1,26 @@
 import { EMPTY_TICKET_LIST_FILTER_OPTIONS } from '@support-ticketing/shared';
 import { render } from '@testing-library/react';
-import { type InitialEntry, MemoryRouter } from 'react-router-dom';
+import { type InitialEntry, MemoryRouter, useLocation } from 'react-router-dom';
 import { App } from '../App';
 
-export function renderApp(initialEntries: InitialEntry[]) {
+function LocationProbe() {
+  const location = useLocation();
+  return (
+    <div data-testid="location-path">
+      {location.pathname}
+      {location.search}
+    </div>
+  );
+}
+
+export function renderApp(
+  initialEntries: InitialEntry[],
+  options?: { probeLocation?: boolean },
+) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <App />
+      {options?.probeLocation ? <LocationProbe /> : null}
     </MemoryRouter>,
   );
 }
