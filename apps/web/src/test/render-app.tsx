@@ -93,6 +93,17 @@ export function isTicketDetailUrl(url: string): boolean {
   return /^\/api\/tickets\/[^/?]+$/.test(url);
 }
 
+export function isClientsUrl(url: string): boolean {
+  return url === '/api/clients';
+}
+
+/** Full Client catalog (ADR 0010). Includes Clients absent from list filterOptions. */
+export const sampleClientCatalog = [
+  { id: 'client-1', name: 'Contoso Health' },
+  { id: 'client-2', name: 'Initech Soft' },
+  { id: 'client-acme', name: 'Acme Logistics' },
+];
+
 export const sampleTicketDetail = {
   ...sampleTickets.tickets[0],
   status: 'open' as const,
