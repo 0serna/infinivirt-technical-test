@@ -11,6 +11,7 @@ import {
 import type {
   ClientCatalogRow,
   CreateClientBody,
+  UpdateClientBody,
 } from '@support-ticketing/shared';
 import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
@@ -22,6 +23,8 @@ type ListState =
   | { kind: 'error' }
   | { kind: 'ready'; clients: ClientCatalogRow[] };
 
+type RowAction = 'rename' | 'soft-delete' | 'restore';
+
 export function AdminClientsPage() {
   const { user } = useAuth();
   const [list, setList] = useState<ListState>({ kind: 'loading' });
@@ -29,6 +32,10 @@ export function AdminClientsPage() {
   const [name, setName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [rowError, setRowError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
   useEffect(() => {
@@ -37,7 +44,7 @@ export function AdminClientsPage() {
     }
     let cancelled = false;
 
-    void apiFetch('/api/clients')
+    void apiFetch('/api/clients?includeDeleted=true')
       .then(async (response) => {
         if (cancelled || response.status === 401) {
           return;
@@ -65,6 +72,19 @@ export function AdminClientsPage() {
 
   if (user?.role !== 'admin') {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  function upsertClient(client: ClientCatalogRow) {
+    setList((current) => {
+      if (current.kind !== 'ready') {
+        return current;
+      }
+      const without = current.clients.filter((row) => row.id !== client.id);
+      const clients = [...without, client].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
+      return { kind: 'ready', clients };
+    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -98,22 +118,71 @@ export function AdminClientsPage() {
       }
       const created = (await response.json()) as ClientCatalogRow;
       setName('');
-      setList((current) => {
-        if (current.kind !== 'ready') {
-          return current;
-        }
-        if (current.clients.some((row) => row.id === created.id)) {
-          return current;
-        }
-        const clients = [...current.clients, created].sort((a, b) =>
-          a.name.localeCompare(b.name),
-        );
-        return { kind: 'ready', clients };
-      });
+      upsertClient(created);
     } catch {
       setFormError("Couldn't create this Client.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function runRowAction(
+    client: ClientCatalogRow,
+    action: RowAction,
+    nextName?: string,
+  ) {
+    setRowError(null);
+    setBusyId(client.id);
+
+    try {
+      let response: Response;
+      if (action === 'rename') {
+        const trimmed = (nextName ?? '').trim();
+        if (trimmed === '') {
+          setRowError('Name is required.');
+          return;
+        }
+        const body: UpdateClientBody = { name: trimmed };
+        response = await apiFetch(`/api/clients/${client.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        });
+      } else if (action === 'soft-delete') {
+        response = await apiFetch(`/api/clients/${client.id}`, {
+          method: 'DELETE',
+        });
+      } else {
+        response = await apiFetch(`/api/clients/${client.id}/restore`, {
+          method: 'POST',
+        });
+      }
+
+      if (response.status === 401) {
+        return;
+      }
+      if (response.status === 409) {
+        setRowError(
+          action === 'rename'
+            ? 'A Client with this name already exists.'
+            : "Couldn't update this Client.",
+        );
+        return;
+      }
+      if (!response.ok) {
+        setRowError("Couldn't update this Client.");
+        return;
+      }
+
+      const updated = (await response.json()) as ClientCatalogRow;
+      upsertClient(updated);
+      if (action === 'rename') {
+        setRenamingId(null);
+        setRenameValue('');
+      }
+    } catch {
+      setRowError("Couldn't update this Client.");
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -134,6 +203,7 @@ export function AdminClientsPage() {
         </Group>
       </form>
       {formError ? <Alert color="red">{formError}</Alert> : null}
+      {rowError ? <Alert color="red">{rowError}</Alert> : null}
       {list.kind === 'error' ? (
         <Alert>
           <Stack gap="sm">
@@ -157,14 +227,102 @@ export function AdminClientsPage() {
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Name</Table.Th>
+              <Table.Th>Status</Table.Th>
+              <Table.Th>Actions</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {list.clients.map((client) => (
-              <Table.Tr key={client.id}>
-                <Table.Td>{client.name}</Table.Td>
-              </Table.Tr>
-            ))}
+            {list.clients.map((client) => {
+              const isDeleted = client.deletedAt !== null;
+              const isRenaming = renamingId === client.id;
+              const busy = busyId === client.id;
+              return (
+                <Table.Tr key={client.id}>
+                  <Table.Td>
+                    {isRenaming ? (
+                      <TextInput
+                        aria-label={`Rename ${client.name}`}
+                        value={renameValue}
+                        onChange={(event) =>
+                          setRenameValue(event.currentTarget.value)
+                        }
+                      />
+                    ) : (
+                      client.name
+                    )}
+                  </Table.Td>
+                  <Table.Td>{isDeleted ? 'Soft-deleted' : 'Active'}</Table.Td>
+                  <Table.Td>
+                    <Group gap="xs" wrap="nowrap">
+                      {isDeleted ? (
+                        <Button
+                          type="button"
+                          variant="default"
+                          size="xs"
+                          loading={busy}
+                          onClick={() => void runRowAction(client, 'restore')}
+                        >
+                          Restore
+                        </Button>
+                      ) : isRenaming ? (
+                        <>
+                          <Button
+                            type="button"
+                            size="xs"
+                            loading={busy}
+                            onClick={() =>
+                              void runRowAction(client, 'rename', renameValue)
+                            }
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="default"
+                            size="xs"
+                            disabled={busy}
+                            onClick={() => {
+                              setRenamingId(null);
+                              setRenameValue('');
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            type="button"
+                            variant="default"
+                            size="xs"
+                            disabled={busy}
+                            onClick={() => {
+                              setRowError(null);
+                              setRenamingId(client.id);
+                              setRenameValue(client.name);
+                            }}
+                          >
+                            Rename
+                          </Button>
+                          <Button
+                            type="button"
+                            color="red"
+                            variant="light"
+                            size="xs"
+                            loading={busy}
+                            onClick={() =>
+                              void runRowAction(client, 'soft-delete')
+                            }
+                          >
+                            Soft-delete
+                          </Button>
+                        </>
+                      )}
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
           </Table.Tbody>
         </Table>
       )}

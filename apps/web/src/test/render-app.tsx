@@ -108,7 +108,7 @@ export function isTicketDetailUrl(url: string): boolean {
 }
 
 export function isClientsUrl(url: string): boolean {
-  return url === '/api/clients';
+  return url === '/api/clients' || url.startsWith('/api/clients?');
 }
 
 export function isUsersUrl(url: string): boolean {
@@ -189,9 +189,9 @@ export const sampleTeamDashboard = {
 
 /** Full Client catalog (ADR 0010). Includes Clients absent from list filterOptions. */
 export const sampleClientCatalog = [
-  { id: 'client-1', name: 'Contoso Health' },
-  { id: 'client-2', name: 'Initech Soft' },
-  { id: 'client-acme', name: 'Acme Logistics' },
+  { id: 'client-1', name: 'Contoso Health', deletedAt: null },
+  { id: 'client-2', name: 'Initech Soft', deletedAt: null },
+  { id: 'client-acme', name: 'Acme Logistics', deletedAt: null },
 ];
 
 /** Read-only staff catalog for Assignee picker. Wider than list filterOptions.assignees. */

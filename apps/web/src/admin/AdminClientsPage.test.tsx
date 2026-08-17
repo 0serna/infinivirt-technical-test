@@ -75,7 +75,11 @@ test('Administrator /admin/clients lists Clients and can create one via POST', a
     }
     if (url === '/api/clients' && method === 'POST') {
       const body = JSON.parse(String(init?.body ?? '{}')) as { name?: string };
-      const created = { id: 'client-new', name: body.name ?? '' };
+      const created = {
+        id: 'client-new',
+        name: body.name ?? '',
+        deletedAt: null,
+      };
       clients.push(created);
       return jsonResponse(201, created);
     }
@@ -105,4 +109,79 @@ test('Administrator /admin/clients lists Clients and can create one via POST', a
   expect(JSON.parse(String(postCall?.[1]?.body))).toEqual({
     name: 'New Client Co',
   });
+
+  const listCall = vi
+    .mocked(fetch)
+    .mock.calls.find(
+      ([url, init]) =>
+        isClientsUrl(String(url)) &&
+        (init?.method ?? 'GET').toUpperCase() === 'GET',
+    );
+  expect(String(listCall?.[0])).toContain('includeDeleted=true');
+});
+
+test('Administrator can rename, soft-delete, and restore a Client', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const clients = [
+    {
+      id: 'client-1',
+      name: 'Contoso Health',
+      deletedAt: null as string | null,
+    },
+  ];
+
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, ada);
+    }
+    if (isClientsUrl(url) && method === 'GET') {
+      return jsonResponse(200, clients);
+    }
+    if (url === '/api/clients/client-1' && method === 'PATCH') {
+      const body = JSON.parse(String(init?.body ?? '{}')) as { name?: string };
+      clients[0] = {
+        ...clients[0],
+        name: body.name ?? clients[0].name,
+      };
+      return jsonResponse(200, clients[0]);
+    }
+    if (url === '/api/clients/client-1' && method === 'DELETE') {
+      clients[0] = {
+        ...clients[0],
+        deletedAt: '2026-08-17T05:00:00.000Z',
+      };
+      return jsonResponse(200, clients[0]);
+    }
+    if (url === '/api/clients/client-1/restore' && method === 'POST') {
+      clients[0] = { ...clients[0], deletedAt: null };
+      return jsonResponse(201, clients[0]);
+    }
+    throw new Error(`unexpected fetch ${method} ${url}`);
+  });
+
+  renderApp(['/admin/clients']);
+
+  const table = await screen.findByRole('table');
+  expect(within(table).getByText('Contoso Health')).toBeDefined();
+  expect(within(table).getByText('Active')).toBeDefined();
+
+  await user.click(screen.getByRole('button', { name: 'Rename' }));
+  const renameInput = screen.getByLabelText('Rename Contoso Health');
+  await user.clear(renameInput);
+  await user.type(renameInput, 'Contoso Renamed');
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+
+  expect(await within(table).findByText('Contoso Renamed')).toBeDefined();
+
+  await user.click(screen.getByRole('button', { name: 'Soft-delete' }));
+  expect(await within(table).findByText('Soft-deleted')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Restore' })).toBeDefined();
+
+  await user.click(screen.getByRole('button', { name: 'Restore' }));
+  expect(await within(table).findByText('Active')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Rename' })).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Soft-delete' })).toBeDefined();
 });

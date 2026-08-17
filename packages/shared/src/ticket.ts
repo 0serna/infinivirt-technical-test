@@ -55,10 +55,17 @@ export type TicketListClient = {
 export type ClientCatalogRow = {
   id: string;
   name: string;
+  /** ISO timestamp when soft-deleted; null when active. */
+  deletedAt: string | null;
 };
 
 /** Administrator Client create. Name must be non-empty after trim; uniqueness is global. */
 export type CreateClientBody = {
+  name: string;
+};
+
+/** Administrator Client rename. Name must be non-empty after trim; uniqueness is global. */
+export type UpdateClientBody = {
   name: string;
 };
 

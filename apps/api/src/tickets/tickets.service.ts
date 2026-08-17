@@ -385,8 +385,8 @@ export class TicketsService {
     const priority =
       parseOptionalEnum(body.priority, PRIORITIES, 'priority') ?? 'medium';
 
-    const client = await this.prisma.client.findUnique({
-      where: { id: clientId },
+    const client = await this.prisma.client.findFirst({
+      where: { id: clientId, deletedAt: null },
       select: { id: true },
     });
     if (!client) {
