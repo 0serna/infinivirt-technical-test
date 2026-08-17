@@ -25,12 +25,7 @@ import {
 } from '@tabler/icons-react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
-
-const ROLE_LABEL = {
-  agent: 'Agent',
-  supervisor: 'Supervisor',
-  admin: 'Administrator',
-} as const;
+import { ROLE_LABEL } from '../users/roleLabels';
 
 type NavItem = {
   to: string;

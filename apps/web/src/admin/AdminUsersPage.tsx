@@ -22,6 +22,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { apiFetch } from '../auth/api';
 import { useAuth } from '../auth/AuthProvider';
+import { ROLE_LABEL } from '../users/roleLabels';
 
 type ListState =
   | { kind: 'loading' }
@@ -29,12 +30,6 @@ type ListState =
   | { kind: 'ready'; users: AdminUserRow[] };
 
 type RowAction = 'soft-delete' | 'restore';
-
-const ROLE_LABEL = {
-  agent: 'Agent',
-  supervisor: 'Supervisor',
-  admin: 'Administrator',
-} as const;
 
 const ROLE_OPTIONS = ROLES.map((value) => ({
   value,
