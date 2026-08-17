@@ -86,11 +86,11 @@ test('Ticket consult shows current fields and Status Transition history oldest f
       'Was closed after hotfix; Client reports regression. Projection timestamps cleared on reopen.',
     ),
   ).toBeDefined();
-  expect(screen.getByText('Status: Open')).toBeDefined();
-  expect(screen.getByText('Priority: High')).toBeDefined();
-  expect(screen.getByText('Client: Northwind Retail')).toBeDefined();
-  expect(screen.getByText('Assignee: Alex Agent')).toBeDefined();
-  expect(screen.getByText('Created: 22 Jul 2026, 12:00')).toBeDefined();
+  expect(screen.getByLabelText('Status: Open')).toBeDefined();
+  expect(screen.getByLabelText('Priority: High')).toBeDefined();
+  expect(screen.getByLabelText('Client: Northwind Retail')).toBeDefined();
+  expect(screen.getByLabelText('Assignee: Alex Agent')).toBeDefined();
+  expect(screen.getByLabelText('Created: 22 Jul 2026, 12:00')).toBeDefined();
   expect(screen.queryByText('Waiting on Client network details.')).toBeNull();
   expect(screen.queryByRole('button', { name: /assign/i })).toBeNull();
   expect(screen.queryByRole('textbox')).toBeNull();
@@ -100,17 +100,17 @@ test('Ticket consult shows current fields and Status Transition history oldest f
     screen.getByRole('button', { name: 'Mark as in progress' }),
   ).toBeDefined();
 
-  const history = screen.getByRole('table', { name: 'Status history' });
-  const rows = within(history).getAllByRole('row');
-  expect(within(rows[0]).getByText('From')).toBeDefined();
-  expect(within(rows[0]).getByText('To')).toBeDefined();
-  expect(within(rows[1]).getByText('—')).toBeDefined();
-  expect(within(rows[1]).getByText('Open')).toBeDefined();
-  expect(within(rows[2]).getByText('In progress')).toBeDefined();
-  expect(within(rows[5]).getByText('Closed')).toBeDefined();
-  expect(within(rows[5]).getAllByText('Open').length).toBeGreaterThan(0);
-  expect(within(history).getAllByText('Ada Lovelace (user-1)').length).toBe(2);
-  expect(within(rows[1]).getByText('Alex Agent (user-2)')).toBeDefined();
+  const history = screen.getByLabelText('Status history');
+  expect(within(history).getByText('Created → Open')).toBeDefined();
+  expect(within(history).getByText('Open → In progress')).toBeDefined();
+  expect(within(history).getByText('Resolved → Closed')).toBeDefined();
+  expect(within(history).getByText('Closed → Open')).toBeDefined();
+  expect(within(history).getAllByText(/Ada Lovelace \(user-1\)/).length).toBe(
+    2,
+  );
+  expect(
+    within(history).getByText(/Alex Agent \(user-2\) · 22 Jul 2026/),
+  ).toBeDefined();
 });
 
 test('in-flight Ticket consult shows loading before fields', async () => {
@@ -306,7 +306,7 @@ test('Agent Assignee can record the next forward Status Transition', async () =>
   ).toBeDefined();
   await user.click(screen.getByRole('button', { name: 'Mark as in progress' }));
 
-  expect(await screen.findByText('Status: In progress')).toBeDefined();
+  expect(await screen.findByLabelText('Status: In progress')).toBeDefined();
   expect(
     screen.queryByRole('button', { name: 'Mark as in progress' }),
   ).toBeNull();
@@ -357,9 +357,9 @@ test('Administrator can record a forward Status Transition on an unassigned Tick
       name: 'High: patient portal MFA reset',
     }),
   ).toBeDefined();
-  expect(screen.getByText('Assignee: Unassigned')).toBeDefined();
+  expect(screen.getByLabelText('Assignee: Unassigned')).toBeDefined();
   await user.click(screen.getByRole('button', { name: 'Mark as in progress' }));
-  expect(await screen.findByText('Status: In progress')).toBeDefined();
+  expect(await screen.findByLabelText('Status: In progress')).toBeDefined();
 });
 
 test('resolved Ticket offers no Close or Reopen control', async () => {
@@ -381,7 +381,7 @@ test('resolved Ticket offers no Close or Reopen control', async () => {
   expect(
     await screen.findByRole('heading', { name: 'Resolved: SSO redirect loop' }),
   ).toBeDefined();
-  expect(screen.getByText('Status: Resolved')).toBeDefined();
+  expect(screen.getByLabelText('Status: Resolved')).toBeDefined();
   expect(screen.queryByRole('button', { name: 'Mark as resolved' })).toBeNull();
   expect(
     screen.queryByRole('button', { name: 'Mark as in progress' }),
@@ -421,7 +421,7 @@ test('failed Status Transition shows error copy without the raw server body', as
     await screen.findByText("Couldn't update this ticket's status."),
   ).toBeDefined();
   expect(screen.queryByText('Illegal edge stack')).toBeNull();
-  expect(screen.getByText('Status: Open')).toBeDefined();
+  expect(screen.getByLabelText('Status: Open')).toBeDefined();
 });
 
 test('Agent Assignee on a resolved Ticket sees no Close or Reopen control', async () => {
@@ -435,7 +435,7 @@ test('Agent Assignee on a resolved Ticket sees no Close or Reopen control', asyn
       name: 'Resolved: gift-card balance mismatch',
     }),
   ).toBeDefined();
-  expect(screen.getByText('Status: Resolved')).toBeDefined();
+  expect(screen.getByLabelText('Status: Resolved')).toBeDefined();
   expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Mark as resolved' })).toBeNull();
@@ -452,7 +452,7 @@ test('Supervisor on a closed Ticket sees no Close or Reopen control', async () =
       name: 'Closed: invoice PDF encoding',
     }),
   ).toBeDefined();
-  expect(screen.getByText('Status: Closed')).toBeDefined();
+  expect(screen.getByLabelText('Status: Closed')).toBeDefined();
   expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
 });
@@ -503,7 +503,7 @@ test('Administrator can close a resolved Ticket', async () => {
   expect(screen.queryByRole('button', { name: 'Mark as resolved' })).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Close' }));
 
-  expect(await screen.findByText('Status: Closed')).toBeDefined();
+  expect(await screen.findByLabelText('Status: Closed')).toBeDefined();
   expect(screen.getByRole('button', { name: 'Reopen' })).toBeDefined();
   expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
 });
@@ -557,7 +557,7 @@ test('Administrator can reopen a closed Ticket', async () => {
   ).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Reopen' }));
 
-  expect(await screen.findByText('Status: Open')).toBeDefined();
+  expect(await screen.findByLabelText('Status: Open')).toBeDefined();
   expect(
     screen.getByRole('button', { name: 'Mark as in progress' }),
   ).toBeDefined();

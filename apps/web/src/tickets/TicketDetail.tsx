@@ -1,4 +1,4 @@
-import { Alert, Button, Stack, Table, Text, Title } from '@mantine/core';
+import { Alert, Button, Stack, Text } from '@mantine/core';
 import {
   nextRecordableStatus,
   type PatchTicketStatusBody,
@@ -9,11 +9,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
-import {
-  formatTicketInstant,
-  PRIORITY_LABEL,
-  STATUS_LABEL,
-} from './ticketLabels';
+import { TicketDetailView } from './TicketDetailView';
+import { STATUS_LABEL } from './ticketLabels';
 
 function transitionButtonLabel(from: TicketStatus, to: TicketStatus): string {
   if (to === 'closed') {
@@ -110,6 +107,10 @@ export function TicketDetail() {
         assigneeId: ticket.assignee?.id ?? null,
       })
     : null;
+  const transitionLabel =
+    nextStatus != null
+      ? transitionButtonLabel(ticket.status, nextStatus)
+      : null;
 
   async function recordTransition(to: TicketStatus) {
     if (!id) {
@@ -140,58 +141,15 @@ export function TicketDetail() {
   }
 
   return (
-    <Stack>
-      <Title order={2}>{ticket.title}</Title>
-      <Text>{ticket.description}</Text>
-      <Text>Status: {STATUS_LABEL[ticket.status]}</Text>
-      <Text>Priority: {PRIORITY_LABEL[ticket.priority]}</Text>
-      <Text>Client: {ticket.client.name}</Text>
-      <Text>Assignee: {ticket.assignee?.displayName ?? 'Unassigned'}</Text>
-      <Text>Created by: {ticket.createdBy.displayName}</Text>
-      <Text>Created: {formatTicketInstant(ticket.createdAt)}</Text>
-      <Text>Updated: {formatTicketInstant(ticket.updatedAt)}</Text>
-      {ticket.resolvedAt ? (
-        <Text>Resolved: {formatTicketInstant(ticket.resolvedAt)}</Text>
-      ) : null}
-      {ticket.closedAt ? (
-        <Text>Closed: {formatTicketInstant(ticket.closedAt)}</Text>
-      ) : null}
-      {nextStatus ? (
-        <Button
-          type="button"
-          loading={isTransitioning}
-          onClick={() => {
-            void recordTransition(nextStatus);
-          }}
-        >
-          {transitionButtonLabel(ticket.status, nextStatus)}
-        </Button>
-      ) : null}
-      {transitionError ? (
-        <Alert>Couldn't update this ticket's status.</Alert>
-      ) : null}
-      <Table aria-label="Status history">
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>From</Table.Th>
-            <Table.Th>To</Table.Th>
-            <Table.Th>Changed</Table.Th>
-            <Table.Th>Changed by</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {ticket.statusHistory.map((row) => (
-            <Table.Tr key={`${row.changedAt}-${row.to}`}>
-              <Table.Td>{row.from ? STATUS_LABEL[row.from] : '—'}</Table.Td>
-              <Table.Td>{STATUS_LABEL[row.to]}</Table.Td>
-              <Table.Td>{formatTicketInstant(row.changedAt)}</Table.Td>
-              <Table.Td>
-                {row.changedBy.displayName} ({row.changedBy.id})
-              </Table.Td>
-            </Table.Tr>
-          ))}
-        </Table.Tbody>
-      </Table>
-    </Stack>
+    <TicketDetailView
+      ticket={ticket}
+      nextStatus={nextStatus}
+      transitionLabel={transitionLabel}
+      isTransitioning={isTransitioning}
+      transitionError={transitionError}
+      onTransition={(to) => {
+        void recordTransition(to);
+      }}
+    />
   );
 }
