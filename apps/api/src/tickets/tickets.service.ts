@@ -10,6 +10,7 @@ import {
   EMPTY_TICKET_LIST_FILTER_OPTIONS,
   hasMinimumRole,
   isLegalStatusEdge,
+  mayRecordStatusTransition,
   type PatchTicketStatusBody,
   PRIORITIES,
   type Priority,
@@ -231,7 +232,7 @@ export class TicketsService {
     return toTicketDetail(ticket);
   }
 
-  async updateStatus(
+  async recordStatusTransition(
     user: PublicUser,
     id: string,
     body: PatchTicketStatusBody,
@@ -250,12 +251,15 @@ export class TicketsService {
       throw new ConflictException();
     }
 
-    const closeOrReopen = to === 'closed' || ticket.status === 'closed';
-    const isAdmin = hasMinimumRole(user.role, 'admin');
-    const mayRecord = closeOrReopen
-      ? isAdmin
-      : isAdmin || ticket.assigneeId === user.id;
-    if (!mayRecord) {
+    if (
+      !mayRecordStatusTransition({
+        from: ticket.status,
+        to,
+        role: user.role,
+        actorId: user.id,
+        assigneeId: ticket.assigneeId,
+      })
+    ) {
       throw new ForbiddenException();
     }
 

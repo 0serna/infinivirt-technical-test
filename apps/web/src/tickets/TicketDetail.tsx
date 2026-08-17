@@ -1,8 +1,7 @@
 import { Alert, Button, Stack, Table, Text, Title } from '@mantine/core';
 import {
-  nextRecordableForwardStatus,
+  nextRecordableStatus,
   type PatchTicketStatusBody,
-  type Priority,
   type TicketDetail as TicketDetailBody,
   type TicketStatus,
 } from '@support-ticketing/shared';
@@ -10,28 +9,11 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
-
-const STATUS_LABEL: Record<TicketStatus, string> = {
-  open: 'Open',
-  in_progress: 'In progress',
-  resolved: 'Resolved',
-  closed: 'Closed',
-};
-
-const PRIORITY_LABEL: Record<Priority, string> = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  critical: 'Critical',
-};
-
-function formatInstant(value: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'UTC',
-  }).format(new Date(value));
-}
+import {
+  formatTicketInstant,
+  PRIORITY_LABEL,
+  STATUS_LABEL,
+} from './ticketLabels';
 
 function transitionButtonLabel(from: TicketStatus, to: TicketStatus): string {
   if (to === 'closed') {
@@ -121,7 +103,7 @@ export function TicketDetail() {
 
   const { ticket } = state;
   const nextStatus = user
-    ? nextRecordableForwardStatus({
+    ? nextRecordableStatus({
         status: ticket.status,
         role: user.role,
         actorId: user.id,
@@ -166,12 +148,13 @@ export function TicketDetail() {
       <Text>Client: {ticket.client.name}</Text>
       <Text>Assignee: {ticket.assignee?.displayName ?? 'Unassigned'}</Text>
       <Text>Created by: {ticket.createdBy.displayName}</Text>
-      <Text>Updated: {formatInstant(ticket.updatedAt)}</Text>
+      <Text>Created: {formatTicketInstant(ticket.createdAt)}</Text>
+      <Text>Updated: {formatTicketInstant(ticket.updatedAt)}</Text>
       {ticket.resolvedAt ? (
-        <Text>Resolved: {formatInstant(ticket.resolvedAt)}</Text>
+        <Text>Resolved: {formatTicketInstant(ticket.resolvedAt)}</Text>
       ) : null}
       {ticket.closedAt ? (
-        <Text>Closed: {formatInstant(ticket.closedAt)}</Text>
+        <Text>Closed: {formatTicketInstant(ticket.closedAt)}</Text>
       ) : null}
       {nextStatus ? (
         <Button
@@ -201,8 +184,10 @@ export function TicketDetail() {
             <Table.Tr key={`${row.changedAt}-${row.to}`}>
               <Table.Td>{row.from ? STATUS_LABEL[row.from] : '—'}</Table.Td>
               <Table.Td>{STATUS_LABEL[row.to]}</Table.Td>
-              <Table.Td>{formatInstant(row.changedAt)}</Table.Td>
-              <Table.Td>{row.changedBy.displayName}</Table.Td>
+              <Table.Td>{formatTicketInstant(row.changedAt)}</Table.Td>
+              <Table.Td>
+                {row.changedBy.displayName} ({row.changedBy.id})
+              </Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody>

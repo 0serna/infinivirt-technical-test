@@ -90,6 +90,7 @@ test('Ticket consult shows current fields and Status Transition history oldest f
   expect(screen.getByText('Priority: High')).toBeDefined();
   expect(screen.getByText('Client: Northwind Retail')).toBeDefined();
   expect(screen.getByText('Assignee: Alex Agent')).toBeDefined();
+  expect(screen.getByText('Created: 22 Jul 2026, 12:00')).toBeDefined();
   expect(screen.queryByText('Waiting on Client network details.')).toBeNull();
   expect(screen.queryByRole('button', { name: /assign/i })).toBeNull();
   expect(screen.queryByRole('textbox')).toBeNull();
@@ -108,7 +109,8 @@ test('Ticket consult shows current fields and Status Transition history oldest f
   expect(within(rows[2]).getByText('In progress')).toBeDefined();
   expect(within(rows[5]).getByText('Closed')).toBeDefined();
   expect(within(rows[5]).getAllByText('Open').length).toBeGreaterThan(0);
-  expect(within(history).getAllByText('Ada Lovelace').length).toBe(2);
+  expect(within(history).getAllByText('Ada Lovelace (user-1)').length).toBe(2);
+  expect(within(rows[1]).getByText('Alex Agent (user-2)')).toBeDefined();
 });
 
 test('in-flight Ticket consult shows loading before fields', async () => {

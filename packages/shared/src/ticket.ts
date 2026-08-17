@@ -76,7 +76,7 @@ export type PatchTicketStatusBody = {
 };
 
 /** Next Status on the single graph, including reopen (`closed` → `open`). */
-export const NEXT_TICKET_STATUS: Record<TicketStatus, TicketStatus | null> = {
+export const NEXT_TICKET_STATUS: Record<TicketStatus, TicketStatus> = {
   open: 'in_progress',
   in_progress: 'resolved',
   resolved: 'closed',
@@ -90,31 +90,40 @@ export function isLegalStatusEdge(
   return NEXT_TICKET_STATUS[from] === to;
 }
 
-/**
- * Next Status this User may record on the detail screen.
- * Close (`resolved` → `closed`) and reopen (`closed` → `open`) are Administrator-only.
- */
-export function nextRecordableForwardStatus(args: {
+export function mayRecordStatusTransition(args: {
+  from: TicketStatus;
+  to: TicketStatus;
+  role: Role;
+  actorId: string;
+  assigneeId: string | null;
+}): boolean {
+  if (!isLegalStatusEdge(args.from, args.to)) {
+    return false;
+  }
+  const closeOrReopen = args.to === 'closed' || args.from === 'closed';
+  if (closeOrReopen) {
+    return hasMinimumRole(args.role, 'admin');
+  }
+  return hasMinimumRole(args.role, 'admin') || args.assigneeId === args.actorId;
+}
+
+/** Next Status this User may record, including Administrator reopen. */
+export function nextRecordableStatus(args: {
   status: TicketStatus;
   role: Role;
   actorId: string;
   assigneeId: string | null;
 }): TicketStatus | null {
-  const next = NEXT_TICKET_STATUS[args.status];
-  if (next == null) {
-    return null;
-  }
-  const closeOrReopen = next === 'closed' || args.status === 'closed';
-  if (closeOrReopen) {
-    return hasMinimumRole(args.role, 'admin') ? next : null;
-  }
-  if (hasMinimumRole(args.role, 'admin')) {
-    return next;
-  }
-  if (args.assigneeId === args.actorId) {
-    return next;
-  }
-  return null;
+  const to = NEXT_TICKET_STATUS[args.status];
+  return mayRecordStatusTransition({
+    from: args.status,
+    to,
+    role: args.role,
+    actorId: args.actorId,
+    assigneeId: args.assigneeId,
+  })
+    ? to
+    : null;
 }
 
 export const EMPTY_TICKET_LIST_FILTER_OPTIONS: TicketListFilterOptions = {

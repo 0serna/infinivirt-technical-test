@@ -12,41 +12,22 @@ import {
   EMPTY_TICKET_LIST_FILTER_OPTIONS,
   hasMinimumRole,
   PRIORITIES,
-  type Priority,
   TICKET_STATUSES,
   type TicketListEnvelope,
   type TicketListFilterOptions,
   type TicketListFilters,
   type TicketListRow,
-  type TicketStatus,
   UNASSIGNED_ASSIGNEE_QUERY,
 } from '@support-ticketing/shared';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { apiFetch } from '../auth/api';
-
-const STATUS_LABEL: Record<TicketStatus, string> = {
-  open: 'Open',
-  in_progress: 'In progress',
-  resolved: 'Resolved',
-  closed: 'Closed',
-};
-
-const PRIORITY_LABEL: Record<Priority, string> = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  critical: 'Critical',
-};
-
-function formatUpdatedAt(value: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'UTC',
-  }).format(new Date(value));
-}
+import {
+  formatTicketInstant,
+  PRIORITY_LABEL,
+  STATUS_LABEL,
+} from './ticketLabels';
 
 function ticketsUrl(
   filters: TicketListFilters,
@@ -235,7 +216,7 @@ export function TicketList() {
                   {ticket.assignee?.displayName ?? 'Unassigned'}
                 </Table.Td>
                 <Table.Td>{ticket.createdBy.displayName}</Table.Td>
-                <Table.Td>{formatUpdatedAt(ticket.updatedAt)}</Table.Td>
+                <Table.Td>{formatTicketInstant(ticket.updatedAt)}</Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>

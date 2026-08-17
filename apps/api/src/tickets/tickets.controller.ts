@@ -15,8 +15,17 @@ import type {
   TicketListFilters,
 } from '@support-ticketing/shared';
 import type { AuthenticatedRequest } from '../auth/auth.guard';
+import type { PublicUser } from '../auth/public-user';
 import { RequireRole } from '../auth/require-role.decorator';
 import { TicketsService } from './tickets.service';
+
+function requireUser(request: AuthenticatedRequest): PublicUser {
+  const user = request.user;
+  if (!user) {
+    throw new UnauthorizedException();
+  }
+  return user;
+}
 
 @Controller('tickets')
 export class TicketsController {
@@ -28,11 +37,7 @@ export class TicketsController {
     @Req() request: AuthenticatedRequest,
     @Query() query: TicketListFilters,
   ): Promise<TicketListEnvelope> {
-    const user = request.user;
-    if (!user) {
-      throw new UnauthorizedException();
-    }
-    return this.ticketsService.list(user, query);
+    return this.ticketsService.list(requireUser(request), query);
   }
 
   @Get(':id')
@@ -41,24 +46,20 @@ export class TicketsController {
     @Req() request: AuthenticatedRequest,
     @Param('id') id: string,
   ): Promise<TicketDetail> {
-    const user = request.user;
-    if (!user) {
-      throw new UnauthorizedException();
-    }
-    return this.ticketsService.getById(user, id);
+    return this.ticketsService.getById(requireUser(request), id);
   }
 
   @Patch(':id')
   @RequireRole('agent')
-  updateStatus(
+  recordStatusTransition(
     @Req() request: AuthenticatedRequest,
     @Param('id') id: string,
     @Body() body: PatchTicketStatusBody,
   ): Promise<TicketDetail> {
-    const user = request.user;
-    if (!user) {
-      throw new UnauthorizedException();
-    }
-    return this.ticketsService.updateStatus(user, id, body);
+    return this.ticketsService.recordStatusTransition(
+      requireUser(request),
+      id,
+      body,
+    );
   }
 }
