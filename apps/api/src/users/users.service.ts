@@ -14,7 +14,6 @@ import {
   type UserCatalogRow,
 } from '@support-ticketing/shared';
 import { hashPassword } from '../auth/password';
-import { throwUniqueConflict } from '../http/prisma-unique-conflict';
 import { requireTrimmed } from '../http/require-trimmed';
 import { requireUuid } from '../http/require-uuid';
 import { PrismaService } from '../prisma/prisma.service';
@@ -77,20 +76,16 @@ export class UsersService {
 
     const passwordHash = await hashPassword(password);
 
-    try {
-      const created = await this.prisma.user.create({
-        data: {
-          email,
-          displayName,
-          role: role as PrismaRole,
-          passwordHash,
-        },
-        select: USER_CATALOG_SELECT,
-      });
-      return toAdminRow(created);
-    } catch (error) {
-      throwUniqueConflict(error);
-    }
+    const created = await this.prisma.user.create({
+      data: {
+        email,
+        displayName,
+        role: role as PrismaRole,
+        passwordHash,
+      },
+      select: USER_CATALOG_SELECT,
+    });
+    return toAdminRow(created);
   }
 
   async update(id: string, body: UpdateUserBody): Promise<AdminUserRow> {

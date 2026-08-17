@@ -9,10 +9,6 @@ import {
   Req,
 } from '@nestjs/common';
 import type {
-  CreateTicketBody,
-  CreateTicketCommentBody,
-  PatchTicketAssigneeBody,
-  PatchTicketStatusBody,
   TicketDetail,
   TicketListEnvelope,
   TicketListFilters,
@@ -20,6 +16,13 @@ import type {
 import type { AuthenticatedRequest } from '../auth/auth.guard';
 import { RequireRole } from '../auth/require-role.decorator';
 import { requireUser } from '../auth/require-user';
+import { IdParamDto } from '../http/dto/id-param.dto';
+import {
+  CreateTicketCommentDto,
+  CreateTicketDto,
+  PatchTicketAssigneeDto,
+  PatchTicketStatusDto,
+} from '../http/dto/ticket.dto';
 import { TicketsService } from './tickets.service';
 
 @Controller('tickets')
@@ -39,7 +42,7 @@ export class TicketsController {
   @RequireRole('agent')
   create(
     @Req() request: AuthenticatedRequest,
-    @Body() body: CreateTicketBody,
+    @Body() body: CreateTicketDto,
   ): Promise<TicketDetail> {
     return this.ticketsService.create(requireUser(request), body);
   }
@@ -48,31 +51,35 @@ export class TicketsController {
   @RequireRole('agent')
   getById(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Param() params: IdParamDto,
   ): Promise<TicketDetail> {
-    return this.ticketsService.getById(requireUser(request), id);
+    return this.ticketsService.getById(requireUser(request), params.id);
   }
 
   @Post(':id/comments')
   @RequireRole('agent')
   createComment(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
-    @Body() body: CreateTicketCommentBody,
+    @Param() params: IdParamDto,
+    @Body() body: CreateTicketCommentDto,
   ): Promise<TicketDetail> {
-    return this.ticketsService.createComment(requireUser(request), id, body);
+    return this.ticketsService.createComment(
+      requireUser(request),
+      params.id,
+      body,
+    );
   }
 
   @Patch(':id/assignee')
   @RequireRole('agent')
   recordReassignment(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
-    @Body() body: PatchTicketAssigneeBody,
+    @Param() params: IdParamDto,
+    @Body() body: PatchTicketAssigneeDto,
   ): Promise<TicketDetail> {
     return this.ticketsService.recordReassignment(
       requireUser(request),
-      id,
+      params.id,
       body,
     );
   }
@@ -81,12 +88,12 @@ export class TicketsController {
   @RequireRole('agent')
   recordStatusTransition(
     @Req() request: AuthenticatedRequest,
-    @Param('id') id: string,
-    @Body() body: PatchTicketStatusBody,
+    @Param() params: IdParamDto,
+    @Body() body: PatchTicketStatusDto,
   ): Promise<TicketDetail> {
     return this.ticketsService.recordStatusTransition(
       requireUser(request),
-      id,
+      params.id,
       body,
     );
   }

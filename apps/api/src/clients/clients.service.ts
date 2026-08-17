@@ -9,7 +9,6 @@ import type {
   CreateClientBody,
   UpdateClientBody,
 } from '@support-ticketing/shared';
-import { throwUniqueConflict } from '../http/prisma-unique-conflict';
 import { requireTrimmed } from '../http/require-trimmed';
 import { requireUuid } from '../http/require-uuid';
 import { PrismaService } from '../prisma/prisma.service';
@@ -55,15 +54,11 @@ export class ClientsService {
   async create(body: CreateClientBody): Promise<AdminClientRow> {
     const name = requireTrimmed(body?.name, 'name');
 
-    try {
-      const created = await this.prisma.client.create({
-        data: { name },
-        select: clientSelect,
-      });
-      return toAdminRow(created);
-    } catch (error) {
-      throwUniqueConflict(error);
-    }
+    const created = await this.prisma.client.create({
+      data: { name },
+      select: clientSelect,
+    });
+    return toAdminRow(created);
   }
 
   async update(id: string, body: UpdateClientBody): Promise<AdminClientRow> {
@@ -74,16 +69,12 @@ export class ClientsService {
       throw new ConflictException();
     }
 
-    try {
-      const updated = await this.prisma.client.update({
-        where: { id: clientId },
-        data: { name },
-        select: clientSelect,
-      });
-      return toAdminRow(updated);
-    } catch (error) {
-      throwUniqueConflict(error);
-    }
+    const updated = await this.prisma.client.update({
+      where: { id: clientId },
+      data: { name },
+      select: clientSelect,
+    });
+    return toAdminRow(updated);
   }
 
   async softDelete(id: string): Promise<AdminClientRow> {

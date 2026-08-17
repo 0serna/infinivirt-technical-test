@@ -1,0 +1,3 @@
+# HTTP error contract and request validation
+
+The API keeps Nest’s error JSON (`statusCode`, `message`, `error`) and does not wrap successes. A global exception filter maps unknown failures to an opaque 500 and Prisma unique violations (P2002) to 409; illegal Status edges stay domain `ConflictException`. Request bodies and UUID path params are validated with ValidationPipe and API-local DTO classes. Login is not: missing or empty credentials stay the same opaque 401. Ticket List query parsing stays role-aware in the service — an Agent’s garbage `assigneeId` is ignored, not 400. `message` is always a string (`Invalid <field>`), never class-validator’s array. Unknown extra keys are stripped; sending `email` on User update is 400 because login email is immutable.

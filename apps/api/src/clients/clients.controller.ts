@@ -12,13 +12,13 @@ import {
 import type {
   AdminClientRow,
   ClientCatalogRow,
-  CreateClientBody,
-  UpdateClientBody,
 } from '@support-ticketing/shared';
 import type { AuthenticatedRequest } from '../auth/auth.guard';
 import { RequireRole } from '../auth/require-role.decorator';
 import { requireUser } from '../auth/require-user';
 import { adminIncludeDeleted } from '../http/admin-include-deleted';
+import { CreateClientDto, UpdateClientDto } from '../http/dto/client.dto';
+import { IdParamDto } from '../http/dto/id-param.dto';
 import { ClientsService } from './clients.service';
 
 @Controller('clients')
@@ -39,28 +39,28 @@ export class ClientsController {
 
   @Post()
   @RequireRole('admin')
-  create(@Body() body: CreateClientBody): Promise<AdminClientRow> {
+  create(@Body() body: CreateClientDto): Promise<AdminClientRow> {
     return this.clientsService.create(body);
   }
 
   @Patch(':id')
   @RequireRole('admin')
   update(
-    @Param('id') id: string,
-    @Body() body: UpdateClientBody,
+    @Param() params: IdParamDto,
+    @Body() body: UpdateClientDto,
   ): Promise<AdminClientRow> {
-    return this.clientsService.update(id, body);
+    return this.clientsService.update(params.id, body);
   }
 
   @Delete(':id')
   @RequireRole('admin')
-  softDelete(@Param('id') id: string): Promise<AdminClientRow> {
-    return this.clientsService.softDelete(id);
+  softDelete(@Param() params: IdParamDto): Promise<AdminClientRow> {
+    return this.clientsService.softDelete(params.id);
   }
 
   @Post(':id/restore')
   @RequireRole('admin')
-  restore(@Param('id') id: string): Promise<AdminClientRow> {
-    return this.clientsService.restore(id);
+  restore(@Param() params: IdParamDto): Promise<AdminClientRow> {
+    return this.clientsService.restore(params.id);
   }
 }
