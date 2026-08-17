@@ -1294,3 +1294,252 @@ describe('Tickets create Comment (e2e)', () => {
     },
   );
 });
+
+async function seededClientId(
+  app: INestApplication,
+  accessToken: string,
+  clientName = 'Contoso Health',
+): Promise<string> {
+  const list = await request(app.getHttpServer())
+    .get('/tickets')
+    .set('Authorization', `Bearer ${accessToken}`)
+    .expect(200);
+  const client = (
+    list.body.filterOptions.clients as Array<{ id: string; name: string }>
+  ).find((row) => row.name === clientName);
+  expect(client).toBeDefined();
+  return client?.id as string;
+}
+
+describe('Tickets create (e2e)', () => {
+  it('Agent POST /tickets births an open unassigned Ticket with default Priority and Status Transition birth row', async () => {
+    const { accessToken, userId } = await login(app, AGENT_EMAIL);
+    const clientId = await seededClientId(app, accessToken);
+    const title = `Create e2e: Agent birth Contoso ${Date.now()}`;
+    const description = 'Client needs portal access restored.';
+
+    const response = await request(app.getHttpServer())
+      .post('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ clientId, title, description })
+      .expect(201);
+
+    expect(response.body).toEqual({
+      id: expect.any(String),
+      title,
+      description,
+      status: 'open',
+      priority: 'medium',
+      client: { id: clientId, name: 'Contoso Health' },
+      assignee: null,
+      createdBy: { id: userId, displayName: 'Alex Agent' },
+      updatedAt: expect.any(String),
+      createdAt: expect.any(String),
+      resolvedAt: null,
+      closedAt: null,
+      statusHistory: [
+        {
+          from: null,
+          to: 'open',
+          changedAt: expect.any(String),
+          changedBy: { id: userId, displayName: 'Alex Agent' },
+        },
+      ],
+      comments: [],
+    });
+    expect(response.body).not.toHaveProperty('assignments');
+
+    const listed = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(titles(listed.body)).toContain(title);
+
+    const detail = await request(app.getHttpServer())
+      .get(`/tickets/${response.body.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect(detail.body).toEqual(response.body);
+  });
+
+  it.each([
+    {
+      roleLabel: 'Supervisor',
+      email: SUPERVISOR_EMAIL,
+      displayName: 'Sam Supervisor',
+      priority: 'high' as const,
+    },
+    {
+      roleLabel: 'Administrator',
+      email: ADMIN_EMAIL,
+      displayName: 'Ada Admin',
+      priority: 'critical' as const,
+    },
+  ] as const)(
+    '$roleLabel POST /tickets with explicit Priority returns detail suitable for consult',
+    async ({ email, displayName, priority }) => {
+      const { accessToken, userId } = await login(app, email);
+      const clientId = await seededClientId(app, accessToken, 'Acme Logistics');
+      const title = `Create e2e: ${displayName} birth ${Date.now()}`;
+
+      const response = await request(app.getHttpServer())
+        .post('/tickets')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          clientId,
+          title,
+          description: 'Opened from create e2e harness.',
+          priority,
+        })
+        .expect(201);
+
+      expect(response.body.status).toBe('open');
+      expect(response.body.priority).toBe(priority);
+      expect(response.body.assignee).toBeNull();
+      expect(response.body.createdBy).toEqual({ id: userId, displayName });
+      expect(response.body.client).toEqual({
+        id: clientId,
+        name: 'Acme Logistics',
+      });
+      expect(response.body.statusHistory).toEqual([
+        {
+          from: null,
+          to: 'open',
+          changedAt: expect.any(String),
+          changedBy: { id: userId, displayName },
+        },
+      ]);
+      expect(response.body).not.toHaveProperty('assignments');
+
+      const listed = await request(app.getHttpServer())
+        .get('/tickets')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+      expect(titles(listed.body)).toContain(title);
+    },
+  );
+
+  it('POST /tickets without a token returns the same opaque 401 as GET /tickets', async () => {
+    const tickets = await request(app.getHttpServer())
+      .get('/tickets')
+      .expect(401);
+    const create = await request(app.getHttpServer())
+      .post('/tickets')
+      .send({
+        clientId: '00000000-0000-4000-8000-000000000001',
+        title: 'Should not land',
+        description: 'Unauthenticated create must fail.',
+      })
+      .expect(401);
+
+    expect(create.body).toEqual(tickets.body);
+  });
+
+  it('POST /tickets with empty or whitespace-only Title or description returns HTTP 400 without writing', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const clientId = await seededClientId(app, accessToken);
+    const before = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    const beforeCount = (before.body.tickets as unknown[]).length;
+
+    const blankTitle = await request(app.getHttpServer())
+      .post('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        clientId,
+        title: '   ',
+        description: 'Valid description body.',
+      })
+      .expect(400);
+    const blankDescription = await request(app.getHttpServer())
+      .post('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        clientId,
+        title: 'Valid title for create e2e',
+        description: '\t\n',
+      })
+      .expect(400);
+    const missingFields = await request(app.getHttpServer())
+      .post('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ clientId })
+      .expect(400);
+
+    for (const response of [blankTitle, blankDescription, missingFields]) {
+      expect(response.body).not.toHaveProperty('stack');
+      expect(JSON.stringify(response.body)).not.toMatch(/TicketsService/);
+    }
+
+    const after = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect((after.body.tickets as unknown[]).length).toBe(beforeCount);
+  });
+
+  it('POST /tickets with unknown Client id matches Ticket non-existence without writing', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const unknownClientId = '00000000-0000-4000-8000-000000000099';
+    const before = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    const beforeCount = (before.body.tickets as unknown[]).length;
+
+    const getUnknownTicket = await request(app.getHttpServer())
+      .get(`/tickets/${unknownClientId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(404);
+    const create = await request(app.getHttpServer())
+      .post('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        clientId: unknownClientId,
+        title: `Create e2e: unknown client ${Date.now()}`,
+        description: 'Must not persist.',
+      })
+      .expect(404);
+
+    expect(create.body).toEqual(getUnknownTicket.body);
+    expect(create.body).not.toHaveProperty('stack');
+
+    const after = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect((after.body.tickets as unknown[]).length).toBe(beforeCount);
+  });
+
+  it('POST /tickets with invalid Priority returns HTTP 400 without writing', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const clientId = await seededClientId(app, accessToken);
+    const before = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    const beforeCount = (before.body.tickets as unknown[]).length;
+
+    const response = await request(app.getHttpServer())
+      .post('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        clientId,
+        title: `Create e2e: invalid priority ${Date.now()}`,
+        description: 'Must not persist.',
+        priority: 'urgent',
+      })
+      .expect(400);
+
+    expect(response.body).not.toHaveProperty('stack');
+    expect(JSON.stringify(response.body)).not.toMatch(/TicketsService/);
+
+    const after = await request(app.getHttpServer())
+      .get('/tickets')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    expect((after.body.tickets as unknown[]).length).toBe(beforeCount);
+  });
+});

@@ -94,6 +94,14 @@ export type CreateTicketCommentBody = {
   visibility?: CommentVisibility;
 };
 
+/** Priority omitted defaults to `medium`. Title and description must be non-empty after trim. */
+export type CreateTicketBody = {
+  clientId: string;
+  title: string;
+  description: string;
+  priority?: Priority;
+};
+
 export const NEXT_TICKET_STATUS: Record<TicketStatus, TicketStatus> = {
   open: 'in_progress',
   in_progress: 'resolved',

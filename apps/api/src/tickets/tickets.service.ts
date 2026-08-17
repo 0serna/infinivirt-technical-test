@@ -8,6 +8,7 @@ import {
 import type { Prisma } from '@prisma/client';
 import {
   COMMENT_VISIBILITIES,
+  type CreateTicketBody,
   type CreateTicketCommentBody,
   hasMinimumRole,
   isLegalStatusEdge,
@@ -264,6 +265,57 @@ export class TicketsService {
     return toTicketDetail(
       await this.requireScopedTicket(user, id, ticketDetailSelect),
     );
+  }
+
+  async create(
+    user: PublicUser,
+    body: CreateTicketBody,
+  ): Promise<TicketDetail> {
+    const title = typeof body?.title === 'string' ? body.title.trim() : '';
+    if (title.length === 0) {
+      throw new BadRequestException('Invalid title');
+    }
+    const description =
+      typeof body?.description === 'string' ? body.description.trim() : '';
+    if (description.length === 0) {
+      throw new BadRequestException('Invalid description');
+    }
+    if (typeof body?.clientId !== 'string') {
+      throw new BadRequestException('Invalid clientId');
+    }
+    const clientId = requireUuid(body.clientId, 'clientId');
+    const priority =
+      parseOptionalEnum(body.priority, PRIORITIES, 'priority') ?? 'medium';
+
+    const client = await this.prisma.client.findUnique({
+      where: { id: clientId },
+      select: { id: true },
+    });
+    if (!client) {
+      throw new NotFoundException();
+    }
+
+    const created = await this.prisma.ticket.create({
+      data: {
+        clientId,
+        title,
+        description,
+        status: 'open',
+        priority,
+        assigneeId: null,
+        createdById: user.id,
+        statusHistory: {
+          create: {
+            fromStatus: null,
+            toStatus: 'open',
+            changedById: user.id,
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    return this.getById(user, created.id);
   }
 
   async createComment(

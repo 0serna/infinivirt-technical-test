@@ -10,6 +10,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type {
+  CreateTicketBody,
   CreateTicketCommentBody,
   PatchTicketStatusBody,
   TicketDetail,
@@ -40,6 +41,15 @@ export class TicketsController {
     @Query() query: TicketListFilters,
   ): Promise<TicketListEnvelope> {
     return this.ticketsService.list(requireUser(request), query);
+  }
+
+  @Post()
+  @RequireRole('agent')
+  create(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: CreateTicketBody,
+  ): Promise<TicketDetail> {
+    return this.ticketsService.create(requireUser(request), body);
   }
 
   @Get(':id')
