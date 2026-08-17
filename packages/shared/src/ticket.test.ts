@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   isLegalStatusEdge,
+  mayRecordReassignment,
   mayRecordStatusTransition,
   NEXT_TICKET_STATUS,
   nextRecordableStatus,
@@ -109,5 +110,13 @@ describe('nextRecordableStatus', () => {
       }),
       null,
     );
+  });
+});
+
+describe('mayRecordReassignment', () => {
+  it('allows Supervisor and Administrator but not Agent', () => {
+    assert.equal(mayRecordReassignment('agent'), false);
+    assert.equal(mayRecordReassignment('supervisor'), true);
+    assert.equal(mayRecordReassignment('admin'), true);
   });
 });

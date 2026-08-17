@@ -97,11 +97,23 @@ export function isClientsUrl(url: string): boolean {
   return url === '/api/clients';
 }
 
+export function isUsersUrl(url: string): boolean {
+  return url === '/api/users';
+}
+
 /** Full Client catalog (ADR 0010). Includes Clients absent from list filterOptions. */
 export const sampleClientCatalog = [
   { id: 'client-1', name: 'Contoso Health' },
   { id: 'client-2', name: 'Initech Soft' },
   { id: 'client-acme', name: 'Acme Logistics' },
+];
+
+/** Read-only staff catalog for Assignee picker. Wider than list filterOptions.assignees. */
+export const sampleUserCatalog = [
+  { id: 'user-1', displayName: 'Ada Lovelace', role: 'admin' as const },
+  { id: 'user-2', displayName: 'Alex Agent', role: 'agent' as const },
+  { id: 'user-3', displayName: 'Sam Supervisor', role: 'supervisor' as const },
+  { id: 'user-4', displayName: 'Jamie Agent', role: 'agent' as const },
 ];
 
 export const sampleTicketDetail = {
@@ -305,6 +317,9 @@ export function mockAuthedSession(
     }
     if (isTicketsUrl(url)) {
       return jsonResponse(200, tickets);
+    }
+    if (isUsersUrl(url)) {
+      return jsonResponse(200, sampleUserCatalog);
     }
     if (detail !== undefined && isTicketDetailUrl(url)) {
       return jsonResponse(200, detail);

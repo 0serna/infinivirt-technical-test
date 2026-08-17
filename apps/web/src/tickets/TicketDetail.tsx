@@ -7,6 +7,7 @@ import {
   Button,
   Group,
   Menu,
+  Select,
   Stack,
   Switch,
   Text,
@@ -18,7 +19,9 @@ import {
   type CommentVisibility,
   type CreateTicketCommentBody,
   hasMinimumRole,
+  mayRecordReassignment,
   nextRecordableStatus,
+  type PatchTicketAssigneeBody,
   type PatchTicketStatusBody,
   type Priority,
   type TicketAssignmentHistoryRow,
@@ -26,6 +29,7 @@ import {
   type TicketDetail as TicketDetailBody,
   type TicketStatus,
   type TicketStatusHistoryRow,
+  type UserCatalogRow,
 } from '@support-ticketing/shared';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -282,16 +286,98 @@ function CommentComposer({
   );
 }
 
-function PropertiesColumn({ ticket }: { ticket: TicketDetailBody }) {
+function PropertiesColumn({
+  ticket,
+  canReassign,
+  users,
+  usersLoading,
+  assigneeBusy,
+  assigneeError,
+  onAssign,
+  onClear,
+}: {
+  ticket: TicketDetailBody;
+  canReassign: boolean;
+  users: UserCatalogRow[];
+  usersLoading: boolean;
+  assigneeBusy: boolean;
+  assigneeError: boolean;
+  onAssign: (assigneeId: string) => Promise<boolean>;
+  onClear: () => Promise<boolean>;
+}) {
+  const [draftAssigneeId, setDraftAssigneeId] = useState<string | null>(
+    ticket.assignee?.id ?? null,
+  );
+
+  useEffect(() => {
+    setDraftAssigneeId(ticket.assignee?.id ?? null);
+  }, [ticket.assignee?.id]);
+
+  const currentId = ticket.assignee?.id ?? null;
+  const canSave =
+    draftAssigneeId !== null && draftAssigneeId !== currentId && !assigneeBusy;
+  const canClear = currentId !== null && !assigneeBusy;
+
   return (
     <Stack gap="md" aria-label="Ticket properties">
       <Text fw={600} size="sm">
         Properties
       </Text>
       <MetaItem label="Client">{ticket.client.name}</MetaItem>
-      <MetaItem label="Assignee">
-        {ticket.assignee?.displayName ?? 'Unassigned'}
-      </MetaItem>
+      {canReassign ? (
+        <Stack gap="sm" aria-label="Assignee controls">
+          <Select
+            label="Assignee"
+            placeholder={usersLoading ? 'Loading users…' : 'Unassigned'}
+            data={users.map((row) => ({
+              value: row.id,
+              label: `${row.displayName} (${row.role})`,
+            }))}
+            value={draftAssigneeId}
+            onChange={setDraftAssigneeId}
+            disabled={assigneeBusy || usersLoading}
+            clearable={false}
+            searchable
+          />
+          <Group gap="sm">
+            <Button
+              type="button"
+              variant="light"
+              loading={assigneeBusy}
+              disabled={!canSave}
+              onClick={() => {
+                if (draftAssigneeId) {
+                  void onAssign(draftAssigneeId);
+                }
+              }}
+            >
+              {currentId === null ? 'Assign' : 'Change assignee'}
+            </Button>
+            {currentId !== null ? (
+              <Button
+                type="button"
+                variant="default"
+                loading={assigneeBusy}
+                disabled={!canClear}
+                onClick={() => {
+                  void onClear();
+                }}
+              >
+                Clear assignee
+              </Button>
+            ) : null}
+          </Group>
+          {assigneeError ? (
+            <Text c="red" size="sm">
+              Couldn't update this ticket's assignee.
+            </Text>
+          ) : null}
+        </Stack>
+      ) : (
+        <MetaItem label="Assignee">
+          {ticket.assignee?.displayName ?? 'Unassigned'}
+        </MetaItem>
+      )}
       <MetaItem label="Created by">{ticket.createdBy.displayName}</MetaItem>
       <MetaItem label="Created">
         {formatTicketInstant(ticket.createdAt)}
@@ -329,6 +415,11 @@ export function TicketDetail() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [commentError, setCommentError] = useState(false);
   const [isCommenting, setIsCommenting] = useState(false);
+  const [assigneeError, setAssigneeError] = useState(false);
+  const [isReassigning, setIsReassigning] = useState(false);
+  const [users, setUsers] = useState<UserCatalogRow[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const canReassign = user !== null && mayRecordReassignment(user.role);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reloadToken retriggers fetch on Try again
   useEffect(() => {
@@ -340,6 +431,7 @@ export function TicketDetail() {
     setState({ kind: 'loading' });
     setTransitionError(false);
     setCommentError(false);
+    setAssigneeError(false);
 
     void apiFetch(`/api/tickets/${id}`)
       .then(async (response) => {
@@ -367,6 +459,41 @@ export function TicketDetail() {
       cancelled = true;
     };
   }, [id, reloadToken]);
+
+  useEffect(() => {
+    if (!canReassign) {
+      setUsers([]);
+      setUsersLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setUsersLoading(true);
+    void apiFetch('/api/users')
+      .then(async (response) => {
+        if (cancelled || response.status === 401) {
+          return;
+        }
+        if (!response.ok) {
+          setUsers([]);
+          return;
+        }
+        const body = (await response.json()) as unknown;
+        setUsers(Array.isArray(body) ? (body as UserCatalogRow[]) : []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUsers([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setUsersLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canReassign]);
 
   if (state.kind === 'loading') {
     return <Text>Loading ticket…</Text>;
@@ -460,6 +587,18 @@ export function TicketDetail() {
     );
   }
 
+  async function recordReassignment(
+    assigneeId: string | null,
+  ): Promise<boolean> {
+    const body: PatchTicketAssigneeBody = { assigneeId };
+    return mutateTicket(
+      `/api/tickets/${id}/assignee`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+      setIsReassigning,
+      setAssigneeError,
+    );
+  }
+
   return (
     <Stack gap="lg">
       <Breadcrumbs separator="›" separatorMargin="xs">
@@ -540,7 +679,16 @@ export function TicketDetail() {
             : '1fr',
         }}
       >
-        <PropertiesColumn ticket={ticket} />
+        <PropertiesColumn
+          ticket={ticket}
+          canReassign={canReassign}
+          users={users}
+          usersLoading={usersLoading}
+          assigneeBusy={isReassigning}
+          assigneeError={assigneeError}
+          onAssign={(assigneeId) => recordReassignment(assigneeId)}
+          onClear={() => recordReassignment(null)}
+        />
         <Stack gap="md">
           <CommentThread comments={ticket.comments} />
           <CommentComposer

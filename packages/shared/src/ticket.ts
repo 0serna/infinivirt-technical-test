@@ -102,6 +102,18 @@ export type PatchTicketStatusBody = {
   status: TicketStatus;
 };
 
+/** Dedicated Reassignment body. `null` clears Assignee (unassign). */
+export type PatchTicketAssigneeBody = {
+  assigneeId: string | null;
+};
+
+/** Read-only staff catalog row for Assignee picker. Not User administration. */
+export type UserCatalogRow = {
+  id: string;
+  displayName: string;
+  role: Role;
+};
+
 /** Visibility omitted defaults to `public`. */
 export type CreateTicketCommentBody = {
   body: string;
@@ -165,6 +177,11 @@ export function nextRecordableStatus(args: {
   })
     ? to
     : null;
+}
+
+/** Supervisor and Administrator may record a Reassignment; Agent may not. */
+export function mayRecordReassignment(role: Role): boolean {
+  return hasMinimumRole(role, 'supervisor');
 }
 
 export const EMPTY_TICKET_LIST_FILTER_OPTIONS: TicketListFilterOptions = {

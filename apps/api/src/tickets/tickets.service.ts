@@ -12,7 +12,9 @@ import {
   type CreateTicketCommentBody,
   hasMinimumRole,
   isLegalStatusEdge,
+  mayRecordReassignment,
   mayRecordStatusTransition,
+  type PatchTicketAssigneeBody,
   type PatchTicketStatusBody,
   PRIORITIES,
   type Priority,
@@ -135,6 +137,16 @@ function parseAssigneeFilter(value?: string): AssigneeFilter | undefined {
     return { kind: 'unassigned' };
   }
   return { kind: 'user', id: requireUuid(value, 'assigneeId') };
+}
+
+function parseAssigneeId(value: unknown): string | null {
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== 'string') {
+    throw new BadRequestException('Invalid assigneeId');
+  }
+  return requireUuid(value, 'assigneeId');
 }
 
 function matchesFilters(
@@ -363,6 +375,57 @@ export class TicketsService {
           },
         },
       },
+    });
+
+    return this.getById(user, ticket.id);
+  }
+
+  async recordReassignment(
+    user: PublicUser,
+    id: string,
+    body: PatchTicketAssigneeBody,
+  ): Promise<TicketDetail> {
+    const toAssigneeId = parseAssigneeId(body?.assigneeId);
+    const ticket = await this.requireScopedTicket(user, id, {
+      id: true,
+      assigneeId: true,
+    });
+
+    // List Scope (non-existence) is checked first — never leak via 403.
+    if (!mayRecordReassignment(user.role)) {
+      throw new ForbiddenException();
+    }
+
+    if (toAssigneeId === ticket.assigneeId) {
+      return this.getById(user, ticket.id);
+    }
+
+    if (toAssigneeId !== null) {
+      const target = await this.prisma.user.findUnique({
+        where: { id: toAssigneeId },
+        select: { id: true },
+      });
+      if (!target) {
+        throw new BadRequestException('Unknown assigneeId');
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ticket.update({
+        where: { id: ticket.id },
+        data: {
+          assigneeId: toAssigneeId,
+          updatedAt: new Date(),
+        },
+      });
+      await tx.ticketAssignment.create({
+        data: {
+          ticketId: ticket.id,
+          fromAssigneeId: ticket.assigneeId,
+          toAssigneeId,
+          changedById: user.id,
+        },
+      });
     });
 
     return this.getById(user, ticket.id);

@@ -5,6 +5,7 @@ import {
   alex,
   isTicketDetailUrl,
   isTicketsUrl,
+  isUsersUrl,
   jsonResponse,
   mockAuthedSession,
   renderApp,
@@ -14,6 +15,7 @@ import {
   sampleResolvedTicketDetail,
   sampleTicketDetail,
   sampleTickets,
+  sampleUserCatalog,
   unauthorized,
 } from '../test/render-app';
 
@@ -66,6 +68,9 @@ function mockTicketPatchSession({
     if (isTicketsUrl(url)) {
       return jsonResponse(200, sampleTickets);
     }
+    if (isUsersUrl(url)) {
+      return jsonResponse(200, sampleUserCatalog);
+    }
     if (isTicketDetailUrl(url) && method === 'PATCH') {
       if (patchResponse) {
         return patchResponse;
@@ -98,8 +103,42 @@ function mockTicketCommentSession({
     if (isTicketsUrl(url)) {
       return jsonResponse(200, sampleTickets);
     }
+    if (isUsersUrl(url)) {
+      return jsonResponse(200, sampleUserCatalog);
+    }
     if (url === '/api/tickets/ticket-1/comments' && method === 'POST') {
       return onPost(String(init?.body ?? ''));
+    }
+    if (isTicketDetailUrl(url)) {
+      return jsonResponse(200, detail);
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  });
+}
+
+function mockTicketAssigneeSession({
+  detail,
+  user,
+  onPatch,
+}: {
+  detail: unknown;
+  user: SessionUser;
+  onPatch: (body: string, url: string) => Response;
+}) {
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url === '/api/auth/me') {
+      return jsonResponse(200, user);
+    }
+    if (isTicketsUrl(url)) {
+      return jsonResponse(200, sampleTickets);
+    }
+    if (isUsersUrl(url)) {
+      return jsonResponse(200, sampleUserCatalog);
+    }
+    if (url.endsWith('/assignee') && method === 'PATCH') {
+      return onPatch(String(init?.body ?? ''), url);
     }
     if (isTicketDetailUrl(url)) {
       return jsonResponse(200, detail);
@@ -153,10 +192,11 @@ test('Ticket consult shows current fields and Status Transition history oldest f
   expect(screen.getByLabelText('Status: Open')).toBeDefined();
   expect(screen.getByLabelText('Priority: High')).toBeDefined();
   expect(screen.getByLabelText('Client: Northwind Retail')).toBeDefined();
-  expect(screen.getByLabelText('Assignee: Alex Agent')).toBeDefined();
+  expect(screen.getByLabelText('Assignee controls')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Change assignee' })).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Clear assignee' })).toBeDefined();
   expect(screen.getByLabelText('Created: 22 Jul 2026, 12:00')).toBeDefined();
   expect(screen.queryByText('Waiting on Client network details.')).toBeNull();
-  expect(screen.queryByRole('button', { name: /assign/i })).toBeNull();
   expect(screen.getByRole('textbox', { name: 'Comment' })).toBeDefined();
   expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
@@ -305,6 +345,9 @@ test('in-flight Ticket consult shows loading before fields', async () => {
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
     }
+    if (isUsersUrl(url)) {
+      return jsonResponse(200, sampleUserCatalog);
+    }
     if (isTicketDetailUrl(url)) {
       return pending;
     }
@@ -335,6 +378,9 @@ test('missing Ticket consult shows not-found copy without the raw server body', 
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
     }
+    if (isUsersUrl(url)) {
+      return jsonResponse(200, sampleUserCatalog);
+    }
     if (isTicketDetailUrl(url)) {
       return jsonResponse(404, {
         message: 'Cannot GET warehouse scanner pairing',
@@ -357,6 +403,9 @@ test('failed Ticket consult fetch shows error copy and can retry', async () => {
     const url = String(input);
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
+    }
+    if (isUsersUrl(url)) {
+      return jsonResponse(200, sampleUserCatalog);
     }
     if (isTicketDetailUrl(url)) {
       detailCalls += 1;
@@ -389,6 +438,9 @@ test('Ticket consult 401 signs the User out', async () => {
     const url = String(input);
     if (url === '/api/auth/me') {
       return jsonResponse(200, ada);
+    }
+    if (isUsersUrl(url)) {
+      return jsonResponse(200, sampleUserCatalog);
     }
     if (isTicketDetailUrl(url)) {
       return unauthorized;
@@ -749,7 +801,8 @@ test('Administrator can record a forward Status Transition on an unassigned Tick
       name: 'High: patient portal MFA reset',
     }),
   ).toBeDefined();
-  expect(screen.getByLabelText('Assignee: Unassigned')).toBeDefined();
+  expect(screen.getByLabelText('Assignee controls')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Assign' })).toBeDefined();
   await chooseStatusTransition(user, /Mark as in progress/);
   expect(await screen.findByLabelText('Status: In progress')).toBeDefined();
 });
@@ -915,4 +968,160 @@ test('Administrator can reopen a closed Ticket', async () => {
   expect(await screen.findByLabelText('Status: Open')).toBeDefined();
   expect(screen.getByRole('button', { name: 'Change status' })).toBeDefined();
   expect(screen.queryByRole('button', { name: 'Reopen' })).toBeNull();
+});
+
+test('Agent has no Assignee Reassignment control on Ticket detail', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  mockTicketSession(sampleTicketDetail, alex);
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  expect(screen.getByLabelText('Assignee: Unassigned')).toBeDefined();
+  expect(screen.queryByLabelText('Assignee controls')).toBeNull();
+  expect(screen.queryByRole('button', { name: /assign/i })).toBeNull();
+  expect(screen.queryByRole('combobox', { name: 'Assignee' })).toBeNull();
+  expect(
+    vi.mocked(fetch).mock.calls.some(([url]) => isUsersUrl(String(url))),
+  ).toBe(false);
+});
+
+test('Supervisor loads User catalog for Assignee picker and can first-assign', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const updated = {
+    ...sampleTicketDetail,
+    assignee: { id: 'user-4', displayName: 'Jamie Agent' },
+    updatedAt: '2026-08-16T15:00:00.000Z',
+    assignments: [
+      {
+        from: null,
+        to: { id: 'user-4', displayName: 'Jamie Agent' },
+        changedAt: '2026-08-16T15:00:00.000Z',
+        changedBy: { id: 'user-3', displayName: 'Sam Supervisor' },
+      },
+    ],
+  };
+  mockTicketAssigneeSession({
+    detail: sampleTicketDetail,
+    user: sam,
+    onPatch: (body, url) => {
+      expect(url).toBe('/api/tickets/ticket-1/assignee');
+      expect(body).toBe(JSON.stringify({ assigneeId: 'user-4' }));
+      return jsonResponse(200, updated);
+    },
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  expect(screen.getByLabelText('Assignee controls')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Assign' })).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Clear assignee' })).toBeNull();
+
+  const usersCall = vi
+    .mocked(fetch)
+    .mock.calls.find(([url]) => isUsersUrl(String(url)));
+  expect(usersCall).toBeDefined();
+
+  await user.click(screen.getByRole('combobox', { name: 'Assignee' }));
+  expect(
+    screen.getByRole('option', { name: 'Jamie Agent (agent)', hidden: true }),
+  ).toBeDefined();
+  expect(
+    screen.queryByRole('option', { name: 'Sam Supervisor', hidden: true }),
+  ).toBeNull();
+  await user.click(
+    screen.getByRole('option', { name: 'Jamie Agent (agent)', hidden: true }),
+  );
+  await user.click(screen.getByRole('button', { name: 'Assign' }));
+
+  expect(
+    await screen.findByRole('button', { name: 'Change assignee' }),
+  ).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Clear assignee' })).toBeDefined();
+  const history = screen.getByLabelText('Assignment history');
+  expect(within(history).getByText('Unassigned → Jamie Agent')).toBeDefined();
+});
+
+test('Administrator can clear Assignee and refreshes detail from response', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  const detail = {
+    ...sampleReopenedTicketDetail,
+    id: 'ticket-1',
+  };
+  const updated = {
+    ...detail,
+    assignee: null,
+    updatedAt: '2026-08-16T16:00:00.000Z',
+    assignments: [
+      ...detail.assignments,
+      {
+        from: { id: 'user-2', displayName: 'Alex Agent' },
+        to: null,
+        changedAt: '2026-08-16T16:00:00.000Z',
+        changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
+      },
+    ],
+  };
+  mockTicketAssigneeSession({
+    detail,
+    user: ada,
+    onPatch: (body, url) => {
+      expect(url).toBe('/api/tickets/ticket-1/assignee');
+      expect(body).toBe(JSON.stringify({ assigneeId: null }));
+      return jsonResponse(200, updated);
+    },
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Reopened: returns portal blank page',
+    }),
+  ).toBeDefined();
+  await user.click(screen.getByRole('button', { name: 'Clear assignee' }));
+
+  expect(await screen.findByRole('button', { name: 'Assign' })).toBeDefined();
+  const history = screen.getByLabelText('Assignment history');
+  expect(within(history).getByText('Alex Agent → Unassigned')).toBeDefined();
+});
+
+test('failed Reassignment shows English error without the raw server body', async () => {
+  const user = userEvent.setup();
+  localStorage.setItem('accessToken', 'token-abc');
+  mockTicketAssigneeSession({
+    detail: sampleTicketDetail,
+    user: sam,
+    onPatch: () =>
+      jsonResponse(400, { message: 'Unknown assigneeId boom stack' }),
+  });
+
+  renderApp(['/tickets/ticket-1']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'High: patient portal MFA reset',
+    }),
+  ).toBeDefined();
+  await user.click(screen.getByRole('combobox', { name: 'Assignee' }));
+  await user.click(
+    screen.getByRole('option', { name: 'Alex Agent (agent)', hidden: true }),
+  );
+  await user.click(screen.getByRole('button', { name: 'Assign' }));
+
+  expect(
+    await screen.findByText("Couldn't update this ticket's assignee."),
+  ).toBeDefined();
+  expect(screen.queryByText(/boom stack/)).toBeNull();
 });
