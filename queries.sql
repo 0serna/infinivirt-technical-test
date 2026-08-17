@@ -44,7 +44,7 @@ ORDER BY t.updated_at ASC;
 -- 4. User with most Tickets having resolved_at in the last 30 days
 --     Inclusion uses Ticket projection (resolved_at in window).
 --     Credit = User who recorded the latest Status Transition to `resolved`
---     for that Ticket (ticket_status_history.changed_by_id) — not current Assignee.
+--     for that Ticket (ticket_status_history.changed_by_id), not current Assignee.
 SELECT
   u.id AS user_id,
   u.email,

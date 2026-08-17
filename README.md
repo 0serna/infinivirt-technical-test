@@ -6,7 +6,7 @@ Staff use this to register, assign, and track customer support tickets.
 
 TypeScript: NestJS API, Prisma, PostgreSQL, React SPA (Vite, Mantine). Shared types in `packages/shared`.
 
-`apps/api` and `apps/web` share a repo, types, and CI. They deploy as two artifacts (API container, static SPA) so each can scale and release on its own. That split was the plan from the start. The API is stateless: JWT, no server session, so more API instances do not need sticky sessions.
+`apps/api` and `apps/web` share a repo, types, and CI. They deploy as two artifacts (API container, static SPA) so each can scale and release on its own. The API is stateless: JWT, no server session, so more API instances do not need sticky sessions.
 
 Auth is a Bearer JWT (~8h) with no refresh token. The token carries `sub`. Each request loads Role and soft-delete from the database. Roles cascade as an enum: `agent` < `supervisor` < `admin`.
 
