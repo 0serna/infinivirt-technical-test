@@ -62,6 +62,15 @@ const ticketDetailSelect = {
       changedBy: { select: { id: true, displayName: true } },
     },
   },
+  assignments: {
+    orderBy: [{ changedAt: 'asc' as const }, { id: 'asc' as const }],
+    select: {
+      changedAt: true,
+      fromAssignee: { select: { id: true, displayName: true } },
+      toAssignee: { select: { id: true, displayName: true } },
+      changedBy: { select: { id: true, displayName: true } },
+    },
+  },
   comments: {
     orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
     select: {
@@ -198,6 +207,7 @@ function toTicketDetail(ticket: TicketDetailRecord): TicketDetail {
     resolvedAt,
     closedAt,
     statusHistory,
+    assignments,
     comments,
     ...rest
   } = ticket;
@@ -210,6 +220,12 @@ function toTicketDetail(ticket: TicketDetailRecord): TicketDetail {
     statusHistory: statusHistory.map((row) => ({
       from: row.fromStatus,
       to: row.toStatus,
+      changedAt: row.changedAt.toISOString(),
+      changedBy: row.changedBy,
+    })),
+    assignments: assignments.map((row) => ({
+      from: row.fromAssignee,
+      to: row.toAssignee,
       changedAt: row.changedAt.toISOString(),
       changedBy: row.changedBy,
     })),

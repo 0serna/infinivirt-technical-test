@@ -176,6 +176,70 @@ test('Ticket consult shows current fields and Status Transition history oldest f
   ).toBeDefined();
 });
 
+test('Ticket consult shows Reassignment history oldest first from detail payload', async () => {
+  localStorage.setItem('accessToken', 'token-abc');
+  const detail = {
+    ...sampleReopenedTicketDetail,
+    id: 'ticket-reassigned',
+    title: 'Reassigned often: customs form mapping',
+    assignee: { id: 'user-2', displayName: 'Alex Agent' },
+    assignments: [
+      {
+        from: null,
+        to: { id: 'user-2', displayName: 'Alex Agent' },
+        changedAt: '2026-08-09T12:00:00.000Z',
+        changedBy: { id: 'user-3', displayName: 'Sam Supervisor' },
+      },
+      {
+        from: { id: 'user-2', displayName: 'Alex Agent' },
+        to: { id: 'user-3', displayName: 'Sam Supervisor' },
+        changedAt: '2026-08-10T12:00:00.000Z',
+        changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
+      },
+      {
+        from: { id: 'user-3', displayName: 'Sam Supervisor' },
+        to: null,
+        changedAt: '2026-08-11T12:00:00.000Z',
+        changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
+      },
+      {
+        from: null,
+        to: { id: 'user-2', displayName: 'Alex Agent' },
+        changedAt: '2026-08-12T12:00:00.000Z',
+        changedBy: { id: 'user-3', displayName: 'Sam Supervisor' },
+      },
+    ],
+  };
+  mockTicketSession(detail, alex);
+
+  renderApp(['/tickets/ticket-reassigned']);
+
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Reassigned often: customs form mapping',
+    }),
+  ).toBeDefined();
+
+  const history = screen.getByLabelText('Assignment history');
+  expect(within(history).getByText('Assignment history')).toBeDefined();
+  expect(
+    within(history).getByText('Alex Agent → Sam Supervisor'),
+  ).toBeDefined();
+  expect(
+    within(history).getByText('Sam Supervisor → Unassigned'),
+  ).toBeDefined();
+  expect(within(history).getAllByText(/Unassigned → Alex Agent/).length).toBe(
+    2,
+  );
+  expect(
+    within(history).getByText(/Sam Supervisor \(user-3\) · 9 Aug 2026/),
+  ).toBeDefined();
+  expect(
+    within(history).getByText(/Ada Lovelace \(user-1\) · 11 Aug 2026/),
+  ).toBeDefined();
+  expect(screen.queryByRole('button', { name: /assign/i })).toBeNull();
+});
+
 test('Ticket consult shows Comment thread oldest first with visibility, author, and timestamp', async () => {
   localStorage.setItem('accessToken', 'token-abc');
   mockTicketSession(sampleReopenedTicketDetail, alex);

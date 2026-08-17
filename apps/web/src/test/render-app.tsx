@@ -119,6 +119,7 @@ export const sampleTicketDetail = {
       changedBy: { id: 'user-2', displayName: 'Alex Agent' },
     },
   ],
+  assignments: [],
   comments: [
     {
       id: 'comment-1',
@@ -176,6 +177,14 @@ export const sampleReopenedTicketDetail = {
       changedBy: { id: 'user-1', displayName: 'Ada Lovelace' },
     },
   ],
+  assignments: [
+    {
+      from: null,
+      to: { id: 'user-2', displayName: 'Alex Agent' },
+      changedAt: '2026-07-22T13:00:00.000Z',
+      changedBy: { id: 'user-3', displayName: 'Sam Supervisor' },
+    },
+  ],
   comments: [
     {
       id: 'comment-reopen-1',
@@ -223,6 +232,14 @@ export const sampleResolvedTicketDetail = {
       to: 'resolved' as const,
       changedAt: '2026-08-11T12:00:00.000Z',
       changedBy: { id: 'user-2', displayName: 'Alex Agent' },
+    },
+  ],
+  assignments: [
+    {
+      from: null,
+      to: { id: 'user-2', displayName: 'Alex Agent' },
+      changedAt: '2026-08-04T13:00:00.000Z',
+      changedBy: { id: 'user-3', displayName: 'Sam Supervisor' },
     },
   ],
   comments: [

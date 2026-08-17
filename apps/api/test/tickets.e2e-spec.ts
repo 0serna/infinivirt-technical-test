@@ -11,6 +11,8 @@ function titles(body: { tickets?: Array<{ title?: string }> }): string[] {
   return (body.tickets ?? []).map((ticket) => ticket.title ?? '');
 }
 
+type TicketPerson = { id: string; displayName: string };
+
 type TicketDetailBody = {
   id: string;
   title: string;
@@ -19,12 +21,18 @@ type TicketDetailBody = {
   updatedAt: string;
   resolvedAt: string | null;
   closedAt: string | null;
-  assignee: { id: string; displayName: string } | null;
+  assignee: TicketPerson | null;
   statusHistory: Array<{
     from: string | null;
     to: string;
     changedAt: string;
-    changedBy: { id: string; displayName: string };
+    changedBy: TicketPerson;
+  }>;
+  assignments: Array<{
+    from: TicketPerson | null;
+    to: TicketPerson | null;
+    changedAt: string;
+    changedBy: TicketPerson;
   }>;
   comments: Array<{
     id: string;
@@ -474,8 +482,8 @@ describe('Tickets get by id (e2e)', () => {
           author: { id: expect.any(String), displayName: 'Alex Agent' },
         },
       ],
+      assignments: [],
     });
-    expect(body).not.toHaveProperty('assignments');
   });
 
   it('Agent GET of a Ticket where they are Assignee includes full Status Transition history oldest first', async () => {
@@ -523,7 +531,64 @@ describe('Tickets get by id (e2e)', () => {
         author: { id: expect.any(String), displayName: 'Alex Agent' },
       },
     ]);
-    expect(body).not.toHaveProperty('assignments');
+    expect(body.assignments).toEqual([
+      {
+        from: null,
+        to: { id: expect.any(String), displayName: 'Alex Agent' },
+        changedAt: expect.any(String),
+        changedBy: {
+          id: expect.any(String),
+          displayName: 'Sam Supervisor',
+        },
+      },
+    ]);
+  });
+
+  it('Agent GET of an in-scope Ticket includes full Reassignment history oldest first', async () => {
+    const { accessToken } = await login(app, AGENT_EMAIL);
+    const body = await ticketByTitle(
+      app,
+      accessToken,
+      'Reassigned often: customs form mapping',
+    );
+
+    expect(body.assignee).toEqual({
+      id: expect.any(String),
+      displayName: 'Alex Agent',
+    });
+    expect(
+      body.assignments.map((row) => [
+        row.from?.displayName ?? null,
+        row.to?.displayName ?? null,
+        row.changedBy.displayName,
+      ]),
+    ).toEqual([
+      [null, 'Alex Agent', 'Sam Supervisor'],
+      ['Alex Agent', 'Sam Supervisor', 'Ada Admin'],
+      ['Sam Supervisor', null, 'Ada Admin'],
+      [null, 'Alex Agent', 'Sam Supervisor'],
+    ]);
+    const changedAt = body.assignments.map((row) => Date.parse(row.changedAt));
+    for (let index = 1; index < changedAt.length; index += 1) {
+      expect(changedAt[index]).toBeGreaterThanOrEqual(changedAt[index - 1]);
+    }
+    for (const row of body.assignments) {
+      expect(row).toEqual({
+        from:
+          row.from === null
+            ? null
+            : { id: expect.any(String), displayName: row.from.displayName },
+        to:
+          row.to === null
+            ? null
+            : { id: expect.any(String), displayName: row.to.displayName },
+        changedAt: expect.any(String),
+        changedBy: {
+          id: expect.any(String),
+          displayName: row.changedBy.displayName,
+        },
+      });
+    }
   });
 
   it('Agent GET includes public and internal Comments oldest first on an in-scope Ticket', async () => {
@@ -1343,8 +1408,8 @@ describe('Tickets create (e2e)', () => {
         },
       ],
       comments: [],
+      assignments: [],
     });
-    expect(response.body).not.toHaveProperty('assignments');
     expect(
       await prisma.ticketAssignment.count({
         where: { ticketId: response.body.id as string },
@@ -1447,7 +1512,7 @@ describe('Tickets create (e2e)', () => {
           changedBy: { id: userId, displayName },
         },
       ]);
-      expect(response.body).not.toHaveProperty('assignments');
+      expect(response.body.assignments).toEqual([]);
 
       const listed = await request(app.getHttpServer())
         .get('/tickets')

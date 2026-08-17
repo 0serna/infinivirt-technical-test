@@ -69,6 +69,13 @@ export type TicketStatusHistoryRow = {
   changedBy: TicketListPerson;
 };
 
+export type TicketAssignmentHistoryRow = {
+  from: TicketListPerson | null;
+  to: TicketListPerson | null;
+  changedAt: string;
+  changedBy: TicketListPerson;
+};
+
 export const COMMENT_VISIBILITIES = ['public', 'internal'] as const;
 
 export type CommentVisibility = (typeof COMMENT_VISIBILITIES)[number];
@@ -86,6 +93,7 @@ export type TicketDetail = TicketListRow & {
   resolvedAt: string | null;
   closedAt: string | null;
   statusHistory: TicketStatusHistoryRow[];
+  assignments: TicketAssignmentHistoryRow[];
   comments: TicketComment[];
 };
 

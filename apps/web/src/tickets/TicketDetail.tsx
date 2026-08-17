@@ -21,6 +21,7 @@ import {
   nextRecordableStatus,
   type PatchTicketStatusBody,
   type Priority,
+  type TicketAssignmentHistoryRow,
   type TicketComment,
   type TicketDetail as TicketDetailBody,
   type TicketStatus,
@@ -126,6 +127,58 @@ function StatusTimeline({ history }: { history: TicketStatusHistoryRow[] }) {
           </Stack>
         </Group>
       ))}
+    </Stack>
+  );
+}
+
+function assigneeLabel(person: { displayName: string } | null): string {
+  return person?.displayName ?? 'Unassigned';
+}
+
+function AssignmentTimeline({
+  history,
+}: {
+  history: TicketAssignmentHistoryRow[];
+}) {
+  return (
+    <Stack gap="sm" aria-label="Assignment history">
+      <Text fw={600} size="sm">
+        Assignment history
+      </Text>
+      {history.length === 0 ? (
+        <Text size="sm" c="dimmed">
+          No assignments yet.
+        </Text>
+      ) : (
+        history.map((row, index) => (
+          <Group
+            key={`${row.changedAt}-${row.from?.id ?? 'none'}-${row.to?.id ?? 'none'}-${row.changedBy.id}`}
+            align="flex-start"
+            gap="sm"
+            wrap="nowrap"
+          >
+            <Box
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 999,
+                marginTop: 6,
+                background:
+                  index === history.length - 1
+                    ? 'var(--mantine-color-blue-6)'
+                    : 'var(--mantine-color-gray-4)',
+                flexShrink: 0,
+              }}
+            />
+            <Stack gap={2}>
+              <Text size="sm" fw={600}>
+                {assigneeLabel(row.from)} → {assigneeLabel(row.to)}
+              </Text>
+              <PersonInstant person={row.changedBy} at={row.changedAt} />
+            </Stack>
+          </Group>
+        ))
+      )}
     </Stack>
   );
 }
@@ -499,7 +552,10 @@ export function TicketDetail() {
             onSubmit={createComment}
           />
         </Stack>
-        <StatusTimeline history={ticket.statusHistory} />
+        <Stack gap="md">
+          <StatusTimeline history={ticket.statusHistory} />
+          <AssignmentTimeline history={ticket.assignments} />
+        </Stack>
       </Box>
     </Stack>
   );
