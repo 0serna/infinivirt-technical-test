@@ -90,8 +90,8 @@ function PersonInstant({
   at: string;
 }) {
   return (
-    <Text size="xs" c="dimmed" title={person.id}>
-      {person.displayName} ({person.id}) · {formatTicketInstant(at)}
+    <Text size="xs" c="dimmed">
+      {person.displayName} · {formatTicketInstant(at)}
     </Text>
   );
 }
@@ -223,12 +223,12 @@ function CommentThread({ comments }: { comments: TicketComment[] }) {
 }
 
 function CommentComposer({
-  disabled,
+  busy,
   error,
   allowInternal,
   onSubmit,
 }: {
-  disabled: boolean;
+  busy: boolean;
   error: boolean;
   allowInternal: boolean;
   onSubmit: (body: string, visibility: CommentVisibility) => Promise<boolean>;
@@ -247,7 +247,7 @@ function CommentComposer({
       onSubmit={(event) => {
         event.preventDefault();
         const body = draft.trim();
-        if (body.length === 0 || disabled) {
+        if (body.length === 0 || busy) {
           return;
         }
         void onSubmit(body, visibility).then((ok) => {
@@ -265,7 +265,7 @@ function CommentComposer({
           setDraft(event.currentTarget.value);
         }}
         minRows={3}
-        disabled={disabled}
+        disabled={busy}
       />
       {allowInternal ? (
         <Switch
@@ -274,11 +274,11 @@ function CommentComposer({
           onChange={(event) => {
             setVisibility(event.currentTarget.checked ? 'internal' : 'public');
           }}
-          disabled={disabled}
+          disabled={busy}
           aria-label="Visibility"
         />
       ) : null}
-      <Button type="submit" loading={disabled} disabled={draft.trim() === ''}>
+      <Button type="submit" loading={busy} disabled={draft.trim() === ''}>
         Add comment
       </Button>
       {error ? (
@@ -309,7 +309,6 @@ function PropertiesColumn({
   const busy = assigneeControls?.busy ?? false;
   const canSave =
     draftAssigneeId !== null && draftAssigneeId !== currentId && !busy;
-  const canClear = currentId !== null && !busy;
 
   return (
     <Stack gap="md" aria-label="Ticket properties">
@@ -353,7 +352,6 @@ function PropertiesColumn({
                 type="button"
                 variant="default"
                 loading={busy}
-                disabled={!canClear}
                 onClick={() => {
                   void assigneeControls.onRecordReassignment(null);
                 }}
@@ -691,7 +689,7 @@ export function TicketDetail() {
         <Stack gap="md">
           <CommentThread comments={ticket.comments} />
           <CommentComposer
-            disabled={isCommenting}
+            busy={isCommenting}
             error={commentError}
             allowInternal={
               user !== null && hasMinimumRole(user.role, 'supervisor')

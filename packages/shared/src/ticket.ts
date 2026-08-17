@@ -179,7 +179,6 @@ export function nextRecordableStatus(args: {
     : null;
 }
 
-/** Supervisor and Administrator may record a Reassignment; Agent may not. */
 export function mayRecordReassignment(role: Role): boolean {
   return hasMinimumRole(role, 'supervisor');
 }

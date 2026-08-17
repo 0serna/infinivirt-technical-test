@@ -42,6 +42,9 @@ type ScopedTicket = Omit<TicketListRow, 'updatedAt' | 'createdAt'> & {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const ticketPersonSelect = { id: true, displayName: true } as const;
+const historyAsc = [{ changedAt: 'asc' as const }, { id: 'asc' as const }];
+
 const ticketDetailSelect = {
   id: true,
   title: true,
@@ -53,24 +56,24 @@ const ticketDetailSelect = {
   resolvedAt: true,
   closedAt: true,
   client: { select: { id: true, name: true } },
-  assignee: { select: { id: true, displayName: true } },
-  createdBy: { select: { id: true, displayName: true } },
+  assignee: { select: ticketPersonSelect },
+  createdBy: { select: ticketPersonSelect },
   statusHistory: {
-    orderBy: [{ changedAt: 'asc' as const }, { id: 'asc' as const }],
+    orderBy: historyAsc,
     select: {
       fromStatus: true,
       toStatus: true,
       changedAt: true,
-      changedBy: { select: { id: true, displayName: true } },
+      changedBy: { select: ticketPersonSelect },
     },
   },
   assignments: {
-    orderBy: [{ changedAt: 'asc' as const }, { id: 'asc' as const }],
+    orderBy: historyAsc,
     select: {
       changedAt: true,
-      fromAssignee: { select: { id: true, displayName: true } },
-      toAssignee: { select: { id: true, displayName: true } },
-      changedBy: { select: { id: true, displayName: true } },
+      fromAssignee: { select: ticketPersonSelect },
+      toAssignee: { select: ticketPersonSelect },
+      changedBy: { select: ticketPersonSelect },
     },
   },
   comments: {
@@ -80,7 +83,7 @@ const ticketDetailSelect = {
       body: true,
       visibility: true,
       createdAt: true,
-      author: { select: { id: true, displayName: true } },
+      author: { select: ticketPersonSelect },
     },
   },
 } satisfies Prisma.TicketSelect;
@@ -410,22 +413,19 @@ export class TicketsService {
       }
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.ticket.update({
-        where: { id: ticket.id },
-        data: {
-          assigneeId: toAssigneeId,
-          updatedAt: new Date(),
+    await this.prisma.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        assigneeId: toAssigneeId,
+        updatedAt: new Date(),
+        assignments: {
+          create: {
+            fromAssigneeId: ticket.assigneeId,
+            toAssigneeId,
+            changedById: user.id,
+          },
         },
-      });
-      await tx.ticketAssignment.create({
-        data: {
-          ticketId: ticket.id,
-          fromAssigneeId: ticket.assigneeId,
-          toAssigneeId,
-          changedById: user.id,
-        },
-      });
+      },
     });
 
     return this.getById(user, ticket.id);

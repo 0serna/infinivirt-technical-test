@@ -21,6 +21,7 @@ import {
 
 beforeEach(() => {
   localStorage.clear();
+  localStorage.setItem('accessToken', 'token-abc');
   vi.stubGlobal('fetch', vi.fn());
 });
 
@@ -156,7 +157,6 @@ function mockTicketAssigneeSession({
 }
 
 test('signed-in Ticket consult is inside the staff shell and loads GET /api/tickets/:id', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockTicketSession();
 
   renderApp(['/tickets/ticket-1']);
@@ -181,7 +181,6 @@ test('signed-in Ticket consult is inside the staff shell and loads GET /api/tick
 });
 
 test('Ticket consult shows current fields and Status Transition history oldest first', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockTicketSession(sampleReopenedTicketDetail);
 
   renderApp(['/tickets/ticket-3']);
@@ -216,16 +215,11 @@ test('Ticket consult shows current fields and Status Transition history oldest f
   expect(within(history).getByText('Open → In progress')).toBeDefined();
   expect(within(history).getByText('Resolved → Closed')).toBeDefined();
   expect(within(history).getByText('Closed → Open')).toBeDefined();
-  expect(within(history).getAllByText(/Ada Lovelace \(user-1\)/).length).toBe(
-    2,
-  );
-  expect(
-    within(history).getByText(/Alex Agent \(user-2\) · 22 Jul 2026/),
-  ).toBeDefined();
+  expect(within(history).getAllByText(/Ada Lovelace ·/).length).toBe(2);
+  expect(within(history).getByText(/Alex Agent · 22 Jul 2026/)).toBeDefined();
 });
 
 test('Ticket consult shows Reassignment history oldest first from detail payload', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   const detail = {
     ...sampleReopenedTicketDetail,
     id: 'ticket-reassigned',
@@ -280,16 +274,13 @@ test('Ticket consult shows Reassignment history oldest first from detail payload
     2,
   );
   expect(
-    within(history).getByText(/Sam Supervisor \(user-3\) · 9 Aug 2026/),
+    within(history).getByText(/Sam Supervisor · 9 Aug 2026/),
   ).toBeDefined();
-  expect(
-    within(history).getByText(/Ada Lovelace \(user-1\) · 11 Aug 2026/),
-  ).toBeDefined();
+  expect(within(history).getByText(/Ada Lovelace · 11 Aug 2026/)).toBeDefined();
   expect(screen.queryByRole('button', { name: /assign/i })).toBeNull();
 });
 
 test('Ticket consult shows Comment thread oldest first with visibility, author, and timestamp', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockTicketSession(sampleReopenedTicketDetail, alex);
 
   renderApp(['/tickets/ticket-3']);
@@ -314,12 +305,8 @@ test('Ticket consult shows Comment thread oldest first with visibility, author, 
   ).toBeDefined();
   expect(within(thread).getByLabelText('Visibility: Internal')).toBeDefined();
   expect(within(thread).getByLabelText('Visibility: Public')).toBeDefined();
-  expect(
-    within(thread).getByText(/Ada Lovelace \(user-1\) · 16 Aug 2026/),
-  ).toBeDefined();
-  expect(
-    within(thread).getByText(/Alex Agent \(user-2\) · 16 Aug 2026/),
-  ).toBeDefined();
+  expect(within(thread).getByText(/Ada Lovelace · 16 Aug 2026/)).toBeDefined();
+  expect(within(thread).getByText(/Alex Agent · 16 Aug 2026/)).toBeDefined();
   expect(screen.getByRole('textbox', { name: 'Comment' })).toBeDefined();
   expect(screen.getByRole('button', { name: 'Add comment' })).toBeDefined();
   expect(screen.queryByRole('combobox')).toBeNull();
@@ -327,7 +314,6 @@ test('Ticket consult shows Comment thread oldest first with visibility, author, 
 });
 
 test('Ticket consult with no Comments shows an empty thread state', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockTicketSession(sampleClosedTicketDetail);
 
   renderApp(['/tickets/ticket-invoice']);
@@ -343,23 +329,18 @@ test('Ticket consult with no Comments shows an empty thread state', async () => 
 });
 
 test('in-flight Ticket consult shows loading before fields', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   let resolveDetail!: (value: Response) => void;
   const pending = new Promise<Response>((resolve) => {
     resolveDetail = resolve;
   });
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isUsersUrl(url)) {
-      return jsonResponse(200, sampleUserCatalog);
-    }
-    if (isTicketDetailUrl(url)) {
-      return pending;
-    }
-    throw new Error(`unexpected fetch ${url}`);
+  mockStaffTicketFetches({
+    user: ada,
+    detail: sampleTicketDetail,
+    handleRoute: (url, method) => {
+      if (isTicketDetailUrl(url) && method === 'GET') {
+        return pending;
+      }
+    },
   });
 
   renderApp(['/tickets/ticket-1']);
@@ -380,21 +361,16 @@ test('in-flight Ticket consult shows loading before fields', async () => {
 });
 
 test('missing Ticket consult shows not-found copy without the raw server body', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isUsersUrl(url)) {
-      return jsonResponse(200, sampleUserCatalog);
-    }
-    if (isTicketDetailUrl(url)) {
-      return jsonResponse(404, {
-        message: 'Cannot GET warehouse scanner pairing',
-      });
-    }
-    throw new Error(`unexpected fetch ${url}`);
+  mockStaffTicketFetches({
+    user: ada,
+    detail: sampleTicketDetail,
+    handleRoute: (url, method) => {
+      if (isTicketDetailUrl(url) && method === 'GET') {
+        return jsonResponse(404, {
+          message: 'Cannot GET warehouse scanner pairing',
+        });
+      }
+    },
   });
 
   renderApp(['/tickets/ticket-missing']);
@@ -405,24 +381,19 @@ test('missing Ticket consult shows not-found copy without the raw server body', 
 
 test('failed Ticket consult fetch shows error copy and can retry', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   let detailCalls = 0;
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isUsersUrl(url)) {
-      return jsonResponse(200, sampleUserCatalog);
-    }
-    if (isTicketDetailUrl(url)) {
-      detailCalls += 1;
-      if (detailCalls === 1) {
-        return jsonResponse(500, { message: 'Internal boom stack' });
+  mockStaffTicketFetches({
+    user: ada,
+    detail: sampleTicketDetail,
+    handleRoute: (url, method) => {
+      if (isTicketDetailUrl(url) && method === 'GET') {
+        detailCalls += 1;
+        if (detailCalls === 1) {
+          return jsonResponse(500, { message: 'Internal boom stack' });
+        }
+        return jsonResponse(200, sampleTicketDetail);
       }
-      return jsonResponse(200, sampleTicketDetail);
-    }
-    throw new Error(`unexpected fetch ${url}`);
+    },
   });
 
   renderApp(['/tickets/ticket-1']);
@@ -441,19 +412,14 @@ test('failed Ticket consult fetch shows error copy and can retry', async () => {
 });
 
 test('Ticket consult 401 signs the User out', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const url = String(input);
-    if (url === '/api/auth/me') {
-      return jsonResponse(200, ada);
-    }
-    if (isUsersUrl(url)) {
-      return jsonResponse(200, sampleUserCatalog);
-    }
-    if (isTicketDetailUrl(url)) {
-      return unauthorized;
-    }
-    throw new Error(`unexpected fetch ${url}`);
+  mockStaffTicketFetches({
+    user: ada,
+    detail: sampleTicketDetail,
+    handleRoute: (url, method) => {
+      if (isTicketDetailUrl(url) && method === 'GET') {
+        return unauthorized;
+      }
+    },
   });
 
   renderApp(['/tickets/ticket-1']);
@@ -468,7 +434,6 @@ test('Ticket consult 401 signs the User out', async () => {
 
 test('staff shell title returns to the Ticket List', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   mockTicketSession();
 
   renderApp(['/tickets/ticket-1']);
@@ -484,7 +449,6 @@ test('staff shell title returns to the Ticket List', async () => {
 });
 
 test('Agent who is not Assignee sees no Status Transition control', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockTicketSession(sampleTicketDetail, alex);
 
   renderApp(['/tickets/ticket-1']);
@@ -503,7 +467,6 @@ test('Agent who is not Assignee sees no Status Transition control', async () => 
 
 test('Agent can submit a public Comment and the thread updates without a visibility control', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   const updated = {
     ...sampleTicketDetail,
     updatedAt: '2026-08-16T14:00:00.000Z',
@@ -559,7 +522,6 @@ test('Agent can submit a public Comment and the thread updates without a visibil
 
 test('failed Comment create shows error copy without the raw server body', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   mockTicketCommentSession({
     user: alex,
     onPost: () => jsonResponse(500, { message: 'Internal boom stack' }),
@@ -587,7 +549,6 @@ test('failed Comment create shows error copy without the raw server body', async
 
 test('Supervisor Comment composer defaults to internal and can post public', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   const updated = {
     ...sampleTicketDetail,
     updatedAt: '2026-08-16T14:05:00.000Z',
@@ -688,7 +649,6 @@ test('Supervisor Comment composer defaults to internal and can post public', asy
 
 test('Administrator Comment composer defaults to internal without changing visibility', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   const updated = {
     ...sampleTicketDetail,
     updatedAt: '2026-08-16T14:10:00.000Z',
@@ -742,7 +702,6 @@ test('Administrator Comment composer defaults to internal without changing visib
 
 test('Agent Assignee can record the next forward Status Transition', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   const updated = {
     ...sampleReopenedTicketDetail,
     status: 'in_progress' as const,
@@ -781,7 +740,6 @@ test('Agent Assignee can record the next forward Status Transition', async () =>
 
 test('Administrator can record a forward Status Transition on an unassigned Ticket', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   const updated = {
     ...sampleTicketDetail,
     status: 'in_progress' as const,
@@ -816,7 +774,6 @@ test('Administrator can record a forward Status Transition on an unassigned Tick
 });
 
 test('resolved Ticket offers no Close or Reopen control', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockTicketSession(
     {
       ...sampleTicketDetail,
@@ -842,7 +799,6 @@ test('resolved Ticket offers no Close or Reopen control', async () => {
 
 test('failed Status Transition shows error copy without the raw server body', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   mockTicketPatchSession({
     detail: sampleTicketDetail,
     patchResponse: jsonResponse(409, { message: 'Illegal edge stack' }),
@@ -865,7 +821,6 @@ test('failed Status Transition shows error copy without the raw server body', as
 });
 
 test('Agent Assignee on a resolved Ticket sees no Close or Reopen control', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockTicketSession(sampleResolvedTicketDetail, alex);
 
   renderApp(['/tickets/ticket-gift-card']);
@@ -882,7 +837,6 @@ test('Agent Assignee on a resolved Ticket sees no Close or Reopen control', asyn
 });
 
 test('Supervisor on a closed Ticket sees no Close or Reopen control', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockTicketSession(sampleClosedTicketDetail, sam);
 
   renderApp(['/tickets/ticket-invoice']);
@@ -900,7 +854,6 @@ test('Supervisor on a closed Ticket sees no Close or Reopen control', async () =
 
 test('Administrator can close a resolved Ticket', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   const updated = {
     ...sampleResolvedTicketDetail,
     status: 'closed' as const,
@@ -939,7 +892,6 @@ test('Administrator can close a resolved Ticket', async () => {
 
 test('Administrator can reopen a closed Ticket', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   const updated = {
     ...sampleClosedTicketDetail,
     status: 'open' as const,
@@ -979,7 +931,6 @@ test('Administrator can reopen a closed Ticket', async () => {
 });
 
 test('Agent has no Assignee Reassignment control on Ticket detail', async () => {
-  localStorage.setItem('accessToken', 'token-abc');
   mockTicketSession(sampleTicketDetail, alex);
 
   renderApp(['/tickets/ticket-1']);
@@ -1000,7 +951,6 @@ test('Agent has no Assignee Reassignment control on Ticket detail', async () => 
 
 test('Supervisor loads User catalog for Assignee picker and can first-assign', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   const updated = {
     ...sampleTicketDetail,
     assignee: { id: 'user-4', displayName: 'Jamie Agent' },
@@ -1062,7 +1012,6 @@ test('Supervisor loads User catalog for Assignee picker and can first-assign', a
 
 test('Administrator can clear Assignee and refreshes detail from response', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   const detail = {
     ...sampleReopenedTicketDetail,
     id: 'ticket-1',
@@ -1107,7 +1056,6 @@ test('Administrator can clear Assignee and refreshes detail from response', asyn
 
 test('Supervisor can change Assignee from one User to another', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   const detail = {
     ...sampleReopenedTicketDetail,
     id: 'ticket-1',
@@ -1162,7 +1110,6 @@ test('Supervisor can change Assignee from one User to another', async () => {
 
 test('in-flight Reassignment disables Assignee controls until the response arrives', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   let resolvePatch!: (value: Response) => void;
   const pending = new Promise<Response>((resolve) => {
     resolvePatch = resolve;
@@ -1223,7 +1170,6 @@ test('in-flight Reassignment disables Assignee controls until the response arriv
 
 test('failed Reassignment shows English error without the raw server body', async () => {
   const user = userEvent.setup();
-  localStorage.setItem('accessToken', 'token-abc');
   mockTicketAssigneeSession({
     detail: sampleTicketDetail,
     user: sam,
